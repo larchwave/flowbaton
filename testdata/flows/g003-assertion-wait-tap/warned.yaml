@@ -1,0 +1,8 @@
+appId: com.example.g003.warned
+name: G003 Public Warned
+---
+- assertTrue:
+    condition: "false"
+    label: Optional false
+    optional: true
+- assertTrue: "true"

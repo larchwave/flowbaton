@@ -1,0 +1,6 @@
+appId: com.example.g003.i21.failed
+name: G003 I21 Failed Required
+---
+- setClipboard: completed-before-failure
+- copyTextFrom: {id: required-target}
+- pressKey: POWER

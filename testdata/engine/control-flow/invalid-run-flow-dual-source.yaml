@@ -1,0 +1,7 @@
+name: Invalid runFlow dual source
+appId: com.example.control.invalid
+---
+- runFlow:
+    file: child.yaml
+    commands:
+      - assertVisible: Never Runs

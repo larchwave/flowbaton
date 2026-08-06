@@ -1,0 +1,7 @@
+appId: com.example.g003.wait-visible
+name: G003 Public Wait Visible
+---
+- tapOn:
+    text: Awaited
+    waitUntilVisible: true
+    waitToSettleTimeoutMs: 0

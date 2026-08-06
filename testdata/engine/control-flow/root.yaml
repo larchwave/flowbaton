@@ -1,0 +1,15 @@
+name: Control Flow Root
+appId: com.example.control.root
+env:
+  ROOT_REPEAT_TIMES: "2"
+  ROOT_RETRY_MAX: "1"
+  ROOT_TARGET: Root Complete
+onFlowComplete:
+  - assertVisible: "${ROOT_TARGET}"
+---
+- runFlow:
+    file: child.yaml
+    env:
+      REPEAT_TIMES: "${ROOT_REPEAT_TIMES}"
+      RETRY_MAX: "${ROOT_RETRY_MAX}"
+      TARGET: Overlay Start

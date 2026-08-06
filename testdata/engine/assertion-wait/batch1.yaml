@@ -1,0 +1,12 @@
+appId: com.example.batch1
+env:
+  READY: "true"
+---
+- assertNotVisible: "${GONE}"
+- assertTrue:
+    condition: "${READY}"
+    label: "${ASSERT_LABEL}"
+- extendedWaitUntil:
+    visible: "${VISIBLE}"
+    notVisible: "${GONE}"
+    timeout: 1200

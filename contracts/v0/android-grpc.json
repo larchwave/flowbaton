@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "contract_version": "v0",
+  "declaration_basis": {
+    "contract_kind": "flowbaton-wire-contract",
+    "specifications": [
+      "specs/04-wire-protocols.md section 1"
+    ],
+    "product_decisions": [
+      {
+        "id": "argument-value-field-numbers",
+        "statement": "FlowBaton v0 assigns ArgumentValue key=1, value=2, type=3."
+      }
+    ]
+  },
+  "proto": {
+    "file": "proto/flowbaton_android.proto",
+    "syntax": "proto3",
+    "package": "flowbaton_android",
+    "service": "FlowBatonDriver"
+  },
+  "rpcs": [
+    {"name":"deviceInfo","request":"DeviceInfoRequest","response":"DeviceInfo","client_streaming":false,"server_streaming":false},
+    {"name":"viewHierarchy","request":"ViewHierarchyRequest","response":"ViewHierarchyResponse","client_streaming":false,"server_streaming":false},
+    {"name":"screenshot","request":"ScreenshotRequest","response":"ScreenshotResponse","client_streaming":false,"server_streaming":false},
+    {"name":"tap","request":"TapRequest","response":"TapResponse","client_streaming":false,"server_streaming":false},
+    {"name":"inputText","request":"InputTextRequest","response":"InputTextResponse","client_streaming":false,"server_streaming":false},
+    {"name":"eraseAllText","request":"EraseAllTextRequest","response":"EraseAllTextResponse","client_streaming":false,"server_streaming":false},
+    {"name":"setLocation","request":"SetLocationRequest","response":"SetLocationResponse","client_streaming":false,"server_streaming":false},
+    {"name":"isWindowUpdating","request":"CheckWindowUpdatingRequest","response":"CheckWindowUpdatingResponse","client_streaming":false,"server_streaming":false},
+    {"name":"launchApp","request":"LaunchAppRequest","response":"LaunchAppResponse","client_streaming":false,"server_streaming":false},
+    {"name":"addMedia","request":"AddMediaRequest","response":"AddMediaResponse","client_streaming":true,"server_streaming":false},
+    {"name":"enableMockLocationProviders","request":"EmptyRequest","response":"EmptyResponse","client_streaming":false,"server_streaming":false},
+    {"name":"disableLocationUpdates","request":"EmptyRequest","response":"EmptyResponse","client_streaming":false,"server_streaming":false}
+  ],
+  "messages": [
+    {"name":"AddMediaRequest","fields":[
+      {"name":"payload","type":"Payload","number":1,"repeated":false},
+      {"name":"media_name","type":"string","number":2,"repeated":false},
+      {"name":"media_ext","type":"string","number":3,"repeated":false}
+    ]},
+    {"name":"AddMediaResponse","fields":[]},
+    {"name":"ArgumentValue","fields":[
+      {"name":"key","type":"string","number":1,"repeated":false},
+      {"name":"value","type":"string","number":2,"repeated":false},
+      {"name":"type","type":"string","number":3,"repeated":false}
+    ]},
+    {"name":"CheckWindowUpdatingRequest","fields":[
+      {"name":"appId","type":"string","number":1,"repeated":false}
+    ]},
+    {"name":"CheckWindowUpdatingResponse","fields":[
+      {"name":"isWindowUpdating","type":"bool","number":1,"repeated":false}
+    ]},
+    {"name":"DeviceInfo","fields":[
+      {"name":"widthPixels","type":"uint32","number":1,"repeated":false},
+      {"name":"heightPixels","type":"uint32","number":2,"repeated":false}
+    ]},
+    {"name":"DeviceInfoRequest","fields":[]},
+    {"name":"EmptyRequest","fields":[]},
+    {"name":"EmptyResponse","fields":[]},
+    {"name":"EraseAllTextRequest","fields":[
+      {"name":"charactersToErase","type":"uint32","number":1,"repeated":false}
+    ]},
+    {"name":"EraseAllTextResponse","fields":[]},
+    {"name":"InputTextRequest","fields":[
+      {"name":"text","type":"string","number":1,"repeated":false}
+    ]},
+    {"name":"InputTextResponse","fields":[]},
+    {"name":"LaunchAppRequest","fields":[
+      {"name":"packageName","type":"string","number":1,"repeated":false},
+      {"name":"arguments","type":"ArgumentValue","number":2,"repeated":true}
+    ]},
+    {"name":"LaunchAppResponse","fields":[]},
+    {"name":"Payload","fields":[
+      {"name":"data","type":"bytes","number":1,"repeated":false}
+    ]},
+    {"name":"ScreenshotRequest","fields":[]},
+    {"name":"ScreenshotResponse","fields":[
+      {"name":"bytes","type":"bytes","number":1,"repeated":false}
+    ]},
+    {"name":"SetLocationRequest","fields":[
+      {"name":"latitude","type":"double","number":1,"repeated":false},
+      {"name":"longitude","type":"double","number":2,"repeated":false}
+    ]},
+    {"name":"SetLocationResponse","fields":[]},
+    {"name":"TapRequest","fields":[
+      {"name":"x","type":"uint32","number":1,"repeated":false},
+      {"name":"y","type":"uint32","number":2,"repeated":false}
+    ]},
+    {"name":"TapResponse","fields":[]},
+    {"name":"ViewHierarchyRequest","fields":[]},
+    {"name":"ViewHierarchyResponse","fields":[
+      {"name":"hierarchy","type":"string","number":1,"repeated":false}
+    ]}
+  ],
+  "error_contract": {
+    "handler_status": "INTERNAL",
+    "trailers": ["error-type", "error-message", "error-cause"],
+    "transport_statuses": ["UNAVAILABLE", "DEADLINE_EXCEEDED"]
+  }
+}

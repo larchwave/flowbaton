@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowbaton.dev/contracts/integration/v1/schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "flowbaton",
+    "transports",
+    "protocols",
+    "auth_profiles",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "contract_version": {"type": "string", "const": "v1"},
+    "flowbaton": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "binary_sha256", "license", "process_id"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "license": {"type": "string", "const": "Apache-2.0"},
+        "process_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "transports": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["cli-stdio", "mcp", "authenticated-local-ipc", "authenticated-remote-ipc"]
+      }
+    },
+    "protocols": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["flow_contract", "device_session", "report"],
+      "properties": {
+        "flow_contract": {"type": "string", "minLength": 1},
+        "device_session": {"type": "string", "minLength": 1},
+        "report": {"type": "string", "minLength": 1}
+      }
+    },
+    "auth_profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profile_id", "transport", "authentication", "channel_binding", "principal_scope", "tenant_scope", "replay_protection"],
+            "properties": {
+              "profile_id": {"type": "string", "const": "local-core-v1"},
+              "transport": {"type": "string", "const": "authenticated-local-ipc"},
+              "authentication": {"type": "string", "const": "peer-credentials+launch-token"},
+              "channel_binding": {"type": "string", "const": "os-peer-identity+endpoint"},
+              "principal_scope": {"type": "string", "const": "local-user+process"},
+              "tenant_scope": {"type": "string", "const": "single-host"},
+              "replay_protection": {"type": "string", "const": "per-launch-nonce+expiry"}
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["profile_id", "transport", "authentication", "channel_binding", "principal_scope", "tenant_scope", "replay_protection"],
+            "properties": {
+              "profile_id": {"type": "string", "const": "remote-cloud-mac-v1"},
+              "transport": {"type": "string", "const": "authenticated-remote-ipc"},
+              "authentication": {"type": "string", "const": "mutual-tls+signed-session-token"},
+              "channel_binding": {"type": "string", "const": "tls-exporter"},
+              "principal_scope": {"type": "string", "const": "account+host+process"},
+              "tenant_scope": {"type": "string", "const": "tenant-id"},
+              "replay_protection": {"type": "string", "const": "nonce+expiry+lease-generation"}
+            }
+          }
+        ]
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

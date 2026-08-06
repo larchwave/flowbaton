@@ -1,0 +1,76 @@
+{
+  "schema_version": "flowbaton.assets.v0",
+  "manifest_version": "0.0.0-contract.1",
+  "assets": [
+    {
+      "id": "g001-android-representative",
+      "status": "representative-not-release-artifact",
+      "host_version": "0.0.0-contract",
+      "asset_version": "g001-fixture.1",
+      "host_os": "linux",
+      "host_arch": "amd64",
+      "platform": "android",
+      "asset_hash": "9961579845486c1def0fe9f5ff74d3f6dcb8ee7f01050dc7f8b5f6454d6fd8fb",
+      "archive": {
+        "format": "gzip",
+        "sha256": "0b595af42bb4c5d6acfd7684cff88b08ef2b186b3872990d511ac494b258f399",
+        "size": 148,
+        "uncompressed_sha256": "9961579845486c1def0fe9f5ff74d3f6dcb8ee7f01050dc7f8b5f6454d6fd8fb",
+        "uncompressed_size": 145
+      },
+      "files": [
+        {
+          "path": "android-agent.fixture",
+          "sha256": "9961579845486c1def0fe9f5ff74d3f6dcb8ee7f01050dc7f8b5f6454d6fd8fb",
+          "size": 145,
+          "mode": "0644"
+        }
+      ],
+      "identity": {
+        "kind": "package-identity",
+        "value": "dev.nohavewho.flowbaton",
+        "path": "android-agent.fixture"
+      },
+      "compatibility": {
+        "android_api": { "min": 21, "max": 36 },
+        "xcode": { "min": "", "max": "" },
+        "ios_runtime": { "min": "", "max": "" }
+      }
+    },
+    {
+      "id": "g001-ios-representative",
+      "status": "representative-not-release-artifact",
+      "host_version": "0.0.0-contract",
+      "asset_version": "g001-fixture.1",
+      "host_os": "darwin",
+      "host_arch": "arm64",
+      "platform": "ios-simulator",
+      "asset_hash": "cbe46645cad2812ba650fa40510992ed6aa8204e4b095b33c8bd6c90f3e6202a",
+      "archive": {
+        "format": "gzip",
+        "sha256": "fe697c8bff6125880535adcdb53df26453e3c3b6687bc1354d32adf26b378d42",
+        "size": 141,
+        "uncompressed_sha256": "cbe46645cad2812ba650fa40510992ed6aa8204e4b095b33c8bd6c90f3e6202a",
+        "uncompressed_size": 136
+      },
+      "files": [
+        {
+          "path": "ios-runner.fixture",
+          "sha256": "cbe46645cad2812ba650fa40510992ed6aa8204e4b095b33c8bd6c90f3e6202a",
+          "size": 136,
+          "mode": "0755"
+        }
+      ],
+      "identity": {
+        "kind": "bundle-signature-identity",
+        "value": "dev.nohavewho.flowbaton.driver",
+        "path": "ios-runner.fixture"
+      },
+      "compatibility": {
+        "android_api": { "min": 0, "max": 0 },
+        "xcode": { "min": "16.0", "max": "26.2" },
+        "ios_runtime": { "min": "17.0", "max": "26.0" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+# OS and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Go and release outputs
+/dist/
+/coverage/
+coverage.out
+*.test
+/flowbaton
+/flowbaton.exe
+
+# Platform build outputs
+drivers/android/.gradle/
+drivers/android/**/build/
+drivers/ios/.build/
+drivers/ios/DerivedData/
+drivers/ios/FlowBatonIOSRunner.xcodeproj/
+*.xcresult
+
+# OMX runtime state; planning artifacts remain reviewable.
+.omx/logs/
+.omx/state/
+.omx/metrics.json
+.omx/tmux-hook.json
+
+# Local credentials and assistant runtime
+.env
+.env.*
+!.env.template
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+secrets.json
+service-account*.json
+.op/
+op-session*
+.claude/settings.local.json
+.claude/.cache/
+.claude/worktrees/
+dev/active/*-context.local.md
+.claude/.context-watermark
+dev/active/context-review.md
+dev/active/HANDOFF.md
+# The probe binary the live sweeps run. Built from the tree it sits in; a
+# compiled copy in git would go stale the moment anyone commits.
+dev/active/flowbaton-probe
+
+# Generated device artifacts from bugreport/recording runs — never source, may
+# carry device data. Keep them out of the tree.
+internal/cli/*.zip
+*.bugreport.zip
+dev/active/ai-probe-out/
+dev/active/runtime-out/
+dev/active/selectorsem-out/
+dev/active/readback-out/
+dev/active/travel-out/
+dev/active/shard-out/
+dev/active/readback-ios-out/

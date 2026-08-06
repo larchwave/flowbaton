@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/goreleaser/goreleaser/v2.17.0/www/docs/static/schema.json
+version: 2
+project_name: flowbaton
+dist: dist
+
+builds:
+  - id: flowbaton
+    main: ./cmd/flowbaton
+    binary: flowbaton
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: linux
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -buildid= -X github.com/nohavewho/flowbaton/internal/version.Version={{ .Version }}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - ids: [flowbaton]
+    name_template: 'flowbaton_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    wrap_in_directory: true
+    files:
+      - LICENSE
+      - NOTICE.md
+      - README.md
+      - docs/support-matrix.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+sboms:
+  - id: archives
+    artifacts: archive
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-next'
+
+release:
+  draft: true
+  replace_existing_draft: false
+  make_latest: false
+
+source:
+  enabled: false

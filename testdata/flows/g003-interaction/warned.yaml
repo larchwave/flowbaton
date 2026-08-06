@@ -1,0 +1,10 @@
+appId: com.example.g003.i21.warned
+name: G003 I21 Warned Optional
+---
+- setClipboard: retained-before-warning
+- copyTextFrom:
+    id: missing-target
+    optional: true
+    label: optional missing copy
+- pasteText
+- pressKey: ENTER

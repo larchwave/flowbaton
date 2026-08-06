@@ -1,0 +1,14 @@
+name: Walking Skeleton
+appId: "${console.log('app evaluation') || APP_ID}"
+env:
+  APP_ID: com.example.walking
+  BUTTON: Continue
+  READY: Ready
+  TAP_LABEL: Tap Continue
+---
+- launchApp
+- tapOn:
+    text: "${console.log('tap evaluation') || BUTTON}"
+    label: ${TAP_LABEL}
+    waitToSettleTimeoutMs: 900
+- assertVisible: "${console.log('assert evaluation') || READY}"

@@ -1,0 +1,121 @@
+version: 1
+entries:
+  - {id: primitives-001, group: primitives, expression: '1 + 1', classification: supported, expected: '2', critical: true}
+  - {id: primitives-002, group: primitives, expression: '6 * 7', classification: supported, expected: '42', critical: true}
+  - {id: primitives-003, group: primitives, expression: '7 / 2', classification: supported, expected: '3.5', critical: true}
+  - {id: primitives-004, group: primitives, expression: '7 % 4', classification: supported, expected: '3', critical: true}
+  - {id: primitives-005, group: primitives, expression: '2 ** 8', classification: supported, expected: '256', critical: true}
+  - {id: primitives-006, group: primitives, expression: 'true && false', classification: supported, expected: 'false', critical: true}
+  - {id: primitives-007, group: primitives, expression: 'true || false', classification: supported, expected: 'true', critical: true}
+  - {id: primitives-008, group: primitives, expression: '!0', classification: supported, expected: 'true', critical: true}
+  - {id: primitives-009, group: primitives, expression: 'null === null', classification: supported, expected: 'true', critical: true}
+  - {id: primitives-010, group: primitives, expression: 'typeof undefined', classification: supported, expected: 'undefined', critical: true}
+  - {id: primitives-011, group: primitives, expression: 'Number("12")', classification: supported, expected: '12', critical: true}
+  - {id: primitives-012, group: primitives, expression: 'Boolean("")', classification: supported, expected: 'false', critical: true}
+  - {id: primitives-013, group: primitives, expression: 'Math.max(3, 9, 4)', classification: supported, expected: '9', critical: true}
+  - {id: primitives-014, group: primitives, expression: 'Math.ceil(12.1)', classification: supported, expected: '13', critical: true}
+  - {id: primitives-015, group: primitives, expression: '1 < 2 ? "yes" : "no"', classification: supported, expected: 'yes', critical: true}
+
+  - {id: missing-vars-001, group: missing-vars, expression: 'typeof MISSING_001', classification: supported, expected: 'undefined', critical: true}
+  - {id: missing-vars-002, group: missing-vars, expression: 'MISSING_002 || "fallback"', classification: supported, expected: 'fallback', critical: true}
+  - {id: missing-vars-003, group: missing-vars, expression: 'MISSING_003 ?? "fallback"', classification: supported, expected: 'fallback', critical: true}
+  - {id: missing-vars-004, group: missing-vars, expression: 'String(MISSING_004)', classification: supported, expected: 'undefined', critical: true}
+  - {id: missing-vars-005, group: missing-vars, expression: 'MISSING_005 === undefined', classification: supported, expected: 'true', critical: true}
+  - {id: missing-vars-006, group: missing-vars, expression: '!MISSING_006', classification: supported, expected: 'true', critical: true}
+  - {id: missing-vars-007, group: missing-vars, expression: '({value: MISSING_007}).value === undefined', classification: supported, expected: 'true', critical: true}
+  - {id: missing-vars-008, group: missing-vars, expression: '[MISSING_008].length', classification: supported, expected: '1', critical: true}
+  - {id: missing-vars-009, group: missing-vars, expression: 'MISSING_009 ? "x" : "y"', classification: supported, expected: 'y', critical: true}
+  - {id: missing-vars-010, group: missing-vars, expression: '"MISSING_010" in globalThis', classification: supported, expected: 'true', critical: true}
+
+  - {id: strings-regex-001, group: strings-regex, expression: '"flow" + "baton"', classification: supported, expected: 'flowbaton', critical: true}
+  - {id: strings-regex-002, group: strings-regex, expression: '"abc".toUpperCase()', classification: supported, expected: 'ABC', critical: true}
+  - {id: strings-regex-003, group: strings-regex, expression: '"ABC".toLowerCase()', classification: supported, expected: 'abc', critical: true}
+  - {id: strings-regex-004, group: strings-regex, expression: '"  x  ".trim()', classification: supported, expected: 'x', critical: true}
+  - {id: strings-regex-005, group: strings-regex, expression: '"abc".includes("b")', classification: supported, expected: 'true', critical: true}
+  - {id: strings-regex-006, group: strings-regex, expression: '"abc".startsWith("a")', classification: supported, expected: 'true', critical: true}
+  - {id: strings-regex-007, group: strings-regex, expression: '"abc".endsWith("c")', classification: supported, expected: 'true', critical: true}
+  - {id: strings-regex-008, group: strings-regex, expression: '"abc".slice(1)', classification: supported, expected: 'bc', critical: true}
+  - {id: strings-regex-009, group: strings-regex, expression: '"abc".charAt(2)', classification: supported, expected: 'c', critical: true}
+  - {id: strings-regex-010, group: strings-regex, expression: '"abc".split("").reverse().join("")', classification: supported, expected: 'cba', critical: true}
+  - {id: strings-regex-011, group: strings-regex, expression: '"x".repeat(3)', classification: supported, expected: 'xxx', critical: true}
+  - {id: strings-regex-012, group: strings-regex, expression: '/^flow/.test("flowbaton")', classification: supported, expected: 'true', critical: true}
+  - {id: strings-regex-013, group: strings-regex, expression: '/a+/i.test("AAA")', classification: supported, expected: 'true', critical: true}
+  - {id: strings-regex-014, group: strings-regex, expression: '"a1b2".replace(/\d/g, "")', classification: supported, expected: 'ab', critical: true}
+  - {id: strings-regex-015, group: strings-regex, expression: '"é".length', classification: supported, expected: '1', critical: true}
+
+  - {id: arrays-objects-001, group: arrays-objects, expression: '[1, 2, 3].length', classification: supported, expected: '3', critical: true}
+  - {id: arrays-objects-002, group: arrays-objects, expression: '[1, 2, 3].join("-")', classification: supported, expected: '1-2-3', critical: true}
+  - {id: arrays-objects-003, group: arrays-objects, expression: '[1, 2, 3].map(function(x) { return x * 2 }).join(",")', classification: supported, expected: '2,4,6', critical: true}
+  - {id: arrays-objects-004, group: arrays-objects, expression: '[1, 2, 3, 4].filter(function(x) { return x % 2 === 0 }).join(",")', classification: supported, expected: '2,4', critical: true}
+  - {id: arrays-objects-005, group: arrays-objects, expression: '[1, 2, 3].reduce(function(a, b) { return a + b }, 0)', classification: supported, expected: '6', critical: true}
+  - {id: arrays-objects-006, group: arrays-objects, expression: '[1, 2].includes(2)', classification: supported, expected: 'true', critical: true}
+  - {id: arrays-objects-007, group: arrays-objects, expression: 'Array.isArray([])', classification: supported, expected: 'true', critical: true}
+  - {id: arrays-objects-008, group: arrays-objects, expression: 'Object.keys({b: 2, a: 1}).sort().join(",")', classification: supported, expected: 'a,b', critical: true}
+  - {id: arrays-objects-009, group: arrays-objects, expression: 'Object.values({a: 2, b: 3}).reduce(function(a, b) { return a + b }, 0)', classification: supported, expected: '5', critical: true}
+  - {id: arrays-objects-010, group: arrays-objects, expression: 'JSON.stringify({a: 1, b: 2})', classification: supported, expected: '{"a":1,"b":2}', critical: true}
+  - {id: arrays-objects-011, group: arrays-objects, expression: '[...[1, 2], 3].join(",")', classification: supported, expected: '1,2,3', critical: true}
+  - {id: arrays-objects-012, group: arrays-objects, expression: '(function() { var [a, b] = [4, 5]; return a + b })()', classification: supported, expected: '9', critical: true}
+  - {id: arrays-objects-013, group: arrays-objects, expression: '({a: {b: 3}}).a.b', classification: supported, expected: '3', critical: true}
+  - {id: arrays-objects-014, group: arrays-objects, expression: '[...new Set([1, 1, 2])].join(",")', classification: supported, expected: '1,2', critical: true}
+  - {id: arrays-objects-015, group: arrays-objects, expression: 'Object.assign({a: 1}, {b: 2}).b', classification: supported, expected: '2', critical: true}
+
+  - {id: scopes-001, group: scopes, expression: '(function() { var x = 2; return x + 1 })()', classification: supported, expected: '3', critical: true}
+  - {id: scopes-002, group: scopes, expression: '(function() { let x = 3; return x + 1 })()', classification: supported, expected: '4', critical: true}
+  - {id: scopes-003, group: scopes, expression: '(function() { const x = 4; return x + 1 })()', classification: supported, expected: '5', critical: true}
+  - {id: scopes-004, group: scopes, expression: '(function() { let x = 1; { let x = 2; } return x })()', classification: supported, expected: '1', critical: true}
+  - {id: scopes-005, group: scopes, expression: '(function() { var x = 6; return function() { return x } })()()', classification: supported, expected: '6', critical: true}
+  - {id: scopes-006, group: scopes, expression: '((x) => x * 2)(4)', classification: supported, expected: '8', critical: true}
+  - {id: scopes-007, group: scopes, expression: '(function(x = 9) { return x })()', classification: supported, expected: '9', critical: true}
+  - {id: scopes-008, group: scopes, expression: '(function(...values) { return values.length })(1, 2, 3)', classification: supported, expected: '3', critical: true}
+  - {id: scopes-009, group: scopes, expression: '(function() { try { throw 7 } catch (error) { return error } })()', classification: supported, expected: '7', critical: true}
+  - {id: scopes-010, group: scopes, expression: '(function() { "use strict"; return this === undefined })()', classification: supported, expected: 'true', critical: true}
+
+  - {id: interpolation-001, group: interpolation, expression: '`value=${1 + 2}`', classification: supported, expected: 'value=3', critical: true}
+  - {id: interpolation-002, group: interpolation, expression: '`${"a"}${"b"}`', classification: supported, expected: 'ab', critical: true}
+  - {id: interpolation-003, group: interpolation, expression: '`truth=${true}`', classification: supported, expected: 'truth=true', critical: true}
+  - {id: interpolation-004, group: interpolation, expression: '`nil=${null}`', classification: supported, expected: 'nil=null', critical: true}
+  - {id: interpolation-005, group: interpolation, expression: '`missing=${undefined}`', classification: supported, expected: 'missing=undefined', critical: true}
+  - {id: interpolation-006, group: interpolation, expression: '`items=${[1, 2, 3]}`', classification: supported, expected: 'items=1,2,3', critical: true}
+  - {id: interpolation-007, group: interpolation, expression: '`choice=${1 < 2 ? "yes" : "no"}`', classification: supported, expected: 'choice=yes', critical: true}
+  - {id: interpolation-008, group: interpolation, expression: '`ceil=${Math.ceil(1.2)}`', classification: supported, expected: 'ceil=2', critical: true}
+  - {id: interpolation-009, group: interpolation, expression: '"$" + "{literal}"', classification: supported, expected: '${literal}', critical: true}
+  - {id: interpolation-010, group: interpolation, expression: 'String.raw`a\nb`', classification: supported, expected: 'a\nb', critical: true}
+
+  - {id: async-promise-001, group: async-promise, expression: 'typeof Promise', classification: supported, expected: 'function', critical: true}
+  - {id: async-promise-002, group: async-promise, expression: 'Promise.resolve(1) instanceof Promise', classification: supported, expected: 'true', critical: true}
+  - {id: async-promise-003, group: async-promise, expression: 'Promise.resolve(1).constructor === Promise', classification: supported, expected: 'true', critical: true}
+  - {id: async-promise-004, group: async-promise, expression: 'typeof Promise.all', classification: supported, expected: 'function', critical: true}
+  - {id: async-promise-005, group: async-promise, expression: 'typeof Promise.race', classification: supported, expected: 'function', critical: true}
+  - {id: async-promise-006, group: async-promise, expression: 'typeof (async function() {})', classification: supported, expected: 'function', critical: true}
+  - {id: async-promise-007, group: async-promise, expression: '(async function() { return 1 })() instanceof Promise', classification: supported, expected: 'true', critical: true}
+  - {id: async-promise-008, group: async-promise, expression: 'Promise.resolve(1)', classification: runtime-specific, rationale: 'Promise object string rendering is engine-specific; settled-state behavior is covered by focused tests.'}
+  - {id: async-promise-009, group: async-promise, expression: 'setTimeout(function() {}, 0)', classification: unsupported-case, rationale: 'The embedded runtime intentionally has no timer event loop.'}
+  - {id: async-promise-010, group: async-promise, expression: 'fetch("http://example.test")', classification: unsupported-case, rationale: 'Fetch is not a permanent binding; synchronous http helpers are the supported network surface.'}
+
+  - {id: helpers-001, group: helpers, expression: 'json(''{"a":1}'').a', classification: supported, expected: '1', critical: true}
+  - {id: helpers-002, group: helpers, expression: 'JSON.stringify(json(''{"a":[1,2]}''))', classification: supported, expected: '{"a":[1,2]}', critical: true}
+  - {id: helpers-003, group: helpers, expression: 'relativePoint(0.125, 0.75)', classification: supported, expected: '13%,75%', critical: true}
+  - {id: helpers-004, group: helpers, expression: 'flowbaton.platform + ":" + flowbaton.copiedText', classification: supported, expected: 'test:clip', critical: true}
+  - {id: helpers-005, group: helpers, expression: 'typeof faker', classification: supported, expected: 'object', critical: true}
+  - {id: helpers-006, group: helpers, expression: 'faker.randomInt(5, 5)', classification: supported, expected: '5', critical: true}
+  - {id: helpers-007, group: helpers, expression: 'faker.uuid().length', classification: supported, expected: '36', critical: true}
+  - {id: helpers-008, group: helpers, expression: '(function() { output.manifestValue = 9; return output.manifestValue })()', classification: supported, expected: '9', critical: true}
+  - {id: helpers-009, group: helpers, expression: 'output.manifestValue', classification: supported, expected: '9', critical: true}
+  - {id: helpers-010, group: helpers, expression: 'typeof console.log', classification: supported, expected: 'function', critical: true}
+
+  - {id: http-001, group: http, expression: 'typeof http.get', classification: supported, expected: 'function', critical: true}
+  - {id: http-002, group: http, expression: 'typeof http.post', classification: supported, expected: 'function', critical: true}
+  - {id: http-003, group: http, expression: 'typeof http.put', classification: supported, expected: 'function', critical: true}
+  - {id: http-004, group: http, expression: 'typeof http.delete', classification: supported, expected: 'function', critical: true}
+  - {id: http-005, group: http, expression: 'typeof http.request', classification: supported, expected: 'function', critical: true}
+  - {id: http-006, group: http, expression: 'http.get("http://link.invalid")', classification: unsupported-case, rationale: 'Live HTTP requires a controlled test server; host behavior is covered with a recording transport.'}
+  - {id: http-007, group: http, expression: 'http.post("http://link.invalid", {body: "x"})', classification: unsupported-case, rationale: 'Live HTTP requires a controlled test server; body behavior is covered with a recording transport.'}
+  - {id: http-008, group: http, expression: 'http.post("http://link.invalid", {multipartForm: {file: {filePath: "fixture"}}})', classification: unsupported-case, rationale: 'Multipart validation requires an external fixture tree; relative-path behavior is covered by a focused test.'}
+
+  - {id: errors-001, group: errors, expression: 'throw new Error("boom")', classification: unsupported-case, rationale: 'Stack and source normalization requires an error-capture harness.'}
+  - {id: errors-002, group: errors, expression: 'MISSING_CALL()', classification: unsupported-case, rationale: 'Exception class and stack contract requires an error-capture harness.'}
+  - {id: errors-003, group: errors, expression: 'JSON.parse("{")', classification: unsupported-case, rationale: 'Syntax-error message text differs by engine and needs normalized runtime capture.'}
+  - {id: errors-004, group: errors, expression: 'null.value', classification: unsupported-case, rationale: 'Type-error message text differs by engine and needs normalized runtime capture.'}
+  - {id: errors-005, group: errors, expression: 'const = 1', classification: unsupported-case, rationale: 'Parser-error text and location need normalized runtime capture.'}
+  - {id: errors-006, group: errors, expression: 'for (;;) {}', classification: unsupported-case, rationale: 'Non-termination is covered by the focused context interruption and runtime reuse test.'}
+  - {id: errors-007, group: errors, expression: 'Promise.reject(new Error("rejected"))', classification: unsupported-case, rationale: 'Unhandled rejection reporting requires an explicit rejection policy.'}

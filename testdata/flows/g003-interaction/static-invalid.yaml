@@ -1,0 +1,4 @@
+appId: com.example.g003.i21.static-invalid
+name: G003 I21 Static Invalid
+---
+- action: clearKeychain

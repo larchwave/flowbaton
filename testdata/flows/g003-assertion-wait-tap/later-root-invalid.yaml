@@ -1,0 +1,5 @@
+appId: com.example.g003.later-root-invalid
+name: G003 Public Later Root Invalid
+---
+- tapOn:
+    point: "50%,invalid"

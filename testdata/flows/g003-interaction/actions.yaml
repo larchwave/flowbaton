@@ -1,0 +1,13 @@
+appId: com.example.g003.i21.actions
+name: G003 I21 Actions
+---
+- setClipboard: action-seed
+- back
+- action: back
+- hideKeyboard
+- action: hideKeyboard
+- scroll
+- action: scroll
+- pasteText
+- action: pasteText
+- pressKey: HOME

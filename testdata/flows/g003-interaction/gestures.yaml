@@ -1,0 +1,23 @@
+appId: com.example.g003.i21.gestures
+name: G003 I21 Gestures
+env:
+  CARD: Gesture Card
+---
+- doubleTapOn:
+    point: "10,20"
+    delay: 125
+    waitToSettleTimeoutMs: 0
+- longPressOn:
+    point: "30%,40%"
+    waitToSettleTimeoutMs: 0
+- swipe: {direction: UP, duration: 401, waitToSettleTimeoutMs: 0}
+- swipe: {direction: DOWN, duration: 402, waitToSettleTimeoutMs: 0}
+- swipe: {direction: LEFT, duration: 403, waitToSettleTimeoutMs: 0}
+- swipe: {direction: RIGHT, duration: 404, waitToSettleTimeoutMs: 0}
+- swipe: {start: "10,20", end: "90,80", duration: 405, waitToSettleTimeoutMs: 0}
+- swipe: {start: "10%,20%", end: "90%,80%", duration: 406, waitToSettleTimeoutMs: 0}
+- swipe:
+    from: {text: "${CARD}"}
+    direction: LEFT
+    duration: 407
+    waitToSettleTimeoutMs: 0

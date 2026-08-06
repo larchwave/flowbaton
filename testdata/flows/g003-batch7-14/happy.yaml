@@ -1,0 +1,23 @@
+appId: com.example.g003.batch714
+name: G003 Batches 7-14 Happy
+---
+- stopApp
+- killApp
+- clearState
+- clearKeychain
+- openLink: {link: 'https://example.invalid/path', browser: true}
+- openBrowser: 'https://example.invalid/home'
+- waitForAnimationToEnd: {timeout: 200}
+- setLocation: {latitude: 48.0, longitude: 2.0}
+- setOrientation: LANDSCAPE_LEFT
+- setPermissions: {permissions: {camera: allow, location: deny}}
+- setAirplaneMode: enabled
+- toggleAirplaneMode
+- travel: {points: ['48.0, 2.0', '48.001, 2.0004'], speed: 1000}
+- startRecording: captures/session
+- addMedia: [sample.png]
+- takeScreenshot: artifacts/home
+- assertScreenshot: expected/home
+- stopRecording
+- runScript: probe.js
+- evalScript: 'output.ready = true'

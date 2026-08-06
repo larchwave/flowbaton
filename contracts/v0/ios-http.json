@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "contract_version": "v0",
+  "declaration_basis": {
+    "contract_kind": "flowbaton-wire-contract",
+    "specifications": [
+      "specs/04-wire-protocols.md sections 3 and 4"
+    ],
+    "product_decisions": [
+      {
+        "id": "ios-http-methods",
+        "statement": "FlowBaton v0 uses GET runningApp, GET screenshot, GET isScreenStatic, GET deviceInfo, GET status, and GET keyboard; it uses POST for mutations and POST viewHierarchy because that route carries a JSON request."
+      },
+      {
+        "id": "permissions-value-schema",
+        "statement": "FlowBaton v0 models setPermissions map entries as string values."
+      }
+    ]
+  },
+  "transport": {
+    "scheme": "http",
+    "bind_host": "127.0.0.1",
+    "default_port": 22087
+  },
+  "routes": [
+    {"name":"runningApp","method":"GET","path":"/runningApp","request_location":"json_body","request_schema":"RunningAppRequest","response_schema":"RunningAppResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"swipe","method":"POST","path":"/swipe","request_location":"json_body","request_schema":"SwipeRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"swipeV2","method":"POST","path":"/swipeV2","request_location":"json_body","request_schema":"SwipeV2Request","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"inputText","method":"POST","path":"/inputText","request_location":"json_body","request_schema":"InputTextRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"touch","method":"POST","path":"/touch","request_location":"json_body","request_schema":"TouchRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"screenshot","method":"GET","path":"/screenshot","request_location":"query","request_schema":"ScreenshotQuery","response_schema":"ScreenshotResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"isScreenStatic","method":"GET","path":"/isScreenStatic","request_location":"none","request_schema":"NoBody","response_schema":"ScreenStaticResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"pressKey","method":"POST","path":"/pressKey","request_location":"json_body","request_schema":"PressKeyRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"pressButton","method":"POST","path":"/pressButton","request_location":"json_body","request_schema":"PressButtonRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"eraseText","method":"POST","path":"/eraseText","request_location":"json_body","request_schema":"EraseTextRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"deviceInfo","method":"GET","path":"/deviceInfo","request_location":"none","request_schema":"NoBody","response_schema":"DeviceInfoResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"setOrientation","method":"POST","path":"/setOrientation","request_location":"json_body","request_schema":"SetOrientationRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"setPermissions","method":"POST","path":"/setPermissions","request_location":"json_body","request_schema":"SetPermissionsRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"viewHierarchy","method":"POST","path":"/viewHierarchy","request_location":"json_body","request_schema":"ViewHierarchyRequest","response_schema":"ViewHierarchyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"status","method":"GET","path":"/status","request_location":"none","request_schema":"NoBody","response_schema":"StatusResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"keyboard","method":"GET","path":"/keyboard","request_location":"json_body","request_schema":"KeyboardRequest","response_schema":"KeyboardResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"launchApp","method":"POST","path":"/launchApp","request_location":"json_body","request_schema":"LaunchAppRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"terminateApp","method":"POST","path":"/terminateApp","request_location":"json_body","request_schema":"TerminateAppRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]}
+  ],
+  "schemas": {
+    "NoBody": {"kind":"none"},
+    "EmptyResponse": {"kind":"empty"},
+    "ScreenshotResponse": {"kind":"binary","content_types":["image/png","image/jpeg"]},
+    "RunningAppRequest": {"kind":"object","required":["appIds"],"fields":{"appIds":{"type":"array","items":"string"}}},
+    "RunningAppResponse": {"kind":"object","required":["runningAppBundleId"],"fields":{"runningAppBundleId":{"type":"string"}}},
+    "SwipeRequest": {
+      "kind":"object",
+      "required":["startX","startY","endX","endY","duration"],
+      "fields":{
+        "appId":{"type":"string"},
+        "startX":{"type":"number"},
+        "startY":{"type":"number"},
+        "endX":{"type":"number"},
+        "endY":{"type":"number"},
+        "duration":{"type":"number"}
+      }
+    },
+    "SwipeV2Request": {
+      "kind":"object",
+      "required":["startX","startY","endX","endY","duration"],
+      "fields":{
+        "startX":{"type":"number"},
+        "startY":{"type":"number"},
+        "endX":{"type":"number"},
+        "endY":{"type":"number"},
+        "duration":{"type":"number"},
+        "appIds":{"type":"array","items":"string"}
+      }
+    },
+    "InputTextRequest": {"kind":"object","required":["text","appIds"],"fields":{"text":{"type":"string"},"appIds":{"type":"array","items":"string"}}},
+    "TouchRequest": {"kind":"object","required":["x","y"],"fields":{"x":{"type":"number"},"y":{"type":"number"},"duration":{"type":"number"}}},
+    "ScreenshotQuery": {"kind":"object","fields":{"compressed":{"type":"boolean"}}},
+    "ScreenStaticResponse": {"kind":"object","required":["isScreenStatic"],"fields":{"isScreenStatic":{"type":"boolean"}}},
+    "PressKeyRequest": {"kind":"object","required":["key"],"fields":{"key":{"type":"string","enum":["delete","return","enter","tab","space","escape"]}}},
+    "PressButtonRequest": {"kind":"object","required":["button"],"fields":{"button":{"type":"string","enum":["home","lock"]}}},
+    "EraseTextRequest": {"kind":"object","required":["charactersToErase","appIds"],"fields":{"charactersToErase":{"type":"integer","minimum":0},"appIds":{"type":"array","items":"string"}}},
+    "DeviceInfoResponse": {
+      "kind":"object",
+      "required":["widthPoints","heightPoints","widthPixels","heightPixels"],
+      "fields":{
+        "widthPoints":{"type":"number"},
+        "heightPoints":{"type":"number"},
+        "widthPixels":{"type":"number"},
+        "heightPixels":{"type":"number"}
+      }
+    },
+    "SetOrientationRequest": {"kind":"object","required":["orientation"],"fields":{"orientation":{"type":"string","enum":["portrait","landscapeLeft","landscapeRight","upsideDown"]}}},
+    "SetPermissionsRequest": {"kind":"object","required":["permissions"],"fields":{"permissions":{"type":"object","additional_properties":"string"}}},
+    "ViewHierarchyRequest": {"kind":"object","required":["appIds","excludeKeyboardElements"],"fields":{"appIds":{"type":"array","items":"string"},"excludeKeyboardElements":{"type":"boolean"}}},
+    "Frame": {
+      "kind":"object",
+      "required":["X","Y","Width","Height"],
+      "fields":{"X":{"type":"number"},"Y":{"type":"number"},"Width":{"type":"number"},"Height":{"type":"number"}}
+    },
+    "AXElement": {
+      "kind":"object",
+      "required":["identifier","frame","label","elementType","enabled","horizontalSizeClass","verticalSizeClass","selected","hasFocus","windowContextID","displayID"],
+      "fields":{
+        "identifier":{"type":"string"},
+        "frame":{"ref":"Frame"},
+        "value":{"type":"string"},
+        "title":{"type":"string"},
+        "label":{"type":"string"},
+        "elementType":{"type":"integer"},
+        "enabled":{"type":"boolean"},
+        "horizontalSizeClass":{"type":"integer"},
+        "verticalSizeClass":{"type":"integer"},
+        "placeholderValue":{"type":"string"},
+        "selected":{"type":"boolean"},
+        "hasFocus":{"type":"boolean"},
+        "children":{"type":"array","items":"ref:AXElement"},
+        "windowContextID":{"type":"number"},
+        "displayID":{"type":"integer"}
+      }
+    },
+    "ViewHierarchyResponse": {"kind":"object","required":["axElement","depth"],"fields":{"axElement":{"ref":"AXElement"},"depth":{"type":"integer"}}},
+    "StatusResponse": {"kind":"object","required":["status"],"fields":{"status":{"type":"string","enum":["ok"]}}},
+    "KeyboardRequest": {"kind":"object","required":["appIds"],"fields":{"appIds":{"type":"array","items":"string"}}},
+    "KeyboardResponse": {"kind":"object","required":["isKeyboardVisible"],"fields":{"isKeyboardVisible":{"type":"boolean"}}},
+    "LaunchAppRequest": {"kind":"object","required":["bundleId"],"fields":{"bundleId":{"type":"string"}}},
+    "TerminateAppRequest": {"kind":"object","required":["appId"],"fields":{"appId":{"type":"string"}}},
+    "ErrorResponse": {
+      "kind":"object",
+      "required":["code","errorMessage"],
+      "fields":{
+        "code":{"type":"string","enum":["internal","precondition","timeout"]},
+        "errorMessage":{"type":"string"}
+      }
+    }
+  },
+  "error_contract": {
+    "schema": "ErrorResponse",
+    "mappings": [
+      {"http_status": 400, "code": "precondition"},
+      {"http_status": 408, "code": "timeout"},
+      {"http_status": 500, "code": "internal"}
+    ],
+    "timeout_signatures": [
+      {"domain": "com.apple.dt.XCTest.XCTFuture", "code": 1000, "retryable": false},
+      {"domain": "com.apple.dt.xctest.automation-support.error", "code": 6, "retryable": false}
+    ]
+  }
+}

@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.26.1'
+  GOTOOLCHAIN: local
+  GOFLAGS: -mod=readonly -trimpath
+
+jobs:
+  public-oss-boundary:
+    name: Require public OSS repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fail closed unless source is public
+        shell: bash
+        env:
+          REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+        run: test "$REPOSITORY_VISIBILITY" = 'public'
+
+  repository-language:
+    needs: public-oss-boundary
+    name: Check repository language
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: false
+          cache: false
+      - name: Scan tracked paths and bytes
+        run: go test ./internal/foundation -run '^TestRepositoryLanguageTree$' -count=1
+
+  audit:
+    needs: repository-language
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: false
+          cache: false
+      - name: Check formatting
+        shell: bash
+        run: |
+          unformatted="$(git ls-files -z -- '*.go' | xargs -0 gofmt -l)"
+          if [[ -n "$unformatted" ]]; then
+            printf '%s\n' "$unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Test with race detector
+        run: go test -race ./...
+
+  portable-tests:
+    needs: repository-language
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: false
+          cache: false
+      - name: Test
+        run: go test ./...
+
+  android:
+    needs: repository-language
+    name: Android driver build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: drivers/android
+    env:
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-ci
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Install Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android command-line tools
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Test core, lint agent, and compile both APKs
+        shell: bash
+        run: >-
+          ./gradlew --no-daemon --dependency-verification strict
+          :core:test :agent:lintDebug
+          :agent:assembleDebug :agent:assembleDebugAndroidTest
+
+  ios:
+    needs: repository-language
+    name: iOS runner build
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run Swift package tests
+        run: swift test --package-path drivers/ios
+      - name: Install XcodeGen 2.44.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/xcodegen-2.44.1"
+          archive="$tool_dir/xcodegen.zip"
+          mkdir -p "$tool_dir"
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$archive" \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip
+          printf '%s  %s\n' \
+            'a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73' \
+            "$archive" | shasum -a 256 --check -
+          unzip -q "$archive" -d "$tool_dir"
+          "$tool_dir/xcodegen/bin/xcodegen" --version
+          printf '%s\n' "$tool_dir/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Generate the iOS project
+        run: xcodegen generate --spec drivers/ios/project.yml --project drivers/ios
+      - name: Check Swift formatting
+        run: >-
+          xcrun swift-format lint --strict --recursive
+          drivers/ios/Sources drivers/ios/Tests drivers/ios/UITests
+      - name: Build generic Simulator test bundle
+        run: |
+          xcodebuild -quiet \
+            -project drivers/ios/FlowBatonIOSRunner.xcodeproj \
+            -scheme FlowBatonIOSRunnerUITests \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/flowbaton-ios-derived" \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build-for-testing

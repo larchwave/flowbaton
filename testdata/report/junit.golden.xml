@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="mobile &amp; web 🚀" tests="5" failures="1" time="3.75">
+    <testcase id="completed &lt;flow&gt; ✅" name="completed &lt;flow&gt; ✅" classname="completed &lt;flow&gt; ✅" time="0.5" status="SUCCESS"></testcase>
+    <testcase id="skipped" name="skipped" classname="skipped" time="0.0" status="SKIPPED">
+      <skipped message="Skipped"></skipped>
+    </testcase>
+    <testcase id="warned" name="warned" classname="warned" time="0.25" status="SUCCESS"></testcase>
+    <testcase id="failed" name="failed" classname="failed" time="2.0" status="ERROR">
+      <failure>selector &#34;Pay&#34; wasn&#39;t found; next: &lt;retry&gt;</failure>
+    </testcase>
+    <testcase id="cancelled" name="cancelled" classname="cancelled" time="1.0" status="SKIPPED">
+      <skipped message="Cancelled"></skipped>
+    </testcase>
+  </testsuite>
+</testsuites>

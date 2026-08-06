@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "contract_version": "v1",
+  "session_id": "session-01JZEXAMPLE",
+  "binding": {
+    "tenant_id": "tenant-example",
+    "principal_id": "studio-core-host-01",
+    "auth_profile_id": "remote-cloud-mac-v1",
+    "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "request_nonce": "nonce-01JZEXAMPLE-0001",
+    "issued_at": "2026-07-15T12:00:00Z",
+    "expires_at": "2026-07-15T12:10:00Z"
+  },
+  "lease": {
+    "lease_id": "lease-01JZEXAMPLE",
+    "resource_id": "ios-simulator-iphone16-18.5",
+    "tenant_id": "tenant-example",
+    "owner_principal_id": "studio-core-host-01",
+    "generation": 7,
+    "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "release_idempotency_key": "release-01JZEXAMPLE-0001",
+    "acquired_at": "2026-07-15T12:00:00Z",
+    "expires_at": "2026-07-15T12:05:00Z",
+    "heartbeat_interval_ms": 5000
+  },
+  "capabilities": ["frame-stream", "tap", "input-text", "hierarchy", "run-flow"],
+  "requests": [
+    {
+      "sequence": 1,
+      "request_id": "request-acquire-0001",
+      "type": "acquire",
+      "timestamp": "2026-07-15T12:00:00Z",
+      "idempotency_key": "acquire-01JZEXAMPLE-0001",
+      "tenant_id": "tenant-example",
+      "principal_id": "studio-core-host-01",
+      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "data": {
+        "resource_selector": "ios-simulator-iphone16-18.5",
+        "requested_capabilities": ["frame-stream", "tap", "input-text", "hierarchy", "run-flow"]
+      }
+    },
+    {
+      "sequence": 2,
+      "request_id": "request-input-0002",
+      "type": "input",
+      "timestamp": "2026-07-15T12:00:01Z",
+      "idempotency_key": "input-tap-01JZEXAMPLE-0001",
+      "tenant_id": "tenant-example",
+      "principal_id": "studio-core-host-01",
+      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "data": {
+        "lease_id": "lease-01JZEXAMPLE",
+        "generation": 7,
+        "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "based_on_stream_epoch": 1,
+        "based_on_frame_sequence": 1,
+        "command": "tap",
+        "payload_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    },
+    {
+      "sequence": 3,
+      "request_id": "request-heartbeat-0003",
+      "type": "heartbeat",
+      "timestamp": "2026-07-15T12:00:05Z",
+      "idempotency_key": "heartbeat-01JZEXAMPLE-0001",
+      "tenant_id": "tenant-example",
+      "principal_id": "studio-core-host-01",
+      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "data": {
+        "lease_id": "lease-01JZEXAMPLE",
+        "generation": 7,
+        "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "requested_extension_ms": 5000
+      }
+    },
+    {
+      "sequence": 4,
+      "request_id": "request-reconnect-0004",
+      "type": "reconnect",
+      "timestamp": "2026-07-15T12:00:07Z",
+      "idempotency_key": "reconnect-01JZEXAMPLE-0001",
+      "tenant_id": "tenant-example",
+      "principal_id": "studio-core-host-01",
+      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "data": {
+        "session_id": "session-01JZEXAMPLE",
+        "lease_id": "lease-01JZEXAMPLE",
+        "generation": 7,
+        "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "last_acknowledged_sequence": 4
+      }
+    },
+    {
+      "sequence": 5,
+      "request_id": "cancel-request-0001",
+      "type": "cancel",
+      "timestamp": "2026-07-15T12:00:08Z",
+      "idempotency_key": "cancel-01JZEXAMPLE-0001",
+      "tenant_id": "tenant-example",
+      "principal_id": "studio-core-host-01",
+      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "data": {
+        "lease_id": "lease-01JZEXAMPLE",
+        "generation": 7,
+        "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "reason": "user_requested"
+      }
+    },
+    {
+      "sequence": 6,
+      "request_id": "request-release-0006",
+      "type": "release",
+      "timestamp": "2026-07-15T12:00:08.050Z",
+      "idempotency_key": "release-01JZEXAMPLE-0001",
+      "tenant_id": "tenant-example",
+      "principal_id": "studio-core-host-01",
+      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "data": {
+        "lease_id": "lease-01JZEXAMPLE",
+        "generation": 7,
+        "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  ],
+  "events": [
+    {
+      "sequence": 1,
+      "event_id": "event-acquired-0001",
+      "type": "acquired",
+      "timestamp": "2026-07-15T12:00:00Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "lease_id": "lease-01JZEXAMPLE",
+        "resource_id": "ios-simulator-iphone16-18.5",
+        "tenant_id": "tenant-example",
+        "owner_principal_id": "studio-core-host-01",
+        "generation": 7
+      }
+    },
+    {
+      "sequence": 2,
+      "event_id": "event-frame-0002",
+      "type": "frame",
+      "timestamp": "2026-07-15T12:00:01Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "stream_epoch": 1,
+        "frame_sequence": 1,
+        "orientation": "portrait",
+        "width": 1179,
+        "height": 2556,
+        "content_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "queue_depth": 0,
+        "dropped_since_previous": 0
+      }
+    },
+    {
+      "sequence": 3,
+      "event_id": "event-input-0003",
+      "type": "input_ack",
+      "timestamp": "2026-07-15T12:00:01.042Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "input_id": "tap-1",
+        "idempotency_key": "input-tap-01JZEXAMPLE-0001",
+        "based_on_stream_epoch": 1,
+        "based_on_frame_sequence": 1,
+        "latency_ms": 42,
+        "result": "applied"
+      }
+    },
+    {
+      "sequence": 4,
+      "event_id": "event-heartbeat-0004",
+      "type": "heartbeat",
+      "timestamp": "2026-07-15T12:00:05Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "request_id": "request-heartbeat-0003",
+        "idempotency_key": "heartbeat-01JZEXAMPLE-0001",
+        "lease_expires_at": "2026-07-15T12:05:05Z",
+        "generation": 7
+      }
+    },
+    {
+      "sequence": 5,
+      "event_id": "event-disconnect-0005",
+      "type": "disconnected",
+      "timestamp": "2026-07-15T12:00:06Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "reason": "transport_interrupted",
+        "last_server_sequence": 4
+      }
+    },
+    {
+      "sequence": 6,
+      "event_id": "event-reconnect-0006",
+      "type": "reconnected",
+      "timestamp": "2026-07-15T12:00:07Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "request_id": "request-reconnect-0004",
+        "idempotency_key": "reconnect-01JZEXAMPLE-0001",
+        "resume_from_sequence": 4,
+        "stream_epoch": 2,
+        "generation": 7
+      }
+    },
+    {
+      "sequence": 7,
+      "event_id": "event-cancel-0007",
+      "type": "cancelled",
+      "timestamp": "2026-07-15T12:00:08Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "request_id": "cancel-request-0001",
+        "idempotency_key": "cancel-01JZEXAMPLE-0001",
+        "reason": "user_requested",
+        "terminal_outcome": "cancelled"
+      }
+    },
+    {
+      "sequence": 8,
+      "event_id": "event-release-0008",
+      "type": "released",
+      "timestamp": "2026-07-15T12:00:08.050Z",
+      "lease_generation": 7,
+      "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "data": {
+        "release_idempotency_key": "release-01JZEXAMPLE-0001",
+        "outcome": "cancelled",
+        "generation": 7
+      }
+    }
+  ]
+}

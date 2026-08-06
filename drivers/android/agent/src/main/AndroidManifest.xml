@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Package visibility (Android 11 / API 30) hides other apps from this one
+         unless it says otherwise, and targetSdk is 34. Without this,
+         getLaunchIntentForPackage returns null for anything but ourselves, and
+         `- launchApp` failed with "no launcher intent for package
+         com.android.chrome" on a package whose launcher intent resolves fine
+         from the shell (com.android.chrome/com.google.android.apps.chrome.Main).
+
+         The query is exactly the one launchApp makes — MAIN/LAUNCHER — rather
+         than QUERY_ALL_PACKAGES, which lint objects to and which asks for more
+         than this needs. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="FlowBaton Android Driver"
+        android:supportsRtl="true" />
+</manifest>

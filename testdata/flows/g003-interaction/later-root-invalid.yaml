@@ -1,0 +1,4 @@
+appId: com.example.g003.i21.later-root-invalid
+name: G003 I21 Later Root Invalid
+---
+- action: clearKeychain

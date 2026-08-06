@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "policy_version": "public-oss-v1",
+  "canonical_owner": "nohavewho",
+  "license": "Apache-2.0",
+  "undeclared_surface_rule": "Every owner-controlled or officially advertised FlowBaton delivery coordinate must be declared, public, anonymously retrievable, and integrity-verifiable before distributed-v1.",
+  "evidence_fields": [
+    "manifest_sha256",
+    "surface_id",
+    "profile_id",
+    "tool_version",
+    "timestamp_utc",
+    "exit_code",
+    "response_sha256",
+    "artifact_sha256",
+    "signature_verified",
+    "result"
+  ],
+  "probe_profiles": {
+    "github_public_repository": {
+      "mode": "anonymous",
+      "tool": "curl",
+      "command_template": "env -i HOME={empty_home} PATH={trusted_path} /usr/bin/curl -fsSL --max-redirs 0 https://api.github.com/repos/{owner}/{repository}",
+      "credential_isolation": [
+        "use an empty HOME with no token, cookie, netrc, or proxy credentials",
+        "record only bounded public metadata and its digest"
+      ],
+      "redirect_policy": "forbid redirects and require api.github.com",
+      "expected_outcomes": [
+        "HTTP 200",
+        "visibility is public and private is false",
+        "license SPDX identifier is Apache-2.0"
+      ],
+      "forbidden_metadata": [
+        "authorization headers",
+        "cookies",
+        "credential values"
+      ]
+    },
+    "git_anonymous_read": {
+      "mode": "anonymous",
+      "tool": "git",
+      "command_template": "env -i HOME={empty_home} PATH={trusted_path} GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c http.followRedirects=false ls-remote {coordinate}",
+      "credential_isolation": [
+        "use an empty HOME and no credential helper",
+        "disable prompts and authenticated HTTP headers"
+      ],
+      "redirect_policy": "forbid redirects and require github.com",
+      "expected_outcomes": [
+        "git ls-remote exits zero",
+        "the audited tag or branch ref is present"
+      ],
+      "forbidden_metadata": [
+        "credential values",
+        "authorization headers",
+        "cookies"
+      ]
+    },
+    "public_release_asset": {
+      "mode": "anonymous",
+      "tool": "curl",
+      "command_template": "env -i HOME={empty_home} PATH={trusted_path} /usr/bin/curl -fL --proto '=https' --output {artifact_file} {coordinate}",
+      "credential_isolation": [
+        "use no token, cookie, netrc, or signed private URL",
+        "delete downloaded payload after digest and signature verification"
+      ],
+      "redirect_policy": "allow HTTPS redirects only to declared GitHub object-storage hosts",
+      "expected_outcomes": [
+        "download exits zero without authentication",
+        "SHA-256 matches checksums.txt",
+        "signature or attestation subject matches the artifact digest"
+      ],
+      "forbidden_metadata": [
+        "credential values",
+        "authorization headers",
+        "private signed query parameters"
+      ]
+    },
+    "public_document": {
+      "mode": "anonymous",
+      "tool": "curl",
+      "command_template": "env -i HOME={empty_home} PATH={trusted_path} /usr/bin/curl -fsSL --max-redirs 0 {coordinate}",
+      "credential_isolation": [
+        "use no token, cookie, netrc, or proxy credentials"
+      ],
+      "redirect_policy": "forbid undeclared host changes",
+      "expected_outcomes": [
+        "HTTP 200 without authentication",
+        "content digest matches the audited source or release manifest"
+      ],
+      "forbidden_metadata": [
+        "credential values",
+        "authorization headers",
+        "cookies"
+      ]
+    }
+  },
+  "surfaces": [
+    {
+      "id": "source-repository",
+      "kind": "source_repository",
+      "coordinate": "https://github.com/nohavewho/flowbaton",
+      "lifecycle": "active",
+      "required_for_distributed_v1": true,
+      "required_visibility": "public",
+      "anonymous_probe_profiles": ["github_public_repository", "git_anonymous_read"]
+    },
+    {
+      "id": "release-assets",
+      "kind": "release_assets",
+      "coordinate": "https://github.com/nohavewho/flowbaton/releases/download/v{version}/{asset_name}",
+      "lifecycle": "planned",
+      "required_for_distributed_v1": true,
+      "required_visibility": "public",
+      "anonymous_probe_profiles": ["public_release_asset"]
+    },
+    {
+      "id": "homebrew-tap",
+      "kind": "homebrew_tap",
+      "coordinate": "https://github.com/nohavewho/homebrew-flowbaton",
+      "lifecycle": "planned",
+      "required_for_distributed_v1": true,
+      "required_visibility": "public",
+      "anonymous_probe_profiles": ["github_public_repository", "git_anonymous_read"]
+    },
+    {
+      "id": "installers",
+      "kind": "installer",
+      "coordinate": "https://github.com/nohavewho/flowbaton/releases/download/v{version}/{install.sh,install.ps1}",
+      "lifecycle": "planned",
+      "required_for_distributed_v1": true,
+      "required_visibility": "public",
+      "anonymous_probe_profiles": ["public_release_asset"]
+    },
+    {
+      "id": "project-documentation",
+      "kind": "project_documentation",
+      "coordinate": "https://github.com/nohavewho/flowbaton/tree/{commit}/docs",
+      "lifecycle": "active",
+      "required_for_distributed_v1": true,
+      "required_visibility": "public",
+      "anonymous_probe_profiles": ["public_document"]
+    },
+    {
+      "id": "release-attestation",
+      "kind": "attestation",
+      "coordinate": "https://github.com/nohavewho/flowbaton/releases/download/v{version}/flowbaton_{version}.intoto.jsonl",
+      "lifecycle": "planned",
+      "required_for_distributed_v1": true,
+      "required_visibility": "public",
+      "anonymous_probe_profiles": ["public_release_asset"]
+    }
+  ]
+}

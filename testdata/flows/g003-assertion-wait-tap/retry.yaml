@@ -1,0 +1,11 @@
+appId: com.example.g003.retry
+name: G003 Public Retry
+---
+- tapOn:
+    point: "10,20"
+    retryTapIfNoChange: true
+    waitToSettleTimeoutMs: 0
+- tapOn:
+    point: "30,40"
+    retryTapIfNoChange: true
+    waitToSettleTimeoutMs: 0

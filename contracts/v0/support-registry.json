@@ -1,0 +1,1738 @@
+{
+  "schema_version": 1,
+  "contract_version": "v0",
+  "registry_version": "flowbaton.support/v0",
+  "entries": [
+    {
+      "kind": "command",
+      "name": "launchApp",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "stopApp",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "killApp",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "clearState",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "clearKeychain",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "ios-simulator"
+      ],
+      "reason": "keychain state applies to the iOS simulator surface"
+    },
+    {
+      "kind": "command",
+      "name": "setPermissions",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "tapOn",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "doubleTapOn",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "longPressOn",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "assertVisible",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "assertNotVisible",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "assertTrue",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "assertNoDefectsWithAI",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "AI command executes against an injected provider; fails closed without one"
+    },
+    {
+      "kind": "command",
+      "name": "assertScreenshot",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "assertWithAI",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "AI command executes against an injected provider; fails closed without one"
+    },
+    {
+      "kind": "command",
+      "name": "extractTextWithAI",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "AI command executes against an injected provider; fails closed without one"
+    },
+    {
+      "kind": "command",
+      "name": "back",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "hideKeyboard",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "pasteText",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "scroll",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "scrollUntilVisible",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputText",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputRandomText",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputRandomNumber",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputRandomEmail",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputRandomPersonName",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputRandomCityName",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputRandomCountryName",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "inputRandomColorName",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "swipe",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "openLink",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "openBrowser",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "pressKey",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "eraseText",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "action",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "takeScreenshot",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "extendedWaitUntil",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "runFlow",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "setLocation",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "setOrientation",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "repeat",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "retry",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "copyTextFrom",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "setClipboard",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "runScript",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "evalScript",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "waitForAnimationToEnd",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "travel",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "startRecording",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "stopRecording",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "addMedia",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 command"
+    },
+    {
+      "kind": "command",
+      "name": "setAirplaneMode",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android"
+      ],
+      "reason": "airplane-mode automation is declared for Android v1"
+    },
+    {
+      "kind": "command",
+      "name": "toggleAirplaneMode",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android"
+      ],
+      "reason": "airplane-mode automation is declared for Android v1"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "text",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "width",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "height",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "tolerance",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "optional",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "retryTapIfNoChange",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "waitUntilVisible",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "point",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "start",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "end",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "below",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "above",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "leftOf",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "rightOf",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "containsChild",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "containsDescendants",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "childOf",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "traits",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "index",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "enabled",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "selected",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "checked",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "focused",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "repeat",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "delay",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "waitToSettleTimeoutMs",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "label",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "declared FlowBaton v1 selector feature"
+    },
+    {
+      "kind": "selector-feature",
+      "name": "css",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "web"
+      ],
+      "reason": "CSS selection is resolved by the Web/CDP driver and is web-only"
+    },
+    {
+      "kind": "config-extension",
+      "name": "url",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "web"
+      ],
+      "reason": "Web flow targeting is served by the Web/CDP driver and is web-only"
+    },
+    {
+      "kind": "config-extension",
+      "name": "jsEngine=graaljs",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "FlowBaton v1 maps the documented GraalJS token to goja"
+    },
+    {
+      "kind": "config-extension",
+      "name": "androidWebViewHierarchy=accessibility",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "android"
+      ],
+      "reason": "accessibility hierarchy is Android-only"
+    },
+    {
+      "kind": "config-extension",
+      "name": "androidWebViewHierarchy=devtools",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "android"
+      ],
+      "reason": "the Chrome DevTools WebView merge rides the Android abstract CDP socket and is Android-only"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "test",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "cloud",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "not part of the approved local v1 product surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "record",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "hierarchy",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "query",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "download-samples",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "not part of the approved local v1 product surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "login",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "not part of the approved local v1 product surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "logout",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "not part of the approved local v1 product surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "bugreport",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "not part of the approved local v1 product surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "studio",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "not part of the approved local v1 product surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "start-device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "list-devices",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "list-cloud-devices",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "not part of the approved local v1 product surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "generate-completion",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "chat",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "post-v1 AI/MCP surface"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "check-syntax",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "driver-setup",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "mcp",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "post-v1 AI/MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.-v",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--version",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--host",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--port",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--driver-host-port",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--udid",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.--verbose",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--config",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--shard-split",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--shard-all",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.-c",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--continuous",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.-e",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--env",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--format",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--test-suite-name",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--output",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--debug-output",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--test-output-dir",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--flatten-debug-output",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--include-tags",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--exclude-tags",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--headless",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--screen-size",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--analyze",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--api-url",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--api-key",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--reinstall-driver",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--no-reinstall-driver",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--apple-team-id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "test.--device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--local",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.--target",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.--target=devtools",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.--csv",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "query.--text",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "query.--id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.--os-version",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.--device-locale",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.--force-create",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "driver-setup.--apple-team-id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "mcp.--base-dir",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "mcp.--no-viewer",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "mcp.--viewer-port",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+    },
+    {
+      "kind": "host-target",
+      "name": "darwin-arm64",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "v1 GA-gated host"
+    },
+    {
+      "kind": "host-target",
+      "name": "darwin-amd64",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android",
+        "ios-simulator"
+      ],
+      "reason": "v1 GA-gated host"
+    },
+    {
+      "kind": "host-target",
+      "name": "linux-amd64",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android"
+      ],
+      "reason": "v1 GA-gated host"
+    },
+    {
+      "kind": "host-target",
+      "name": "windows-amd64",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android"
+      ],
+      "reason": "v1 GA-gated host"
+    },
+    {
+      "kind": "host-target",
+      "name": "linux-arm64",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "android"
+      ],
+      "reason": "build-only experimental host is post-v1 GA"
+    },
+    {
+      "kind": "host-target",
+      "name": "windows-arm64",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "android"
+      ],
+      "reason": "build-only experimental host is post-v1 GA"
+    },
+    {
+      "kind": "device-platform",
+      "name": "android-emulator",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android"
+      ],
+      "reason": "v1 device surface"
+    },
+    {
+      "kind": "device-platform",
+      "name": "android-physical",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "android"
+      ],
+      "reason": "v1 device surface"
+    },
+    {
+      "kind": "device-platform",
+      "name": "ios-simulator",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "ios-simulator"
+      ],
+      "reason": "v1 device surface"
+    },
+    {
+      "kind": "device-platform",
+      "name": "ios-physical",
+      "parseStatus": "parseable",
+      "runtimeStatus": "deferred",
+      "platforms": [
+        "ios-physical"
+      ],
+      "reason": "physical iOS automation is post-v1"
+    },
+    {
+      "kind": "device-platform",
+      "name": "web",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "web"
+      ],
+      "reason": "Web/CDP execution surface"
+    }
+  ]
+}

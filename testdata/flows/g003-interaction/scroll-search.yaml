@@ -1,0 +1,17 @@
+appId: com.example.g003.i21.scroll-search
+name: G003 I21 Scroll Search
+---
+- scrollUntilVisible:
+    element: {text: Immediate Target}
+    direction: UP
+    timeout: 1000
+    speed: 25
+    visibilityPercentage: 100
+- scrollUntilVisible:
+    element: {text: Delayed Target}
+    direction: DOWN
+    timeout: 1000
+    speed: 60
+    visibilityPercentage: 100
+    waitToSettleTimeoutMs: 0
+    centerElement: true

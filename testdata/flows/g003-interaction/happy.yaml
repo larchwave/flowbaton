@@ -1,0 +1,24 @@
+appId: com.example.g003.i21.happy
+name: G003 I21 Happy All Private
+---
+- doubleTapOn: {point: "10,20", delay: 25, waitToSettleTimeoutMs: 0}
+- longPressOn: {point: "20,30", waitToSettleTimeoutMs: 0}
+- back
+- hideKeyboard
+- pasteText
+- scroll
+- scrollUntilVisible: {element: {text: Ready}, direction: DOWN, timeout: 1000, speed: 40, visibilityPercentage: 100}
+- inputText: happy-text
+- inputRandomText: {length: 3}
+- inputRandomNumber: {length: 4}
+- inputRandomEmail
+- inputRandomPersonName
+- inputRandomCityName
+- inputRandomCountryName
+- inputRandomColorName
+- swipe: {direction: RIGHT, duration: 450, waitToSettleTimeoutMs: 0}
+- pressKey: HOME
+- eraseText: 2
+- action: back
+- copyTextFrom: {id: copy-target}
+- setClipboard: happy-final

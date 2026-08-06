@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowbaton.dev/contracts/device-session/v1/schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_version",
+    "session_id",
+    "binding",
+    "lease",
+    "capabilities",
+    "requests",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "contract_version": {"type": "string", "const": "v1"},
+    "session_id": {"type": "string", "minLength": 8},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant_id", "principal_id", "auth_profile_id", "channel_binding_sha256", "request_nonce", "issued_at", "expires_at"],
+      "properties": {
+        "tenant_id": {"type": "string", "minLength": 3},
+        "principal_id": {"type": "string", "minLength": 3},
+        "auth_profile_id": {"type": "string", "minLength": 8},
+        "channel_binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "request_nonce": {"type": "string", "minLength": 16},
+        "issued_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "resource_id", "tenant_id", "owner_principal_id", "generation", "fencing_token_sha256", "release_idempotency_key", "acquired_at", "expires_at", "heartbeat_interval_ms"],
+      "properties": {
+        "lease_id": {"type": "string", "minLength": 8},
+        "resource_id": {"type": "string", "minLength": 3},
+        "tenant_id": {"type": "string", "minLength": 3},
+        "owner_principal_id": {"type": "string", "minLength": 3},
+        "generation": {"type": "integer", "minimum": 1},
+        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "release_idempotency_key": {"type": "string", "minLength": 16},
+        "acquired_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "heartbeat_interval_ms": {"type": "integer", "minimum": 1}
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "requests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "request_id", "type", "timestamp", "idempotency_key", "tenant_id", "principal_id", "channel_binding_sha256", "data"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 1},
+          "request_id": {"type": "string", "minLength": 8},
+          "type": {"type": "string", "enum": ["acquire", "input", "heartbeat", "reconnect", "cancel", "release"]},
+          "timestamp": {"type": "string", "format": "date-time"},
+          "idempotency_key": {"type": "string", "minLength": 16},
+          "tenant_id": {"type": "string", "minLength": 3},
+          "principal_id": {"type": "string", "minLength": 3},
+          "channel_binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "data": {"type": "object"}
+        },
+        "allOf": [
+          {"if": {"properties": {"type": {"const": "acquire"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/acquire_request_data"}}}},
+          {"if": {"properties": {"type": {"const": "input"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/input_request_data"}}}},
+          {"if": {"properties": {"type": {"const": "heartbeat"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/heartbeat_request_data"}}}},
+          {"if": {"properties": {"type": {"const": "reconnect"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/reconnect_request_data"}}}},
+          {"if": {"properties": {"type": {"const": "cancel"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/cancel_request_data"}}}},
+          {"if": {"properties": {"type": {"const": "release"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/release_request_data"}}}}
+        ]
+      }
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "event_id", "type", "timestamp", "lease_generation", "fencing_token_sha256", "data"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 1},
+          "event_id": {"type": "string", "minLength": 8},
+          "type": {
+            "type": "string",
+            "enum": ["acquired", "frame", "input_ack", "heartbeat", "disconnected", "reconnected", "cancelled", "released", "error"]
+          },
+          "timestamp": {"type": "string", "format": "date-time"},
+          "lease_generation": {"type": "integer", "minimum": 1},
+          "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "data": {"type": "object"}
+        },
+        "allOf": [
+          {"if": {"properties": {"type": {"const": "acquired"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/acquired_data"}}}},
+          {"if": {"properties": {"type": {"const": "frame"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/frame_data"}}}},
+          {"if": {"properties": {"type": {"const": "input_ack"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/input_ack_data"}}}},
+          {"if": {"properties": {"type": {"const": "heartbeat"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/heartbeat_data"}}}},
+          {"if": {"properties": {"type": {"const": "disconnected"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/disconnected_data"}}}},
+          {"if": {"properties": {"type": {"const": "reconnected"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/reconnected_data"}}}},
+          {"if": {"properties": {"type": {"const": "cancelled"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/cancelled_data"}}}},
+          {"if": {"properties": {"type": {"const": "released"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/released_data"}}}},
+          {"if": {"properties": {"type": {"const": "error"}}}, "then": {"properties": {"data": {"$ref": "#/$defs/error_data"}}}}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "acquire_request_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_selector", "requested_capabilities"],
+      "properties": {
+        "resource_selector": {"type": "string", "minLength": 3},
+        "requested_capabilities": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "input_request_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "generation", "fencing_token_sha256", "based_on_stream_epoch", "based_on_frame_sequence", "command", "payload_sha256"],
+      "properties": {
+        "lease_id": {"type": "string", "minLength": 8},
+        "generation": {"type": "integer", "minimum": 1},
+        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "based_on_stream_epoch": {"type": "integer", "minimum": 1},
+        "based_on_frame_sequence": {"type": "integer", "minimum": 1},
+        "command": {"type": "string", "enum": ["tap", "input-text", "press-key", "swipe", "set-orientation"]},
+        "payload_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "heartbeat_request_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "generation", "fencing_token_sha256", "requested_extension_ms"],
+      "properties": {
+        "lease_id": {"type": "string", "minLength": 8},
+        "generation": {"type": "integer", "minimum": 1},
+        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "requested_extension_ms": {"type": "integer", "minimum": 1}
+      }
+    },
+    "reconnect_request_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "lease_id", "generation", "fencing_token_sha256", "last_acknowledged_sequence"],
+      "properties": {
+        "session_id": {"type": "string", "minLength": 8},
+        "lease_id": {"type": "string", "minLength": 8},
+        "generation": {"type": "integer", "minimum": 1},
+        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "last_acknowledged_sequence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "cancel_request_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "generation", "fencing_token_sha256", "reason"],
+      "properties": {
+        "lease_id": {"type": "string", "minLength": 8},
+        "generation": {"type": "integer", "minimum": 1},
+        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "reason": {"type": "string", "enum": ["user_requested", "budget_exhausted", "authorization_revoked", "deadline_exceeded"]}
+      }
+    },
+    "release_request_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "generation", "fencing_token_sha256"],
+      "properties": {
+        "lease_id": {"type": "string", "minLength": 8},
+        "generation": {"type": "integer", "minimum": 1},
+        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "acquired_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease_id", "resource_id", "tenant_id", "owner_principal_id", "generation"],
+      "properties": {
+        "lease_id": {"type": "string", "minLength": 8},
+        "resource_id": {"type": "string", "minLength": 3},
+        "tenant_id": {"type": "string", "minLength": 3},
+        "owner_principal_id": {"type": "string", "minLength": 3},
+        "generation": {"type": "integer", "minimum": 1}
+      }
+    },
+    "frame_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stream_epoch", "frame_sequence", "orientation", "width", "height", "content_sha256", "queue_depth", "dropped_since_previous"],
+      "properties": {
+        "stream_epoch": {"type": "integer", "minimum": 1},
+        "frame_sequence": {"type": "integer", "minimum": 1},
+        "orientation": {"type": "string", "enum": ["portrait", "portrait-upside-down", "landscape-left", "landscape-right"]},
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "content_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "queue_depth": {"type": "integer", "minimum": 0},
+        "dropped_since_previous": {"type": "integer", "minimum": 0}
+      }
+    },
+    "input_ack_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_id", "idempotency_key", "based_on_stream_epoch", "based_on_frame_sequence", "latency_ms", "result"],
+      "properties": {
+        "input_id": {"type": "string", "minLength": 1},
+        "idempotency_key": {"type": "string", "minLength": 16},
+        "based_on_stream_epoch": {"type": "integer", "minimum": 1},
+        "based_on_frame_sequence": {"type": "integer", "minimum": 1},
+        "latency_ms": {"type": "integer", "minimum": 0},
+        "result": {"type": "string", "enum": ["applied", "duplicate", "rejected"]}
+      }
+    },
+    "heartbeat_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "idempotency_key", "lease_expires_at", "generation"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 8},
+        "idempotency_key": {"type": "string", "minLength": 16},
+        "lease_expires_at": {"type": "string", "format": "date-time"},
+        "generation": {"type": "integer", "minimum": 1}
+      }
+    },
+    "disconnected_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "last_server_sequence"],
+      "properties": {
+        "reason": {"type": "string", "enum": ["transport_interrupted", "lease_expired", "auth_revoked", "server_restart"]},
+        "last_server_sequence": {"type": "integer", "minimum": 1}
+      }
+    },
+    "reconnected_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "idempotency_key", "resume_from_sequence", "stream_epoch", "generation"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 8},
+        "idempotency_key": {"type": "string", "minLength": 16},
+        "resume_from_sequence": {"type": "integer", "minimum": 1},
+        "stream_epoch": {"type": "integer", "minimum": 1},
+        "generation": {"type": "integer", "minimum": 1}
+      }
+    },
+    "cancelled_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "idempotency_key", "reason", "terminal_outcome"],
+      "properties": {
+        "request_id": {"type": "string", "minLength": 8},
+        "idempotency_key": {"type": "string", "minLength": 16},
+        "reason": {"type": "string", "enum": ["user_requested", "budget_exhausted", "authorization_revoked", "deadline_exceeded"]},
+        "terminal_outcome": {"type": "string", "const": "cancelled"}
+      }
+    },
+    "released_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_idempotency_key", "outcome", "generation"],
+      "properties": {
+        "release_idempotency_key": {"type": "string", "minLength": 16},
+        "outcome": {"type": "string", "enum": ["completed", "cancelled", "error"]},
+        "generation": {"type": "integer", "minimum": 1}
+      }
+    },
+    "error_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "retryable", "safe_message"],
+      "properties": {
+        "code": {"type": "string", "enum": ["STALE_LEASE", "FENCED", "AUTHENTICATION_FAILED", "AUTHORIZATION_DENIED", "TENANT_MISMATCH", "CAPABILITY_UNSUPPORTED", "BACKPRESSURE_LIMIT", "TRANSPORT_UNAVAILABLE", "DEVICE_UNAVAILABLE", "INVALID_TRANSITION"]},
+        "retryable": {"type": "boolean"},
+        "safe_message": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

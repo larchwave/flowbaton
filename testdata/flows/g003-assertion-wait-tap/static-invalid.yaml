@@ -1,0 +1,5 @@
+appId: com.example.g003.static-invalid
+name: G003 Public Static Invalid
+---
+- tapOn:
+    point: "100%,50%"

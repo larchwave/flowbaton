@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "product": "FlowBaton",
+  "distribution": {
+    "decision": "docs/decisions/0001-public-release.md",
+    "visibility": "public",
+    "license": "Apache-2.0",
+    "studio_included": false
+  },
+  "host_targets": [
+    {"os": "darwin", "arch": "arm64", "status": "ga-gated"},
+    {"os": "darwin", "arch": "amd64", "status": "ga-gated"},
+    {"os": "linux", "arch": "amd64", "status": "ga-gated"},
+    {"os": "windows", "arch": "amd64", "status": "ga-gated"}
+  ],
+  "features": {
+    "v1": [
+      "YAML host and CLI",
+      "Android emulator and physical device",
+      "iOS Simulator",
+      "local reports, recording, sharding, and release packaging"
+    ],
+    "fail_closed": [
+      "missing platform SDK or driver artifact",
+      "missing target device",
+      "missing AI provider credentials"
+    ],
+    "post_v1": [
+      "physical iOS",
+      "hosted services"
+    ],
+    "excluded": [
+      "hosted accounts and billing",
+      "product telemetry",
+      "remote recording render"
+    ]
+  }
+}

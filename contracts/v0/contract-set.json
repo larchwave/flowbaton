@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "contract_version": "v0",
+  "contract_update_policy": {
+    "change_mode": "atomic",
+    "breaking_change_requires_version_bump": true,
+    "compatible_change_refreshes_all": true,
+    "unlisted_artifact_policy": "fail",
+    "required_languages": {
+      "ast": [
+        "machine-readable"
+      ],
+      "support": [
+        "machine-readable"
+      ],
+      "asset-manifest": [
+        "machine-readable"
+      ],
+      "parser-commands": [
+        "machine-readable"
+      ],
+      "driver": [
+        "go",
+        "machine-readable"
+      ],
+      "android-grpc": [
+        "proto",
+        "machine-readable",
+        "jvm"
+      ],
+      "ios-http": [
+        "go",
+        "machine-readable",
+        "swift"
+      ]
+    }
+  },
+  "artifacts": [
+    {
+      "id": "driver-go-source",
+      "component": "driver",
+      "language": "go",
+      "path": "internal/device/driver.go",
+      "coverage": "contract-complete",
+      "sha256": "32bbaad3535eff6bb53718933731a08e7e38b8b6ed0a9b7aca6155ed85a719da"
+    },
+    {
+      "id": "driver-json-descriptor",
+      "component": "driver",
+      "language": "machine-readable",
+      "path": "contracts/v0/driver.json",
+      "coverage": "contract-complete",
+      "sha256": "8c149cf251211b9c0857a8316ded8f8161922382636c0845b91153ee26cb16c9"
+    },
+    {
+      "id": "ast-json-snapshot",
+      "component": "ast",
+      "language": "machine-readable",
+      "path": "contracts/v0/ast.json",
+      "coverage": "contract-complete",
+      "sha256": "3a8859b335eff6ee91fc9bba4200904209cc2035639217ccc345666dfe616de5"
+    },
+    {
+      "id": "support-json-snapshot",
+      "component": "support",
+      "language": "machine-readable",
+      "path": "contracts/v0/support-registry.json",
+      "coverage": "contract-complete",
+      "sha256": "cbe3981e9b07ee614ee57efd5763fddcbe479fae77c15c702e4e11464d86da55"
+    },
+    {
+      "id": "asset-schema-snapshot",
+      "component": "asset-manifest",
+      "language": "machine-readable",
+      "path": "contracts/v0/asset-manifest-schema.json",
+      "coverage": "contract-complete",
+      "sha256": "e66c5d99208c48835b5041880f9278577a0b8fdadba3b784b1bb5d0cede362a9"
+    },
+    {
+      "id": "parser-commands-json-snapshot",
+      "component": "parser-commands",
+      "language": "machine-readable",
+      "path": "contracts/v0/parser-commands.json",
+      "coverage": "contract-complete",
+      "sha256": "8e8e07a8519acb85c733e8657772f26cfa9a60fdf2dc3b7378c1c6160b9ba2f6"
+    },
+    {
+      "id": "android-canonical-proto",
+      "component": "android-grpc",
+      "language": "proto",
+      "path": "proto/flowbaton_android.proto",
+      "coverage": "contract-complete",
+      "sha256": "418880fbd0f6ec86398925c63bc4c9f37d564a064141bb96efbc6ea17b291bae"
+    },
+    {
+      "id": "android-json-descriptor",
+      "component": "android-grpc",
+      "language": "machine-readable",
+      "path": "contracts/v0/android-grpc.json",
+      "coverage": "contract-complete",
+      "sha256": "d0b1b630a6c96c717d3824bc60098c46f00f90c3c3f614bbad0635182eb3a640"
+    },
+    {
+      "id": "android-jvm-declarations",
+      "component": "android-grpc",
+      "language": "jvm",
+      "path": "drivers/android/core/src/main/java/dev/nohavewho/flowbaton/driver/contract/AndroidWireContractV0.java",
+      "coverage": "contract-complete",
+      "sha256": "016442282ef8d596107cbae36c4af5418a0dfbf58d07c890124111c95553f8a0"
+    },
+    {
+      "id": "android-g001-runtime",
+      "component": "android-grpc",
+      "language": "jvm-runtime",
+      "path": "drivers/android/core/src/main/java/dev/nohavewho/flowbaton/driver/GrpcDeviceServer.java",
+      "coverage": "partial-g001-deviceInfo-only",
+      "sha256": "9e1d780905d66206b932fdf0b9b712a04d0fe27e9f9e08744d29e88d4fcc8790"
+    },
+    {
+      "id": "ios-go-routes",
+      "component": "ios-http",
+      "language": "go",
+      "path": "internal/device/ios_http.go",
+      "coverage": "contract-complete",
+      "sha256": "2440cbd543b3eec0d676815f32109eb128900071d394980dcbf768d25c432730"
+    },
+    {
+      "id": "ios-json-descriptor",
+      "component": "ios-http",
+      "language": "machine-readable",
+      "path": "contracts/v0/ios-http.json",
+      "coverage": "contract-complete",
+      "sha256": "bfe573e32bcaf07392bb5b6766c795f5df0b44615066d832400a858662bc604e"
+    },
+    {
+      "id": "ios-swift-declarations",
+      "component": "ios-http",
+      "language": "swift",
+      "path": "drivers/ios/Sources/FlowBatonIOSRunner/WireContractV0.swift",
+      "coverage": "contract-complete",
+      "sha256": "144ae958da6fca652c2a4ca1a447edde67028cf969500512cfc2d46d49159a30"
+    },
+    {
+      "id": "ios-g001-runtime",
+      "component": "ios-http",
+      "language": "swift-runtime",
+      "path": "drivers/ios/Sources/FlowBatonIOSRunner/StatusEndpoint.swift",
+      "coverage": "partial-g001-status-only",
+      "sha256": "38eed99d0b9ad54fb1c58e6c5615bc2f2419ab3688c5945b75fc83cc0f6ae5f8"
+    }
+  ]
+}

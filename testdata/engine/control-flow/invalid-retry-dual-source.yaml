@@ -1,0 +1,7 @@
+name: Invalid retry dual source
+appId: com.example.control.invalid
+---
+- retry:
+    file: child.yaml
+    commands:
+      - assertVisible: Never Runs

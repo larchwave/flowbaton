@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "contract_version": "v1",
+  "flowbaton": {
+    "version": "0.1.0",
+    "binary_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "license": "Apache-2.0",
+    "process_id": 4812
+  },
+  "transports": ["cli-stdio", "mcp", "authenticated-local-ipc", "authenticated-remote-ipc"],
+  "protocols": {
+    "flow_contract": "contracts/v0",
+    "device_session": "device-session/v1",
+    "report": "report/v0"
+  },
+  "auth_profiles": [
+    {
+      "profile_id": "local-core-v1",
+      "transport": "authenticated-local-ipc",
+      "authentication": "peer-credentials+launch-token",
+      "channel_binding": "os-peer-identity+endpoint",
+      "principal_scope": "local-user+process",
+      "tenant_scope": "single-host",
+      "replay_protection": "per-launch-nonce+expiry"
+    },
+    {
+      "profile_id": "remote-cloud-mac-v1",
+      "transport": "authenticated-remote-ipc",
+      "authentication": "mutual-tls+signed-session-token",
+      "channel_binding": "tls-exporter",
+      "principal_scope": "account+host+process",
+      "tenant_scope": "tenant-id",
+      "replay_protection": "nonce+expiry+lease-generation"
+    }
+  ],
+  "capabilities": ["check-syntax", "capability-preflight", "run-flow", "device-session"]
+}

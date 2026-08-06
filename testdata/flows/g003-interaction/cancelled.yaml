@@ -1,0 +1,11 @@
+appId: com.example.g003.i21.cancelled
+name: G003 I21 Cancelled Cutoff
+---
+- back
+- scrollUntilVisible:
+    element: {text: Never Visible}
+    direction: DOWN
+    timeout: 1000
+    speed: 40
+    visibilityPercentage: 100
+- pressKey: LOCK

@@ -1,0 +1,32 @@
+appId: "${APP_ID}"
+name: G003 I21 Late Evaluation
+# APP_ID and CLIP are supplied by the caller and deliberately NOT declared
+# here: a flow's own `env:` beats anything handed to it, so a name declared
+# below could never be parameterised from outside. See
+# internal/engine/env_precedence_test.go.
+env:
+  POINT: "15,25"
+  START: "10,20"
+  END: "90,80"
+  TARGET: Dynamic Target
+  DIRECTION: DOWN
+  TIMEOUT: "1000"
+  TEXT: dynamic-text
+  COUNT: "2"
+  KEY: HOME
+---
+- doubleTapOn: {point: "${POINT}", delay: 10, waitToSettleTimeoutMs: 0}
+- swipe: {start: "${START}", end: "${END}", duration: 410, waitToSettleTimeoutMs: 0}
+- scrollUntilVisible: {element: {text: "${TARGET}"}, direction: "${DIRECTION}", timeout: "${TIMEOUT}", speed: 50, visibilityPercentage: 100}
+- inputText: "${TEXT}"
+- eraseText: "${COUNT}"
+- inputRandomText: {length: 3}
+- inputRandomNumber: {length: 4}
+- inputRandomEmail
+- inputRandomPersonName
+- inputRandomCityName
+- inputRandomCountryName
+- inputRandomColorName
+- setClipboard: "${CLIP}"
+- pasteText
+- pressKey: "${KEY}"

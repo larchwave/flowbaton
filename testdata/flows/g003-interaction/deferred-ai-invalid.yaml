@@ -1,0 +1,6 @@
+appId: com.example.g003.i21.deferred-ai-invalid
+name: G003 I21 Deferred AI Invalid
+---
+- back
+- inputText: must-not-run
+- assertWithAI: "screen remains correct"

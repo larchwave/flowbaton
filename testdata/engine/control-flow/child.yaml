@@ -1,0 +1,23 @@
+name: Control Flow Child
+appId: com.example.control.child
+env:
+  TARGET: Child Shadow
+  REPEAT_TARGET: Repeat Target
+  RETRY_TARGET: Retry Tap
+  COMPLETE_TARGET: Child Complete
+  ROOT_TARGET: Child Shadow
+onFlowStart:
+  - assertVisible: "${TARGET}"
+onFlowComplete:
+  - assertVisible: "${COMPLETE_TARGET}"
+---
+- repeat:
+    times: "${REPEAT_TIMES}"
+    commands:
+      - assertVisible: "${REPEAT_TARGET}"
+- retry:
+    maxRetries: "${RETRY_MAX}"
+    commands:
+      - tapOn:
+          text: "${RETRY_TARGET}"
+          waitToSettleTimeoutMs: 1000

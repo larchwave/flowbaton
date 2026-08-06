@@ -1,0 +1,12 @@
+appId: com.example.g003.i21.text-random
+name: G003 I21 Text Random
+---
+- inputText: "authored-text"
+- eraseText: 3
+- inputRandomText: {length: 5}
+- inputRandomNumber: {length: 6}
+- inputRandomEmail
+- inputRandomPersonName
+- inputRandomCityName
+- inputRandomCountryName
+- inputRandomColorName

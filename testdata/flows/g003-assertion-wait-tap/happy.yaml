@@ -1,0 +1,15 @@
+appId: com.example.g003.happy
+name: G003 Public Happy
+env:
+  READY: Ready
+  GONE: Gone
+---
+- assertVisible: "${READY}"
+- assertNotVisible: "${GONE}"
+- assertTrue:
+    condition: "1 === 1"
+    label: Happy truth
+- extendedWaitUntil:
+    visible: "${READY}"
+    notVisible: "${GONE}"
+    timeout: 1000

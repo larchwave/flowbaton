@@ -1,0 +1,7 @@
+appId: com.example.g003.failed
+name: G003 Public Failed
+---
+- assertTrue:
+    condition: "false"
+    label: Required false
+- assertTrue: "true"

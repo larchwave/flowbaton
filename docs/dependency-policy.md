@@ -1,0 +1,75 @@
+# Dependency Policy
+
+FlowBaton keeps the execution core small and uses maintained libraries where a
+platform or protocol would otherwise require a fragile custom implementation.
+
+## Rules
+
+Every new direct dependency must include:
+
+- a concrete product need;
+- the smallest supported version that satisfies that need;
+- a license review;
+- committed lock data or module checksums;
+- focused tests at the integration boundary;
+- an update to `THIRD_PARTY_NOTICES.md` when shipped code changes.
+
+CI actions must use immutable commit pins. Toolchains and build plugins are
+pinned to fixed versions. Automated updates must preserve these controls and
+pass the full repository checks.
+
+## Toolchain pins
+
+| Tool | Version | Role |
+| --- | --- | --- |
+| Go | 1.26.1 in CI; module floor 1.25 | Host, CLI, and contract tests |
+| GoReleaser | 2.17.0 | Archives, checksums, and SBOM generation |
+| Syft | 1.42.3 | Release SBOM generation |
+| XcodeGen | 2.44.1 | Build-only MIT-licensed Xcode project generator downloaded by CI; the release archive SHA-256 is `a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73`; it is not shipped in FlowBaton |
+| Gradle | 8.5 | Android build wrapper |
+| Android Gradle Plugin | 8.3.2 | Android application and test packages |
+| Kotlin Gradle plugin | 1.9.22 | Kotlin compilation |
+| Android SDK | API 34; build-tools 34.0.0 | Android CI build surface |
+| AndroidX Test runner | 1.5.2 | Instrumentation runner |
+| AndroidX Test JUnit | 1.1.5 | JUnit instrumentation adapter |
+| gRPC Java | 1.81.0 | Android loopback transport |
+| JUnit | 4.13.2 | Android JVM tests |
+
+## Go modules
+
+The direct Go modules are declared in `go.mod`; their resolved checksums are in
+`go.sum`. The current direct modules provide:
+
+- YAML node decoding and source locations;
+- an embedded ECMAScript runtime;
+- HTTP/2 support for Android transport;
+- MCP server support;
+- multimodal AI provider clients.
+
+Run these checks after a module change:
+
+```sh
+go mod tidy
+go mod verify
+go test ./...
+go vet ./...
+go list -m all
+```
+
+Confirm the compiled package graph for each changed binary or runtime path with
+`go list -deps`. Release packaging must reconcile the resolved graph with
+`THIRD_PARTY_NOTICES.md` and the generated SBOM.
+
+## Android dependencies
+
+Android versions and checksums are locked under `drivers/android`. Builds must
+use strict dependency verification:
+
+```sh
+cd drivers/android
+./gradlew --no-daemon --dependency-verification strict \
+  :core:test :agent:lintDebug :agent:assembleDebug :agent:assembleDebugAndroidTest
+```
+
+Do not distribute a host binary or device package until its resolved graph and
+required notices are included in the release review.

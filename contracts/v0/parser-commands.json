@@ -1,0 +1,757 @@
+{
+  "schema_version": 1,
+  "contract_version": "v0",
+  "manifest_schema_version": "flowbaton.command-manifest/v0",
+  "entries": [
+    {
+      "keyword": "launchApp",
+      "command": {
+        "kind": "launchApp",
+        "form": "object",
+        "arguments": {
+          "appId": "com.example.app",
+          "arguments": {
+            "mode": "test"
+          },
+          "clearKeychain": true,
+          "clearState": true,
+          "permissions": {
+            "camera": "allow"
+          },
+          "stopApp": true
+        }
+      }
+    },
+    {
+      "keyword": "stopApp",
+      "command": {
+        "kind": "stopApp",
+        "form": "object",
+        "arguments": "com.example.app"
+      }
+    },
+    {
+      "keyword": "killApp",
+      "command": {
+        "kind": "killApp",
+        "form": "object",
+        "arguments": "com.example.app"
+      }
+    },
+    {
+      "keyword": "clearState",
+      "command": {
+        "kind": "clearState",
+        "form": "object",
+        "arguments": "com.example.app"
+      }
+    },
+    {
+      "keyword": "clearKeychain",
+      "command": {
+        "kind": "clearKeychain",
+        "form": "scalar"
+      }
+    },
+    {
+      "keyword": "setPermissions",
+      "command": {
+        "kind": "setPermissions",
+        "form": "object",
+        "arguments": {
+          "permissions": {
+            "camera": "allow",
+            "location": "unset",
+            "notifications": "deny"
+          }
+        }
+      }
+    },
+    {
+      "keyword": "tapOn",
+      "command": {
+        "kind": "tapOn",
+        "form": "object",
+        "arguments": {
+          "above": "Footer",
+          "below": "Header",
+          "checked": false,
+          "childOf": "Container",
+          "containsChild": "Icon",
+          "containsDescendants": [
+            {
+              "text": "Child"
+            }
+          ],
+          "css": "#continue",
+          "delay": 100,
+          "enabled": true,
+          "end": "90%,90%",
+          "focused": true,
+          "height": 40,
+          "id": "com.example:id/continue",
+          "index": -1,
+          "label": "primary",
+          "leftOf": "Right",
+          "optional": false,
+          "point": "50%,50%",
+          "repeat": 2,
+          "retryTapIfNoChange": true,
+          "rightOf": "Left",
+          "selected": false,
+          "start": "10%,10%",
+          "text": "Continue",
+          "tolerance": 5,
+          "traits": "TEXT SQUARE",
+          "waitToSettleTimeoutMs": 30000,
+          "waitUntilVisible": true,
+          "width": 100
+        },
+        "selector": {
+          "text": "Continue",
+          "id": "com.example:id/continue",
+          "size": {
+            "width": 100,
+            "height": 40,
+            "tolerance": 5
+          },
+          "optional": false,
+          "retryTapIfNoChange": true,
+          "waitUntilVisible": true,
+          "point": "50%,50%",
+          "start": "10%,10%",
+          "end": "90%,90%",
+          "below": {
+            "text": "Header"
+          },
+          "above": {
+            "text": "Footer"
+          },
+          "leftOf": {
+            "text": "Right"
+          },
+          "rightOf": {
+            "text": "Left"
+          },
+          "containsChild": {
+            "text": "Icon"
+          },
+          "containsDescendants": [
+            {
+              "text": "Child"
+            }
+          ],
+          "childOf": {
+            "text": "Container"
+          },
+          "traits": [
+            "TEXT",
+            "SQUARE"
+          ],
+          "index": "-1",
+          "enabled": true,
+          "selected": false,
+          "checked": false,
+          "focused": true,
+          "repeat": 2,
+          "delay": 100,
+          "waitToSettleTimeoutMs": 30000,
+          "label": "primary",
+          "css": "#continue"
+        },
+        "label": "primary",
+        "optional": false
+      }
+    },
+    {
+      "keyword": "doubleTapOn",
+      "command": {
+        "kind": "doubleTapOn",
+        "form": "object",
+        "arguments": {
+          "label": "double",
+          "optional": true,
+          "text": "Continue"
+        },
+        "selector": {
+          "text": "Continue",
+          "optional": true,
+          "label": "double"
+        },
+        "label": "double",
+        "optional": true
+      }
+    },
+    {
+      "keyword": "longPressOn",
+      "command": {
+        "kind": "longPressOn",
+        "form": "object",
+        "arguments": {
+          "id": "com.example:id/continue",
+          "waitToSettleTimeoutMs": 30000
+        },
+        "selector": {
+          "id": "com.example:id/continue",
+          "waitToSettleTimeoutMs": 30000
+        }
+      }
+    },
+    {
+      "keyword": "assertVisible",
+      "command": {
+        "kind": "assertVisible",
+        "form": "object",
+        "arguments": {
+          "label": "visible",
+          "optional": false,
+          "text": "Ready"
+        },
+        "selector": {
+          "text": "Ready",
+          "optional": false,
+          "label": "visible"
+        },
+        "label": "visible",
+        "optional": false
+      }
+    },
+    {
+      "keyword": "assertNotVisible",
+      "command": {
+        "kind": "assertNotVisible",
+        "form": "object",
+        "arguments": {
+          "label": "absent",
+          "optional": false,
+          "text": "Error"
+        },
+        "selector": {
+          "text": "Error",
+          "optional": false,
+          "label": "absent"
+        },
+        "label": "absent",
+        "optional": false
+      }
+    },
+    {
+      "keyword": "assertTrue",
+      "command": {
+        "kind": "assertTrue",
+        "form": "object",
+        "arguments": {
+          "condition": "${READY}",
+          "label": "ready",
+          "optional": false
+        },
+        "label": "ready",
+        "optional": false
+      }
+    },
+    {
+      "keyword": "assertNoDefectsWithAI",
+      "command": {
+        "kind": "assertNoDefectsWithAI",
+        "form": "object",
+        "arguments": {
+          "label": "ai-check",
+          "optional": true
+        },
+        "label": "ai-check",
+        "optional": true
+      }
+    },
+    {
+      "keyword": "assertScreenshot",
+      "command": {
+        "kind": "assertScreenshot",
+        "form": "object",
+        "arguments": {
+          "cropOn": {
+            "text": "Content"
+          },
+          "path": "expected/home",
+          "thresholdPercentage": 95
+        },
+        "selector": {
+          "text": "Content"
+        }
+      }
+    },
+    {
+      "keyword": "assertWithAI",
+      "command": {
+        "kind": "assertWithAI",
+        "form": "object",
+        "arguments": {
+          "assertion": "No overlap",
+          "label": "ai-assert",
+          "optional": true
+        },
+        "label": "ai-assert",
+        "optional": true
+      }
+    },
+    {
+      "keyword": "extractTextWithAI",
+      "command": {
+        "kind": "extractTextWithAI",
+        "form": "object",
+        "arguments": {
+          "label": "ai-extract",
+          "optional": true,
+          "outputVariable": "TOTAL",
+          "query": "Total amount"
+        },
+        "label": "ai-extract",
+        "optional": true
+      }
+    },
+    {
+      "keyword": "back",
+      "command": {
+        "kind": "back",
+        "form": "scalar"
+      }
+    },
+    {
+      "keyword": "hideKeyboard",
+      "command": {
+        "kind": "hideKeyboard",
+        "form": "scalar"
+      }
+    },
+    {
+      "keyword": "pasteText",
+      "command": {
+        "kind": "pasteText",
+        "form": "scalar"
+      }
+    },
+    {
+      "keyword": "scroll",
+      "command": {
+        "kind": "scroll",
+        "form": "scalar"
+      }
+    },
+    {
+      "keyword": "scrollUntilVisible",
+      "command": {
+        "kind": "scrollUntilVisible",
+        "form": "object",
+        "arguments": {
+          "centerElement": true,
+          "direction": "DOWN",
+          "element": {
+            "text": "Ready"
+          },
+          "speed": 40,
+          "timeout": "20000",
+          "visibilityPercentage": 100,
+          "waitToSettleTimeoutMs": 30000
+        },
+        "selector": {
+          "text": "Ready"
+        }
+      }
+    },
+    {
+      "keyword": "inputText",
+      "command": {
+        "kind": "inputText",
+        "form": "object",
+        "arguments": "hello ${NAME}"
+      }
+    },
+    {
+      "keyword": "inputRandomText",
+      "command": {
+        "kind": "inputRandomText",
+        "form": "object",
+        "arguments": {
+          "length": 12
+        }
+      }
+    },
+    {
+      "keyword": "inputRandomNumber",
+      "command": {
+        "kind": "inputRandomNumber",
+        "form": "object",
+        "arguments": {
+          "length": 12
+        }
+      }
+    },
+    {
+      "keyword": "inputRandomEmail",
+      "command": {
+        "kind": "inputRandomEmail",
+        "form": "object",
+        "arguments": {}
+      }
+    },
+    {
+      "keyword": "inputRandomPersonName",
+      "command": {
+        "kind": "inputRandomPersonName",
+        "form": "object",
+        "arguments": {}
+      }
+    },
+    {
+      "keyword": "inputRandomCityName",
+      "command": {
+        "kind": "inputRandomCityName",
+        "form": "object",
+        "arguments": {}
+      }
+    },
+    {
+      "keyword": "inputRandomCountryName",
+      "command": {
+        "kind": "inputRandomCountryName",
+        "form": "object",
+        "arguments": {}
+      }
+    },
+    {
+      "keyword": "inputRandomColorName",
+      "command": {
+        "kind": "inputRandomColorName",
+        "form": "object",
+        "arguments": {}
+      }
+    },
+    {
+      "keyword": "swipe",
+      "command": {
+        "kind": "swipe",
+        "form": "object",
+        "arguments": {
+          "duration": 400,
+          "end": "90%,80%",
+          "start": "10%,20%"
+        }
+      }
+    },
+    {
+      "keyword": "openLink",
+      "command": {
+        "kind": "openLink",
+        "form": "object",
+        "arguments": {
+          "autoVerify": true,
+          "browser": true,
+          "link": "https://example.invalid/path"
+        }
+      }
+    },
+    {
+      "keyword": "openBrowser",
+      "command": {
+        "kind": "openBrowser",
+        "form": "object",
+        "arguments": "https://example.invalid/path"
+      }
+    },
+    {
+      "keyword": "pressKey",
+      "command": {
+        "kind": "pressKey",
+        "form": "object",
+        "arguments": "HOME"
+      }
+    },
+    {
+      "keyword": "eraseText",
+      "command": {
+        "kind": "eraseText",
+        "form": "object",
+        "arguments": 5
+      }
+    },
+    {
+      "keyword": "action",
+      "command": {
+        "kind": "action",
+        "form": "object",
+        "arguments": "pasteText"
+      }
+    },
+    {
+      "keyword": "takeScreenshot",
+      "command": {
+        "kind": "takeScreenshot",
+        "form": "object",
+        "arguments": "artifacts/home"
+      }
+    },
+    {
+      "keyword": "extendedWaitUntil",
+      "command": {
+        "kind": "extendedWaitUntil",
+        "form": "object",
+        "arguments": {
+          "notVisible": "Loading",
+          "timeout": 20000
+        },
+        "condition": {
+          "notVisible": {
+            "text": "Loading"
+          }
+        }
+      }
+    },
+    {
+      "keyword": "runFlow",
+      "command": {
+        "kind": "runFlow",
+        "form": "object",
+        "arguments": {
+          "env": {
+            "ROLE": "tester"
+          },
+          "file": "child.yaml",
+          "label": "child",
+          "optional": false,
+          "when": {
+            "platform": "android",
+            "visible": "Ready"
+          }
+        },
+        "condition": {
+          "platform": "android",
+          "visible": {
+            "text": "Ready"
+          }
+        },
+        "links": [
+          {
+            "kind": "flow",
+            "path": "child.yaml"
+          }
+        ],
+        "label": "child",
+        "optional": false
+      }
+    },
+    {
+      "keyword": "setLocation",
+      "command": {
+        "kind": "setLocation",
+        "form": "object",
+        "arguments": {
+          "latitude": 43.6501,
+          "longitude": -79.3801
+        }
+      }
+    },
+    {
+      "keyword": "setOrientation",
+      "command": {
+        "kind": "setOrientation",
+        "form": "object",
+        "arguments": "LANDSCAPE_LEFT"
+      }
+    },
+    {
+      "keyword": "repeat",
+      "command": {
+        "kind": "repeat",
+        "form": "object",
+        "arguments": {
+          "commands": [
+            "back",
+            {
+              "tapOn": "Again"
+            }
+          ],
+          "times": "2",
+          "while": {
+            "true": "${REPEAT}"
+          }
+        },
+        "condition": {
+          "true": "${REPEAT}"
+        },
+        "children": [
+          {
+            "kind": "back",
+            "form": "scalar"
+          },
+          {
+            "kind": "tapOn",
+            "form": "object",
+            "arguments": "Again",
+            "selector": {
+              "text": "Again"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "keyword": "retry",
+      "command": {
+        "kind": "retry",
+        "form": "object",
+        "arguments": {
+          "commands": [
+            "back"
+          ],
+          "file": "fallback.yaml",
+          "maxRetries": "2"
+        },
+        "children": [
+          {
+            "kind": "back",
+            "form": "scalar"
+          }
+        ],
+        "links": [
+          {
+            "kind": "flow",
+            "path": "fallback.yaml"
+          }
+        ]
+      }
+    },
+    {
+      "keyword": "copyTextFrom",
+      "command": {
+        "kind": "copyTextFrom",
+        "form": "object",
+        "arguments": {
+          "id": "com.example:id/total",
+          "optional": false
+        },
+        "selector": {
+          "id": "com.example:id/total",
+          "optional": false
+        },
+        "optional": false
+      }
+    },
+    {
+      "keyword": "setClipboard",
+      "command": {
+        "kind": "setClipboard",
+        "form": "object",
+        "arguments": "hello ${NAME}"
+      }
+    },
+    {
+      "keyword": "runScript",
+      "command": {
+        "kind": "runScript",
+        "form": "object",
+        "arguments": {
+          "env": {
+            "ROLE": "tester"
+          },
+          "file": "scripts/setup.js",
+          "label": "setup",
+          "when": {
+            "platform": "android"
+          }
+        },
+        "condition": {
+          "platform": "android"
+        },
+        "links": [
+          {
+            "kind": "script",
+            "path": "scripts/setup.js"
+          }
+        ],
+        "label": "setup"
+      }
+    },
+    {
+      "keyword": "evalScript",
+      "command": {
+        "kind": "evalScript",
+        "form": "object",
+        "arguments": "output.value = ${VALUE}"
+      }
+    },
+    {
+      "keyword": "waitForAnimationToEnd",
+      "command": {
+        "kind": "waitForAnimationToEnd",
+        "form": "object",
+        "arguments": {
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "keyword": "travel",
+      "command": {
+        "kind": "travel",
+        "form": "object",
+        "arguments": {
+          "points": [
+            "43.65, -79.38",
+            "43.66, -79.39"
+          ],
+          "speed": 4.5
+        }
+      }
+    },
+    {
+      "keyword": "startRecording",
+      "command": {
+        "kind": "startRecording",
+        "form": "object",
+        "arguments": "captures/session"
+      }
+    },
+    {
+      "keyword": "stopRecording",
+      "command": {
+        "kind": "stopRecording",
+        "form": "scalar"
+      }
+    },
+    {
+      "keyword": "addMedia",
+      "command": {
+        "kind": "addMedia",
+        "form": "object",
+        "arguments": [
+          "media/a.png",
+          "media/b.mp4"
+        ],
+        "links": [
+          {
+            "kind": "media",
+            "path": "media/a.png"
+          },
+          {
+            "kind": "media",
+            "path": "media/b.mp4"
+          }
+        ]
+      }
+    },
+    {
+      "keyword": "setAirplaneMode",
+      "command": {
+        "kind": "setAirplaneMode",
+        "form": "object",
+        "arguments": "disabled"
+      }
+    },
+    {
+      "keyword": "toggleAirplaneMode",
+      "command": {
+        "kind": "toggleAirplaneMode",
+        "form": "scalar"
+      }
+    }
+  ]
+}

@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "contract_version": "v0",
+  "manifest_schema_version": "flowbaton.assets.v0",
+  "types": [
+    {
+      "name": "Manifest",
+      "fields": [
+        {
+          "name": "SchemaVersion",
+          "json_name": "schema_version",
+          "go_type": "string"
+        },
+        {
+          "name": "ManifestVersion",
+          "json_name": "manifest_version",
+          "go_type": "string"
+        },
+        {
+          "name": "Assets",
+          "json_name": "assets",
+          "go_type": "[]assets.Asset"
+        }
+      ]
+    },
+    {
+      "name": "Asset",
+      "fields": [
+        {
+          "name": "ID",
+          "json_name": "id",
+          "go_type": "string"
+        },
+        {
+          "name": "Status",
+          "json_name": "status",
+          "go_type": "assets.AssetStatus"
+        },
+        {
+          "name": "HostVersion",
+          "json_name": "host_version",
+          "go_type": "string"
+        },
+        {
+          "name": "AssetVersion",
+          "json_name": "asset_version",
+          "go_type": "string"
+        },
+        {
+          "name": "HostOS",
+          "json_name": "host_os",
+          "go_type": "string"
+        },
+        {
+          "name": "HostArch",
+          "json_name": "host_arch",
+          "go_type": "string"
+        },
+        {
+          "name": "Platform",
+          "json_name": "platform",
+          "go_type": "assets.Platform"
+        },
+        {
+          "name": "AssetHash",
+          "json_name": "asset_hash",
+          "go_type": "string"
+        },
+        {
+          "name": "Archive",
+          "json_name": "archive",
+          "go_type": "assets.AssetArchive"
+        },
+        {
+          "name": "Files",
+          "json_name": "files",
+          "go_type": "[]assets.AssetFile"
+        },
+        {
+          "name": "Identity",
+          "json_name": "identity",
+          "go_type": "assets.AssetIdentity"
+        },
+        {
+          "name": "Compatibility",
+          "json_name": "compatibility",
+          "go_type": "assets.Compatibility"
+        }
+      ]
+    },
+    {
+      "name": "AssetArchive",
+      "fields": [
+        {
+          "name": "Format",
+          "json_name": "format",
+          "go_type": "assets.ArchiveFormat"
+        },
+        {
+          "name": "SHA256",
+          "json_name": "sha256",
+          "go_type": "string"
+        },
+        {
+          "name": "Size",
+          "json_name": "size",
+          "go_type": "int64"
+        },
+        {
+          "name": "UncompressedSHA256",
+          "json_name": "uncompressed_sha256",
+          "go_type": "string"
+        },
+        {
+          "name": "UncompressedSize",
+          "json_name": "uncompressed_size",
+          "go_type": "int64"
+        }
+      ]
+    },
+    {
+      "name": "AssetFile",
+      "fields": [
+        {
+          "name": "Path",
+          "json_name": "path",
+          "go_type": "string"
+        },
+        {
+          "name": "SHA256",
+          "json_name": "sha256",
+          "go_type": "string"
+        },
+        {
+          "name": "Size",
+          "json_name": "size",
+          "go_type": "int64"
+        },
+        {
+          "name": "Mode",
+          "json_name": "mode",
+          "go_type": "string"
+        }
+      ]
+    },
+    {
+      "name": "AssetIdentity",
+      "fields": [
+        {
+          "name": "Kind",
+          "json_name": "kind",
+          "go_type": "assets.VerificationKind"
+        },
+        {
+          "name": "Value",
+          "json_name": "value",
+          "go_type": "string"
+        },
+        {
+          "name": "Path",
+          "json_name": "path",
+          "go_type": "string"
+        }
+      ]
+    },
+    {
+      "name": "Compatibility",
+      "fields": [
+        {
+          "name": "AndroidAPI",
+          "json_name": "android_api",
+          "go_type": "assets.IntegerRange"
+        },
+        {
+          "name": "Xcode",
+          "json_name": "xcode",
+          "go_type": "assets.VersionRange"
+        },
+        {
+          "name": "IOSRuntime",
+          "json_name": "ios_runtime",
+          "go_type": "assets.VersionRange"
+        }
+      ]
+    },
+    {
+      "name": "IntegerRange",
+      "fields": [
+        {
+          "name": "Min",
+          "json_name": "min",
+          "go_type": "int"
+        },
+        {
+          "name": "Max",
+          "json_name": "max",
+          "go_type": "int"
+        }
+      ]
+    },
+    {
+      "name": "VersionRange",
+      "fields": [
+        {
+          "name": "Min",
+          "json_name": "min",
+          "go_type": "string"
+        },
+        {
+          "name": "Max",
+          "json_name": "max",
+          "go_type": "string"
+        }
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "AssetStatus",
+      "values": [
+        "representative-not-release-artifact",
+        "release"
+      ]
+    },
+    {
+      "name": "ArchiveFormat",
+      "values": [
+        "gzip",
+        "tar+gzip"
+      ]
+    },
+    {
+      "name": "Platform",
+      "values": [
+        "android",
+        "ios-simulator"
+      ]
+    },
+    {
+      "name": "VerificationKind",
+      "values": [
+        "package-identity",
+        "bundle-signature-identity"
+      ]
+    }
+  ]
+}

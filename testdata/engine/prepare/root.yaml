@@ -1,0 +1,6 @@
+appId: com.example.app
+---
+- runFlow: left.yaml
+- runFlow: right.yaml
+- runFlow: shared.yaml
+- runFlow: shared.yaml

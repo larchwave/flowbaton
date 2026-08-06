@@ -1,0 +1,10 @@
+appId: com.example.g003.i21.clipboard
+name: G003 I21 Clipboard
+---
+- copyTextFrom: {id: copy-target}
+- assertTrue: 'flowbaton.copiedText === "copied-from-target"'
+- pasteText
+- setClipboard: override-one
+- setClipboard: override-two
+- assertTrue: 'flowbaton.copiedText === "override-two"'
+- pasteText
