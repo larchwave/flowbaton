@@ -247,8 +247,7 @@ func TestFindUsesOriginsNotGaps(t *testing.T) {
 // selector is then evaluated inside that element's subtree, the element
 // included.
 //
-// Measured on iOS 2026-08-06 against the pinned reference on the Settings root.
-// Three results only this rule produces:
+// Three results only this rule produces, taken on the iOS Settings root:
 //
 //	{id: general, childOf: {id: general}}      -> [General]   the anchor matches itself
 //	{childOf: {id: general}}                   -> 4 elements  the row plus its three children
@@ -311,10 +310,10 @@ func TestChildOfScopesTheSearchToOneAnchorIncludingItself(t *testing.T) {
 // reduction runs.
 //
 // `containsDescendants: [text: General]` with nothing else on the selector
-// enumerates six or more elements on the reference and exactly one here
-// (measured on iOS 2026-08-06). Every one of the reference's is an ancestor of
-// the General label, and the first in document order is the tree root, whose
-// text is empty — which is what that sweep row reads back.
+// enumerates six or more elements on the iOS Settings root, every one of them
+// an ancestor of the General label. The first in document order is the tree
+// root, whose text is empty, which is what reading that selector back yields.
+// Reducing to the deepest node collapses all six to one and loses that.
 //
 // So the reduction belongs to resolving a text/id match, not to the pipeline:
 // a selector carrying only structural filters keeps the whole ancestor chain.

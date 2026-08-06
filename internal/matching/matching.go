@@ -110,9 +110,8 @@ func compileSelector(selector *model.ElementSelector) (*compiledSelector, error)
 func (selector *compiledSelector) find(root *hierarchy.Element) []*hierarchy.Element {
 	// childOf narrows where to look. Its anchor resolves to ONE element and the
 	// rest of the selector is evaluated inside that element, the element
-	// included — measured on iOS 2026-08-06 against the pinned reference, where
-	// `{id: general, childOf: {id: general}}` resolves the row itself and
-	// `{childOf: {id: general}}` enumerates the row plus its three children.
+	// included: `{id: general, childOf: {id: general}}` resolves the row itself,
+	// and `{childOf: {id: general}}` enumerates the row plus its three children.
 	//
 	// An anchor that resolves to nothing means there is nowhere to look, which
 	// is not the same as looking everywhere.
@@ -137,10 +136,10 @@ func (selector *compiledSelector) find(root *hierarchy.Element) []*hierarchy.Ele
 	result = selector.filterStructural(root, result)
 	// The reduction belongs to resolving a text/id match, not to the pipeline.
 	// A selector whose only filter is structural keeps the whole chain:
-	// `containsDescendants: [text: General]` enumerates six or more elements on
-	// the reference and one here (measured on iOS 2026-08-06), and every one of
-	// its results is an ancestor of the label. The first in document order is
-	// the tree root, whose text is empty, which is what that row reads back.
+	// `containsDescendants: [text: General]` enumerates every ancestor of that
+	// label, six or more of them, not just the innermost one. The first in
+	// document order is the tree root, whose text is empty, which is what
+	// reading that selector back yields.
 	if selector.hasBasicFilter() {
 		result = deepest(result)
 	}
@@ -249,9 +248,9 @@ func hasMatchingDescendant(candidate *hierarchy.Element, set map[*hierarchy.Elem
 // pipeline as a top-level one — including the deepest-node reduction — and the
 // test is set membership.
 //
-// Membership, not a fresh per-candidate match: measured on iOS 2026-08-06, the
-// reference resolves `containsChild: {text: General}` to the one row that holds
-// the label and `containsDescendants: [text: General]` to every ancestor of it.
+// Membership, not a fresh per-candidate match: `containsChild: {text: General}`
+// resolves to the one row that holds the label, and
+// `containsDescendants: [text: General]` to every ancestor of it.
 func (selector *compiledSelector) filterStructural(root *hierarchy.Element, candidates []*hierarchy.Element) []*hierarchy.Element {
 	var childSet map[*hierarchy.Element]struct{}
 	if selector.containsChild != nil {
