@@ -108,8 +108,24 @@ func compileSelector(selector *model.ElementSelector) (*compiledSelector, error)
 }
 
 func (selector *compiledSelector) find(root *hierarchy.Element) []*hierarchy.Element {
+	// childOf narrows where to look. Its anchor resolves to ONE element and the
+	// rest of the selector is evaluated inside that element, the element
+	// included — measured on iOS 2026-08-06 against the pinned reference, where
+	// `{id: general, childOf: {id: general}}` resolves the row itself and
+	// `{childOf: {id: general}}` enumerates the row plus its three children.
+	//
+	// An anchor that resolves to nothing means there is nowhere to look, which
+	// is not the same as looking everywhere.
+	scope := root
+	if selector.childOf != nil {
+		anchors := selector.childOf.find(root)
+		if len(anchors) == 0 {
+			return []*hierarchy.Element{}
+		}
+		scope = anchors[0]
+	}
 	result := make([]*hierarchy.Element, 0)
-	for _, element := range hierarchy.Walk(root) {
+	for _, element := range hierarchy.Walk(scope) {
 		if selector.matchesBasic(element) {
 			result = append(result, element)
 		}
@@ -119,7 +135,15 @@ func (selector *compiledSelector) find(root *hierarchy.Element) []*hierarchy.Ele
 	// `containsDescendants` can select one, and those selectors carry no traits
 	// of their own, so the basic pass initially includes the whole tree.
 	result = selector.filterStructural(root, result)
-	result = deepest(result)
+	// The reduction belongs to resolving a text/id match, not to the pipeline.
+	// A selector whose only filter is structural keeps the whole chain:
+	// `containsDescendants: [text: General]` enumerates six or more elements on
+	// the reference and one here (measured on iOS 2026-08-06), and every one of
+	// its results is an ancestor of the label. The first in document order is
+	// the tree root, whose text is empty, which is what that row reads back.
+	if selector.hasBasicFilter() {
+		result = deepest(result)
+	}
 	result = applyDirection(root, result, selector.below, directionBelow)
 	result = applyDirection(root, result, selector.above, directionAbove)
 	result = applyDirection(root, result, selector.leftOf, directionLeft)
@@ -183,6 +207,15 @@ func (selector *compiledSelector) matchesBasic(element *hierarchy.Element) bool 
 		matchesBool(selector.selector.Focused, element.Node.Focused)
 }
 
+// hasBasicFilter reports whether the selector says anything about an element on
+// its own, as opposed to only about its relatives.
+func (selector *compiledSelector) hasBasicFilter() bool {
+	return selector.text != nil || selector.id != nil ||
+		selector.selector.Size != nil || len(selector.selector.Traits) > 0 ||
+		selector.selector.Enabled != nil || selector.selector.Selected != nil ||
+		selector.selector.Checked != nil || selector.selector.Focused != nil
+}
+
 func deepest(candidates []*hierarchy.Element) []*hierarchy.Element {
 	set := make(map[*hierarchy.Element]struct{}, len(candidates))
 	for _, candidate := range candidates {
@@ -211,15 +244,32 @@ func hasMatchingDescendant(candidate *hierarchy.Element, set map[*hierarchy.Elem
 	return false
 }
 
+// filterStructural keeps candidates whose relatives are IN the set the nested
+// selector resolves to. The nested selector is resolved once, through the same
+// pipeline as a top-level one — including the deepest-node reduction — and the
+// test is set membership.
+//
+// Membership, not a fresh per-candidate match: measured on iOS 2026-08-06, the
+// reference resolves `containsChild: {text: General}` to the one row that holds
+// the label and `containsDescendants: [text: General]` to every ancestor of it.
 func (selector *compiledSelector) filterStructural(root *hierarchy.Element, candidates []*hierarchy.Element) []*hierarchy.Element {
+	var childSet map[*hierarchy.Element]struct{}
+	if selector.containsChild != nil {
+		childSet = elementSet(selector.containsChild.find(root))
+	}
+	descendantSets := make([]map[*hierarchy.Element]struct{}, len(selector.containsDescendants))
+	for index, descendantSelector := range selector.containsDescendants {
+		descendantSets[index] = elementSet(descendantSelector.find(root))
+	}
+
 	result := candidates[:0]
 	for _, candidate := range candidates {
-		if selector.containsChild != nil && !hasDirectChild(root, candidate, selector.containsChild) {
+		if childSet != nil && !hasDirectChildIn(candidate, childSet) {
 			continue
 		}
 		matchesAllDescendants := true
-		for _, descendantSelector := range selector.containsDescendants {
-			if !hasDescendant(root, candidate, descendantSelector) {
+		for _, set := range descendantSets {
+			if !hasDescendantIn(candidate, set) {
 				matchesAllDescendants = false
 				break
 			}
@@ -227,61 +277,40 @@ func (selector *compiledSelector) filterStructural(root *hierarchy.Element, cand
 		if !matchesAllDescendants {
 			continue
 		}
-		if selector.childOf != nil && (candidate.Parent == nil || !selector.childOf.matchesCandidate(root, candidate.Parent)) {
-			continue
-		}
 		result = append(result, candidate)
 	}
 	return result
 }
 
-func hasDirectChild(root, candidate *hierarchy.Element, selector *compiledSelector) bool {
+func elementSet(elements []*hierarchy.Element) map[*hierarchy.Element]struct{} {
+	set := make(map[*hierarchy.Element]struct{}, len(elements))
+	for _, element := range elements {
+		set[element] = struct{}{}
+	}
+	return set
+}
+
+func hasDirectChildIn(candidate *hierarchy.Element, set map[*hierarchy.Element]struct{}) bool {
 	for _, child := range candidate.Children {
-		if selector.matchesCandidate(root, child) {
+		if _, exists := set[child]; exists {
 			return true
 		}
 	}
 	return false
 }
 
-func hasDescendant(root, candidate *hierarchy.Element, selector *compiledSelector) bool {
+func hasDescendantIn(candidate *hierarchy.Element, set map[*hierarchy.Element]struct{}) bool {
 	stack := append([]*hierarchy.Element(nil), candidate.Children...)
 	for len(stack) > 0 {
 		index := len(stack) - 1
 		current := stack[index]
 		stack = stack[:index]
-		if selector.matchesCandidate(root, current) {
+		if _, exists := set[current]; exists {
 			return true
 		}
 		stack = append(stack, current.Children...)
 	}
 	return false
-}
-
-func (selector *compiledSelector) matchesCandidate(root, candidate *hierarchy.Element) bool {
-	if !selector.matchesBasic(candidate) {
-		return false
-	}
-	if len(selector.filterStructural(root, []*hierarchy.Element{candidate})) == 0 {
-		return false
-	}
-	for _, relation := range []struct {
-		anchor    *compiledSelector
-		direction direction
-	}{
-		{selector.below, directionBelow},
-		{selector.above, directionAbove},
-		{selector.leftOf, directionLeft},
-		{selector.rightOf, directionRight},
-	} {
-		if relation.anchor == nil {
-			continue
-		}
-		if !matchesAnyAnchor(candidate, relation.anchor.find(root), relation.direction) {
-			return false
-		}
-	}
-	return true
 }
 
 type direction uint8

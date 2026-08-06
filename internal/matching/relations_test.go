@@ -241,3 +241,101 @@ func TestFindUsesOriginsNotGaps(t *testing.T) {
 		})
 	}
 }
+
+// TestChildOfScopesTheSearchToOneAnchorIncludingItself pins what `childOf`
+// means: the anchor selector resolves to a SINGLE element, and the rest of the
+// selector is then evaluated inside that element's subtree, the element
+// included.
+//
+// Measured on iOS 2026-08-06 against the pinned reference on the Settings root.
+// Three results only this rule produces:
+//
+//	{id: general, childOf: {id: general}}      -> [General]   the anchor matches itself
+//	{childOf: {id: general}}                   -> 4 elements  the row plus its three children
+//	{text: ".*", childOf: {text: ".*"}}        -> 1 element   the anchor is one node, not a set
+//
+// A parent test gives none of them; an ancestor-set test gives three for the
+// second and dozens for the third.
+func TestChildOfScopesTheSearchToOneAnchorIncludingItself(t *testing.T) {
+	t.Parallel()
+
+	root := mustHierarchy(t, matchNode("root", nil,
+		matchNode("cell", map[string]string{"resource-id": "cell", "text": "Row"},
+			matchNode("wrapper", nil,
+				matchNode("deep-label", map[string]string{"text": "Deep"}),
+			),
+		),
+		matchNode("outside", map[string]string{"text": "Deep"}),
+	))
+	anchor := &model.ElementSelector{IDRegex: stringPointer("cell")}
+
+	t.Run("a grandchild counts", func(t *testing.T) {
+		matches, err := Find(root, model.ElementSelector{
+			TextRegex: stringPointer("Deep"), ChildOf: anchor,
+		})
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if got := matchNames(matches); !reflect.DeepEqual(got, []string{"deep-label"}) {
+			t.Fatalf("childOf names = %v, want [deep-label]", got)
+		}
+	})
+
+	t.Run("the anchor matches itself", func(t *testing.T) {
+		matches, err := Find(root, model.ElementSelector{
+			IDRegex: stringPointer("cell"), ChildOf: anchor,
+		})
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if got := matchNames(matches); !reflect.DeepEqual(got, []string{"cell"}) {
+			t.Fatalf("self childOf names = %v, want [cell]", got)
+		}
+	})
+
+	t.Run("an anchor that resolves to nothing matches nothing", func(t *testing.T) {
+		matches, err := Find(root, model.ElementSelector{
+			TextRegex: stringPointer("Deep"),
+			ChildOf:   &model.ElementSelector{IDRegex: stringPointer("no-such-id")},
+		})
+		if err != nil {
+			t.Fatalf("Find: %v", err)
+		}
+		if got := matchNames(matches); len(got) != 0 {
+			t.Fatalf("childOf names = %v, want none", got)
+		}
+	})
+}
+
+// TestStructuralOnlySelectorsKeepEveryAncestor pins when the deepest-node
+// reduction runs.
+//
+// `containsDescendants: [text: General]` with nothing else on the selector
+// enumerates six or more elements on the reference and exactly one here
+// (measured on iOS 2026-08-06). Every one of the reference's is an ancestor of
+// the General label, and the first in document order is the tree root, whose
+// text is empty — which is what that sweep row reads back.
+//
+// So the reduction belongs to resolving a text/id match, not to the pipeline:
+// a selector carrying only structural filters keeps the whole ancestor chain.
+func TestStructuralOnlySelectorsKeepEveryAncestor(t *testing.T) {
+	t.Parallel()
+
+	root := mustHierarchy(t, matchNode("root", nil,
+		matchNode("outer", nil,
+			matchNode("inner", nil,
+				matchNode("target", map[string]string{"text": "Target"}),
+			),
+		),
+	))
+
+	matches, err := Find(root, model.ElementSelector{
+		ContainsDescendants: []model.ElementSelector{{TextRegex: stringPointer("Target")}},
+	})
+	if err != nil {
+		t.Fatalf("Find: %v", err)
+	}
+	if got := matchNames(matches); !reflect.DeepEqual(got, []string{"root", "outer", "inner"}) {
+		t.Fatalf("containsDescendants names = %v, want every ancestor in document order", got)
+	}
+}
