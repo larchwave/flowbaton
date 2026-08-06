@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 type compiledDispatch struct {

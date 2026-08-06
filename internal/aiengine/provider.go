@@ -7,7 +7,7 @@ import (
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/openai"
 
-	"github.com/nohavewho/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/engine"
 )
 
 // Provider names the LLM backend an Engine talks to.

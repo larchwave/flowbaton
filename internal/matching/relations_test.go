@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestFindAppliesBasicIntersectionBeforeDeepestReduction(t *testing.T) {

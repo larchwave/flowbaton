@@ -4,7 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The agent's viewHierarchy reply is the spec 04 §2 XML: a <hierarchy> root

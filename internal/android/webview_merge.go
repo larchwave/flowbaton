@@ -16,8 +16,8 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/hierarchy"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
 )
 
 // webViewClassSuffix is what an Android WebView reports as its class. The

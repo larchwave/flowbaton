@@ -3,7 +3,7 @@ package engine
 import (
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestCloneFlowCopiesEveryLinkBearingASTField(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/engine"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestFromEngineFlowResultEmitsExplicitZeroAndOmitsAbsentNumberOfRuns(t *testing.T) {

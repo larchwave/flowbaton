@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // query is spec 03's element finder: "which elements match this expression".

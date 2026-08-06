@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nohavewho/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/android"
 )
 
 // The Android driver installs the agent and starts instrumentation when the

@@ -1,4 +1,4 @@
-module github.com/nohavewho/flowbaton
+module github.com/larchwave/flowbaton
 
 go 1.25.0
 

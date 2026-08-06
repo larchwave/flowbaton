@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	flowcli "github.com/nohavewho/flowbaton/internal/cli"
+	flowcli "github.com/larchwave/flowbaton/internal/cli"
 )
 
 func TestEveryCompletionSubcommandIsActuallyDispatched(t *testing.T) {

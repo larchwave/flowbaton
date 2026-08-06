@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/enginetest"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // specs/05-command-semantics-addendum.md §1.2 defines openBrowser as openLink

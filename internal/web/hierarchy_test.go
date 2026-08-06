@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The injected script (spec 02 §4) emits one JSON node per kept DOM element.

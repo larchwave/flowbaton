@@ -4,8 +4,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // commandResultLedger retains every terminal command result for one root.

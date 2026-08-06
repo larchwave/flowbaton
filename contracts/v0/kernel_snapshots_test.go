@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/assets"
-	"github.com/nohavewho/flowbaton/internal/capability"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/assets"
+	"github.com/larchwave/flowbaton/internal/capability"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 type astContractSnapshot struct {

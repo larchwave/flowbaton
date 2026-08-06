@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/android"
-	"github.com/nohavewho/flowbaton/internal/ios"
-	"github.com/nohavewho/flowbaton/internal/web"
+	"github.com/larchwave/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/web"
 )
 
 // list-devices answers "what can I target?" through simctl for iOS, adb for

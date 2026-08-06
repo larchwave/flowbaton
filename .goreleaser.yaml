@@ -24,7 +24,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -buildid= -X github.com/nohavewho/flowbaton/internal/version.Version={{ .Version }}
+      - -s -w -buildid= -X github.com/larchwave/flowbaton/internal/version.Version={{ .Version }}
     mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
@@ -52,10 +52,10 @@ sboms:
 homebrew_casks:
   - name: flowbaton
     repository:
-      owner: nohavewho
+      owner: larchwave
       name: homebrew-flowbaton
       branch: main
-    homepage: 'https://github.com/nohavewho/flowbaton'
+    homepage: 'https://github.com/larchwave/flowbaton'
     description: 'Pre-alpha mobile UI automation toolkit: Go CLI, Android agent, iOS Simulator runner'
     license: Apache-2.0
     binaries: [flowbaton]

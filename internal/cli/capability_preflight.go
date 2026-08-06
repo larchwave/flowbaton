@@ -4,8 +4,8 @@ import (
 	"context"
 	"path/filepath"
 
-	"github.com/nohavewho/flowbaton/internal/capability"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/capability"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // NewParserChecker returns the production syntax checker. Parsing is followed

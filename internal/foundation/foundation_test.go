@@ -14,7 +14,7 @@ import (
 func TestModuleIdentity(t *testing.T) {
 	contents := readFile(t, "go.mod")
 	for _, want := range []string{
-		"module github.com/nohavewho/flowbaton",
+		"module github.com/larchwave/flowbaton",
 		// The MCP Go SDK requires Go 1.25, and the CI toolchain satisfies that
 		// minimum. See docs/dependency-policy.md.
 		"go 1.25.0",
@@ -58,7 +58,7 @@ func TestRepoRootIsAbsoluteWithTrimmedSourcePaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read repository go.mod: %v", err)
 	}
-	if !strings.Contains(string(contents), "module github.com/nohavewho/flowbaton") {
+	if !strings.Contains(string(contents), "module github.com/larchwave/flowbaton") {
 		t.Fatalf("repository root %q does not contain the FlowBaton module", root)
 	}
 }
@@ -292,7 +292,7 @@ func TestPublicDeliverySurfaceManifestIsDecidable(t *testing.T) {
 	if err := json.Unmarshal([]byte(readFile(t, "governance/public-delivery-surfaces.json")), &manifest); err != nil {
 		t.Fatalf("parse public delivery manifest: %v", err)
 	}
-	if manifest.SchemaVersion != 1 || manifest.PolicyVersion != "public-oss-v1" || manifest.CanonicalOwner != "nohavewho" || manifest.License != "Apache-2.0" {
+	if manifest.SchemaVersion != 1 || manifest.PolicyVersion != "public-oss-v1" || manifest.CanonicalOwner != "larchwave" || manifest.License != "Apache-2.0" {
 		t.Errorf("unexpected public delivery manifest identity: %+v", manifest)
 	}
 	requiredEvidence := []string{"manifest_sha256", "surface_id", "profile_id", "tool_version", "timestamp_utc", "exit_code", "response_sha256", "artifact_sha256", "signature_verified", "result"}
@@ -453,7 +453,7 @@ func repoRoot(t *testing.T) string {
 	for {
 		modulePath := filepath.Join(current, "go.mod")
 		contents, readErr := os.ReadFile(modulePath)
-		if readErr == nil && strings.Contains(string(contents), "module github.com/nohavewho/flowbaton") {
+		if readErr == nil && strings.Contains(string(contents), "module github.com/larchwave/flowbaton") {
 			return current
 		}
 		if readErr != nil && !os.IsNotExist(readErr) {

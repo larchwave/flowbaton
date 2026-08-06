@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.nohavewho.flowbaton.fixture"
+    namespace = "dev.larchwave.flowbaton.fixture"
     compileSdk = 34
 
     compileOptions {
@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.nohavewho.flowbaton.fixture"
+        applicationId = "dev.larchwave.flowbaton.fixture"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

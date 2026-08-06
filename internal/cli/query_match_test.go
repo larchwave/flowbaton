@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // Native platform query uses the same host-side matcher as flow selectors.

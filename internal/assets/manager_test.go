@@ -1015,7 +1015,7 @@ func tarGzipAssetForTestArchive(t *testing.T, variant string, extra *tar.Header,
 		mode int64
 		body []byte
 	}{
-		{path: "Runner.app/Info.plist", mode: 0o644, body: []byte("bundle=dev.nohavewho.flowbaton.driver\n")},
+		{path: "Runner.app/Info.plist", mode: 0o644, body: []byte("bundle=dev.larchwave.flowbaton.driver\n")},
 		{path: "Runner.app/runner", mode: 0o755, body: []byte("#!/bin/sh\necho flowbaton-runner " + variant + "\n")},
 	}
 	var tarBuffer bytes.Buffer
@@ -1090,7 +1090,7 @@ func tarGzipAssetForTestArchive(t *testing.T, variant string, extra *tar.Header,
 		Files: manifestFiles,
 		Identity: AssetIdentity{
 			Kind:  VerificationBundleSignatureIdentity,
-			Value: "dev.nohavewho.flowbaton.driver",
+			Value: "dev.larchwave.flowbaton.driver",
 			Path:  "Runner.app",
 		},
 		Compatibility: Compatibility{
@@ -1137,7 +1137,7 @@ func gzipAssetForTest(t *testing.T) (Asset, []byte, []byte) {
 		Files: []AssetFile{{Path: "agent.apk", SHA256: payloadHash, Size: int64(len(payload)), Mode: "0644"}},
 		Identity: AssetIdentity{
 			Kind:  VerificationPackageIdentity,
-			Value: "dev.nohavewho.flowbaton",
+			Value: "dev.larchwave.flowbaton",
 			Path:  "agent.apk",
 		},
 		Compatibility: Compatibility{AndroidAPI: IntegerRange{Min: 21, Max: 36}},

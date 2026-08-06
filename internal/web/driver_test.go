@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // pageState is the fake page a driver test drives: it answers the six protocol

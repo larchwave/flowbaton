@@ -28,7 +28,7 @@
       ],
       "identity": {
         "kind": "package-identity",
-        "value": "dev.nohavewho.flowbaton",
+        "value": "dev.larchwave.flowbaton",
         "path": "android-agent.fixture"
       },
       "compatibility": {
@@ -63,7 +63,7 @@
       ],
       "identity": {
         "kind": "bundle-signature-identity",
-        "value": "dev.nohavewho.flowbaton.driver",
+        "value": "dev.larchwave.flowbaton.driver",
         "path": "ios-runner.fixture"
       },
       "compatibility": {

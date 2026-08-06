@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/android/grpcwire"
-	"github.com/nohavewho/flowbaton/internal/android/pbwire"
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/android/grpcwire"
+	"github.com/larchwave/flowbaton/internal/android/pbwire"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // Driver composes the two halves of the Android host side into the frozen

@@ -7,7 +7,7 @@ import (
 	"image/color"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/imagecheck"
+	"github.com/larchwave/flowbaton/internal/imagecheck"
 )
 
 func TestCheckCropIgnoresPixelsOutsideAndCountsPixelsInside(t *testing.T) {

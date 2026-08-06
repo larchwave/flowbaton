@@ -5,7 +5,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 type repeatCounterKind uint8

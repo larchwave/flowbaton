@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // hierarchy is spec 03's view-hierarchy dump: "what is on screen right now",

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // FlowLoader separates canonical identity from parsing so the checker can

@@ -5,14 +5,14 @@
              Exported because the instrumented process runs under the TARGET app's uid,
              which counts as another app to this test-package activity. -->
         <activity
-            android:name="dev.nohavewho.flowbaton.TextEntryActivity"
+            android:name="dev.larchwave.flowbaton.TextEntryActivity"
             android:exported="true" />
         <!-- A WebView with content debugging on, so there is SOMETHING on this
              emulator publishing a DevTools endpoint: release Chrome publishes
              none and ignores /data/local/tmp/chrome-command-line. Exported for
              the same reason as the one above. -->
         <activity
-            android:name="dev.nohavewho.flowbaton.WebViewHostActivity"
+            android:name="dev.larchwave.flowbaton.WebViewHostActivity"
             android:exported="true" />
     </application>
 </manifest>

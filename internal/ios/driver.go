@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // Driver composes the two halves of the iOS host side into the frozen

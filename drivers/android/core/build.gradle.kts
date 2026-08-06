@@ -2,7 +2,7 @@ plugins {
     `java-library`
 }
 
-group = "dev.nohavewho.flowbaton"
+group = "dev.larchwave.flowbaton"
 version = "0.0.1-g001"
 
 java {

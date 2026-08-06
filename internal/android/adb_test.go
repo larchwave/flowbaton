@@ -154,9 +154,9 @@ func TestAdbBuildsTheExactCommandLine(t *testing.T) {
 			},
 			want: []string{"shell", "am", "instrument", "-w", "-m",
 				"-e", "debug", "false",
-				"-e", "class", "dev.nohavewho.flowbaton.FlowBatonDriverService#grpcServer",
+				"-e", "class", "dev.larchwave.flowbaton.FlowBatonDriverService#grpcServer",
 				"-e", "port", "7001",
-				"dev.nohavewho.flowbaton.test/androidx.test.runner.AndroidJUnitRunner"},
+				"dev.larchwave.flowbaton.test/androidx.test.runner.AndroidJUnitRunner"},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {

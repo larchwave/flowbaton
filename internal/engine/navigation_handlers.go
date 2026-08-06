@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/js"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/js"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // Navigation handlers cover authored links, browser launch, and animation waits.

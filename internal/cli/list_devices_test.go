@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/android"
-	"github.com/nohavewho/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/ios"
 )
 
 // list-devices is the operator diagnostic named in G006: "what can I target?"

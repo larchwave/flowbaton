@@ -7,7 +7,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/imagecheck"
+	"github.com/larchwave/flowbaton/internal/imagecheck"
 )
 
 func TestResultWithinThresholdUsesInclusiveBoundary(t *testing.T) {

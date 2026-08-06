@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/enginetest"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 const (

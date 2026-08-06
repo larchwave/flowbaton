@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/android"
 )
 
 // bugreport collects a device diagnostic bundle (spec 03). Android is an adb

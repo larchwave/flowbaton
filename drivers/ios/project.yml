@@ -24,7 +24,7 @@ targets:
     settings:
       base:
         DEFINES_MODULE: true
-        PRODUCT_BUNDLE_IDENTIFIER: dev.nohavewho.flowbaton.driver
+        PRODUCT_BUNDLE_IDENTIFIER: dev.larchwave.flowbaton.driver
         SKIP_INSTALL: true
 
   FlowBatonIOSRunnerTests:
@@ -36,7 +36,7 @@ targets:
       - target: FlowBatonIOSRunner
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.nohavewho.flowbaton.driver.tests
+        PRODUCT_BUNDLE_IDENTIFIER: dev.larchwave.flowbaton.driver.tests
         SKIP_INSTALL: true
 
   FlowBatonIOSRunnerUITests:
@@ -48,7 +48,7 @@ targets:
       - target: FlowBatonIOSRunner
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.nohavewho.flowbaton.driver.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: dev.larchwave.flowbaton.driver.uitests
         SKIP_INSTALL: true
 
 schemes:

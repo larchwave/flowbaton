@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/js"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/js"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 type actionAliasCompiled struct {

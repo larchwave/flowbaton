@@ -5,7 +5,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestCheckValidatesScriptAndMediaResourcesWithoutParsingThemAsFlows(t *testing.T) {

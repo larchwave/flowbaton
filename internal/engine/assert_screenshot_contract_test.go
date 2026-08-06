@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // assertScreenshot resolves extensionless expected-image paths to PNG, accepts

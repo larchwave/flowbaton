@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/hierarchy"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
 )
 
 // A live end-to-end run against a real browser.

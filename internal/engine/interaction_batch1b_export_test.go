@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // ExecuteBatch1BRootForReportTest exposes the private swipe root lifecycle

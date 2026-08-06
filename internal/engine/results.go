@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // Outcome is the stable terminal status for a command or flow.

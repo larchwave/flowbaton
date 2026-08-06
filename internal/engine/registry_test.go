@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // productionKeywords defines the sorted production handler set used by

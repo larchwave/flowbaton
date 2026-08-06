@@ -674,7 +674,7 @@ func assertNoGojaType(t *testing.T, valueType reflect.Type, seen map[reflect.Typ
 	if strings.Contains(valueType.PkgPath(), "github.com/dop251/goja") {
 		t.Fatalf("exported runtime contract exposes goja type %s", valueType)
 	}
-	if valueType.PkgPath() != "" && valueType.PkgPath() != "github.com/nohavewho/flowbaton/internal/js" {
+	if valueType.PkgPath() != "" && valueType.PkgPath() != "github.com/larchwave/flowbaton/internal/js" {
 		return
 	}
 	switch valueType.Kind() {

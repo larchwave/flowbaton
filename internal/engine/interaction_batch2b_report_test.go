@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/engine"
-	"github.com/nohavewho/flowbaton/internal/model"
-	"github.com/nohavewho/flowbaton/internal/report"
+	"github.com/larchwave/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/report"
 )
 
 func TestInteractionBatch2BResultEventAndReportProjectionMatrix(t *testing.T) {

@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.nohavewho.flowbaton"
+    namespace = "dev.larchwave.flowbaton"
     compileSdk = 34
 
     compileOptions {
@@ -13,13 +13,13 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.nohavewho.flowbaton"
+        applicationId = "dev.larchwave.flowbaton"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "0.0.1-g001"
 
-        testApplicationId = "dev.nohavewho.flowbaton.test"
+        testApplicationId = "dev.larchwave.flowbaton.test"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

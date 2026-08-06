@@ -5,8 +5,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/js"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/js"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // specs/01-core-engine.md:98 is the whole contract: runScript evaluates the

@@ -57,7 +57,7 @@ func TestRepresentativeFixturesAreDeterministicAndSelfDescribing(t *testing.T) {
 	}{
 		PlatformAndroid: {
 			artifactName:     "android-agent.fixture",
-			identity:         "dev.nohavewho.flowbaton",
+			identity:         "dev.larchwave.flowbaton",
 			verificationKind: VerificationPackageIdentity,
 			mode:             0o644,
 			compressedSHA256: "0b595af42bb4c5d6acfd7684cff88b08ef2b186b3872990d511ac494b258f399",
@@ -68,7 +68,7 @@ func TestRepresentativeFixturesAreDeterministicAndSelfDescribing(t *testing.T) {
 		},
 		PlatformIOSSimulator: {
 			artifactName:     "ios-runner.fixture",
-			identity:         "dev.nohavewho.flowbaton.driver",
+			identity:         "dev.larchwave.flowbaton.driver",
 			verificationKind: VerificationBundleSignatureIdentity,
 			mode:             0o755,
 			compressedSHA256: "fe697c8bff6125880535adcdb53df26453e3c3b6687bc1354d32adf26b378d42",

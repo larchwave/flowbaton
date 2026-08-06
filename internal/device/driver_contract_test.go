@@ -149,7 +149,7 @@ func reflectDriverV0Contract(t *testing.T) driverContractSnapshot {
 		SchemaVersion:   1,
 		ContractVersion: ContractVersionV0,
 		Interface: interfaceSnapshot{
-			Package: "github.com/nohavewho/flowbaton/internal/device",
+			Package: "github.com/larchwave/flowbaton/internal/device",
 			Name:    "Driver",
 			Methods: methods,
 		},
@@ -209,7 +209,7 @@ func contractTypeName(typ reflect.Type) string {
 	if typ.PkgPath() == "context" {
 		return "context." + typ.Name()
 	}
-	if typ.PkgPath() == "github.com/nohavewho/flowbaton/internal/device" {
+	if typ.PkgPath() == "github.com/larchwave/flowbaton/internal/device" {
 		return typ.Name()
 	}
 	if typ.Name() != "" {

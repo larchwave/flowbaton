@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // These tests pin the iOS device.Driver composition: which boundary answers

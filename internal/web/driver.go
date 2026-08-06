@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 const Platform = device.Platform("web")

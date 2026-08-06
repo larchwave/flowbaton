@@ -16,8 +16,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/flow"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/flow"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // configFileNames are the workspace configuration names auto-discovery looks

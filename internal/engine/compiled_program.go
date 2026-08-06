@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // compileContext is the effect-free structural context supplied to handler

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/workspace"
+	"github.com/larchwave/flowbaton/internal/workspace"
 )
 
 // A sharded run uses all attached devices for the selected platform unless

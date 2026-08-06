@@ -1,8 +1,8 @@
 package engine
 
 import (
-	"github.com/nohavewho/flowbaton/internal/capability"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/capability"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func cloneCapabilityReport(report capability.Report) capability.Report {

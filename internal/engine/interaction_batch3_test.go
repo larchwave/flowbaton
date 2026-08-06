@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/enginetest"
-	"github.com/nohavewho/flowbaton/internal/hierarchy"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestInteractionBatch3PrivateRegistryAndCompileContract(t *testing.T) {

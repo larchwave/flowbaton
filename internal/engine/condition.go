@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/js"
-	"github.com/nohavewho/flowbaton/internal/matching"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/js"
+	"github.com/larchwave/flowbaton/internal/matching"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 type conditionServices struct {

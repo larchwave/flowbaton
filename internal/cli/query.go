@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // query finds on-device elements matching an expression — spec 03's element

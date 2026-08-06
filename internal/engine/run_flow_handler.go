@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 type runFlowSource uint8

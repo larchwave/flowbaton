@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/nohavewho/flowbaton/internal/android"
-	"github.com/nohavewho/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/ios"
 )
 
 // A sharded run uses all attached devices for the selected platform unless

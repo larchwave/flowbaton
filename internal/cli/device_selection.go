@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/android"
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/ios"
-	"github.com/nohavewho/flowbaton/internal/web"
+	"github.com/larchwave/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/web"
 )
 
 // Resolving the operator's -p/--device into a driver.

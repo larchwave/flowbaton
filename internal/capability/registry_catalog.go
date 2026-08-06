@@ -1,6 +1,6 @@
 package capability
 
-import "github.com/nohavewho/flowbaton/internal/model"
+import "github.com/larchwave/flowbaton/internal/model"
 
 var configExtensionsV0 = []string{
 	"url",

@@ -50,9 +50,9 @@ const chromePackage = "com.android.chrome"
 // entrypoint between them are defined by specs/02-device-drivers.md §2.2.
 const (
 	// AgentAppPackage is the app APK: drivers/android/agent's applicationId.
-	AgentAppPackage = "dev.nohavewho.flowbaton"
+	AgentAppPackage = "dev.larchwave.flowbaton"
 	// AgentTestPackage is the instrumentation APK that hosts the gRPC server.
-	AgentTestPackage = "dev.nohavewho.flowbaton.test"
+	AgentTestPackage = "dev.larchwave.flowbaton.test"
 	// agentServiceClass is the -e class filter FlowBatonDriverService#grpcServer
 	// requires before it will serve (it skips itself on blanket runs).
 	agentServiceClass = AgentAppPackage + ".FlowBatonDriverService#grpcServer"

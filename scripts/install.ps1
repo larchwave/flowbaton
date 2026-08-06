@@ -5,7 +5,7 @@
   SHA-256 against the published checksums file, and installs flowbaton.exe.
   Fails closed on any mismatch.
 
-  irm https://github.com/nohavewho/flowbaton/releases/latest/download/install.ps1 | iex
+  irm https://github.com/larchwave/flowbaton/releases/latest/download/install.ps1 | iex
 
 .DESCRIPTION
   Environment overrides:
@@ -17,7 +17,7 @@
 # terminates instead of continuing past a broken download or extraction.
 Set-StrictMode -Version Latest
 
-$repo = 'nohavewho/flowbaton'
+$repo = 'larchwave/flowbaton'
 $arch = if ([Environment]::Is64BitOperatingSystem) { 'amd64' } else { throw 'install: unsupported architecture (amd64 only)' }
 $installDir = if ($env:FLOWBATON_INSTALL_DIR) { $env:FLOWBATON_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'FlowBaton\bin' }
 

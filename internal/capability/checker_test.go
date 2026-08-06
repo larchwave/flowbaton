@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestCheckAnalyzesOnlySelectedRoots(t *testing.T) {

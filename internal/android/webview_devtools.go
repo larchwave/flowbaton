@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/web"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/web"
 )
 
 // devToolsAbstractSocket is the name Chrome publishes on (spec 02:44). It is

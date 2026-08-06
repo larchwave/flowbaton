@@ -158,7 +158,7 @@ func TestResolveEnforcesIOSVersionRangesNumerically(t *testing.T) {
 	asset.HostArch = "arm64"
 	asset.Platform = PlatformIOSSimulator
 	asset.Identity.Kind = VerificationBundleSignatureIdentity
-	asset.Identity.Value = "dev.nohavewho.flowbaton.driver"
+	asset.Identity.Value = "dev.larchwave.flowbaton.driver"
 	asset.Compatibility.AndroidAPI = IntegerRange{}
 	asset.Compatibility.Xcode = VersionRange{Min: "16.0", Max: "26.10"}
 	asset.Compatibility.IOSRuntime = VersionRange{Min: "17.0", Max: "26.2"}
@@ -294,7 +294,7 @@ func validReleaseAsset() Asset {
 		Files: []AssetFile{{Path: "agent.apk", SHA256: payloadHash, Size: 256, Mode: "0644"}},
 		Identity: AssetIdentity{
 			Kind:  VerificationPackageIdentity,
-			Value: "dev.nohavewho.flowbaton",
+			Value: "dev.larchwave.flowbaton",
 			Path:  "agent.apk",
 		},
 		Compatibility: Compatibility{AndroidAPI: IntegerRange{Min: 21, Max: 36}},
@@ -311,7 +311,7 @@ func convertAssetToIOS(asset *Asset) {
 	asset.HostArch = "arm64"
 	asset.Platform = PlatformIOSSimulator
 	asset.Identity.Kind = VerificationBundleSignatureIdentity
-	asset.Identity.Value = "dev.nohavewho.flowbaton.driver"
+	asset.Identity.Value = "dev.larchwave.flowbaton.driver"
 	asset.Compatibility = Compatibility{
 		Xcode:      VersionRange{Min: "16.0", Max: "26.2"},
 		IOSRuntime: VersionRange{Min: "17.0", Max: "26.0"},

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // TestFiveCommandsAcceptLabelAndOptional pins universal metadata across five

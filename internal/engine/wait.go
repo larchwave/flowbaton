@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/hierarchy"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // WaitUntilNotVisible checks immediately, then polls at the exact 500ms

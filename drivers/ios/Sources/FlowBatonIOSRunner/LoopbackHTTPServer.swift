@@ -8,7 +8,7 @@ public enum LoopbackHTTPServerError: Error, Equatable {
 
 public final class LoopbackHTTPServer: @unchecked Sendable {
   private let requestedPort: NWEndpoint.Port
-  private let queue = DispatchQueue(label: "dev.nohavewho.flowbaton.driver.http")
+  private let queue = DispatchQueue(label: "dev.larchwave.flowbaton.driver.http")
   private let lock = NSLock()
   private var listener: NWListener?
   /// Answers a parsed request. Injected so the transport can be exercised

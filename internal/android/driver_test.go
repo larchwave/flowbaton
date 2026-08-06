@@ -22,8 +22,8 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
-	"github.com/nohavewho/flowbaton/internal/android/pbwire"
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/android/pbwire"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The composition batch for Android: the gRPC agent half rides a REAL
@@ -300,18 +300,18 @@ func TestOpenInstallsAndStartsTheAgentWhenAPKsAreGiven(t *testing.T) {
 
 	calls := runner.recorded()
 	want := [][]string{
-		{"-s", testSerial, "uninstall", "dev.nohavewho.flowbaton"},
-		{"-s", testSerial, "uninstall", "dev.nohavewho.flowbaton.test"},
+		{"-s", testSerial, "uninstall", "dev.larchwave.flowbaton"},
+		{"-s", testSerial, "uninstall", "dev.larchwave.flowbaton.test"},
 		{"-s", testSerial, "install", "-r", "/apks/agent-app.apk"},
 		{"-s", testSerial, "install", "-r", "/apks/agent-test.apk"},
 		{"-s", testSerial, "shell", "appops", "set",
-			"dev.nohavewho.flowbaton", "android:mock_location", "allow"},
+			"dev.larchwave.flowbaton", "android:mock_location", "allow"},
 		{"-s", testSerial, "forward", "tcp:" + strconv.Itoa(port), "tcp:7001"},
 		{"-s", testSerial, "shell", "am", "instrument", "-w", "-m",
 			"-e", "debug", "false",
-			"-e", "class", "dev.nohavewho.flowbaton.FlowBatonDriverService#grpcServer",
+			"-e", "class", "dev.larchwave.flowbaton.FlowBatonDriverService#grpcServer",
 			"-e", "port", "7001",
-			"dev.nohavewho.flowbaton.test/androidx.test.runner.AndroidJUnitRunner"},
+			"dev.larchwave.flowbaton.test/androidx.test.runner.AndroidJUnitRunner"},
 	}
 	if len(calls) != len(want) {
 		t.Fatalf("adb calls = %v, want %v", calls, want)
@@ -411,7 +411,7 @@ func TestOpenReportsAnInstrumentationThatRefusesToStart(t *testing.T) {
 	port := deadPort(t)
 	runner := &recordingRunner{respond: func(args []string) ([]byte, error) {
 		if slices.Contains(args, "instrument") {
-			return []byte("INSTRUMENTATION_FAILED: dev.nohavewho.flowbaton.test"), nil
+			return []byte("INSTRUMENTATION_FAILED: dev.larchwave.flowbaton.test"), nil
 		}
 		return nil, nil
 	}}
@@ -445,8 +445,8 @@ func TestCloseStopsAndUninstallsTheManagedAgent(t *testing.T) {
 	}
 	want := [][]string{
 		{"-s", testSerial, "forward", "--remove", "tcp:" + strconv.Itoa(port)},
-		{"-s", testSerial, "uninstall", "dev.nohavewho.flowbaton"},
-		{"-s", testSerial, "uninstall", "dev.nohavewho.flowbaton.test"},
+		{"-s", testSerial, "uninstall", "dev.larchwave.flowbaton"},
+		{"-s", testSerial, "uninstall", "dev.larchwave.flowbaton.test"},
 	}
 	tail := calls[len(calls)-3:]
 	for i := range want {

@@ -6,7 +6,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // Method names one device.Driver operation in an action trace.

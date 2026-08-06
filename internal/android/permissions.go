@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // setPermissions on Android is pm grant / pm revoke per permission.

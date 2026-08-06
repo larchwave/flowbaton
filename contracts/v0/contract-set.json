@@ -50,7 +50,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/driver.json",
       "coverage": "contract-complete",
-      "sha256": "8c149cf251211b9c0857a8316ded8f8161922382636c0845b91153ee26cb16c9"
+      "sha256": "fcc464ebb2b9a4e36caa035c6aa36515f85e85adbefb1b5c9aef54368a39af5c"
     },
     {
       "id": "ast-json-snapshot",
@@ -104,17 +104,17 @@
       "id": "android-jvm-declarations",
       "component": "android-grpc",
       "language": "jvm",
-      "path": "drivers/android/core/src/main/java/dev/nohavewho/flowbaton/driver/contract/AndroidWireContractV0.java",
+      "path": "drivers/android/core/src/main/java/dev/larchwave/flowbaton/driver/contract/AndroidWireContractV0.java",
       "coverage": "contract-complete",
-      "sha256": "016442282ef8d596107cbae36c4af5418a0dfbf58d07c890124111c95553f8a0"
+      "sha256": "d1c0e477e7b71ff83d86f2fbaa06c2eebb7e519b1a8c75ca1117e325427887a2"
     },
     {
       "id": "android-g001-runtime",
       "component": "android-grpc",
       "language": "jvm-runtime",
-      "path": "drivers/android/core/src/main/java/dev/nohavewho/flowbaton/driver/GrpcDeviceServer.java",
+      "path": "drivers/android/core/src/main/java/dev/larchwave/flowbaton/driver/GrpcDeviceServer.java",
       "coverage": "partial-g001-deviceInfo-only",
-      "sha256": "9e1d780905d66206b932fdf0b9b712a04d0fe27e9f9e08744d29e88d4fcc8790"
+      "sha256": "537091ba9e0cf10f24586cf08713087b8aa5449743cb6ffcfc5f76992648a87f"
     },
     {
       "id": "ios-go-routes",

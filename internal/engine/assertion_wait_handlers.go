@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/js"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/js"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // parseTimeoutMillis resolves a post-interpolation timeout string as a strict

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestInteractionBatch2BSchemaRetainsExactStaticActionGrammar(t *testing.T) {

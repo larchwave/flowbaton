@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestFindExplicitIndexSortsYXSupportsNegativeAndPlacesMissingBoundsLast(t *testing.T) {

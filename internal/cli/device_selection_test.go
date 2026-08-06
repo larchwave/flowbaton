@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/android"
 )
 
 // Device resolution must never invent a device identifier.

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_version": "v0",
   "interface": {
-    "package": "github.com/nohavewho/flowbaton/internal/device",
+    "package": "github.com/larchwave/flowbaton/internal/device",
     "name": "Driver",
     "methods": [
       {"name":"AddMedia","parameters":["context.Context","AddMediaRequest"],"results":["error"]},

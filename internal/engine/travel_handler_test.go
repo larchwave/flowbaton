@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/enginetest"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // Travel expectations follow specs/05-command-semantics-addendum.md §2.3.

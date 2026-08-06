@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/android/pbwire"
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/android/pbwire"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // specs/01-core-engine.md:62 — the engine initialises Android Chrome DevTools

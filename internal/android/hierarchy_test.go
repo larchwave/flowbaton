@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The agent answers viewHierarchy with the spec 04 §2 XML. This parser turns

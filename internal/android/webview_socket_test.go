@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // specs/02-device-drivers.md:44 names the localabstract CDP socket. A

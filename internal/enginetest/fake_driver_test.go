@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 func TestFakeDriverHasStableDefaultName(t *testing.T) {

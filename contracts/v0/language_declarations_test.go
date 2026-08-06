@@ -13,7 +13,7 @@ func TestAndroidJVMDeclarationsAreLinkedToCanonicalDescriptor(t *testing.T) {
 	assertLanguageDescriptorHash(
 		t,
 		"android-grpc.json",
-		filepath.Join("..", "..", "drivers", "android", "core", "src", "main", "java", "dev", "nohavewho", "flowbaton", "driver", "contract", "AndroidWireContractV0.java"),
+		filepath.Join("..", "..", "drivers", "android", "core", "src", "main", "java", "dev", "larchwave", "flowbaton", "driver", "contract", "AndroidWireContractV0.java"),
 		regexp.MustCompile(`DESCRIPTOR_SHA256\s*=\s*"([0-9a-f]{64})"`),
 	)
 }

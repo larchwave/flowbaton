@@ -12,7 +12,7 @@ func TestGoReleaserInjectsSnapshotOrTagVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const want = "-X github.com/nohavewho/flowbaton/internal/version.Version={{ .Version }}"
+	const want = "-X github.com/larchwave/flowbaton/internal/version.Version={{ .Version }}"
 	if !strings.Contains(string(contents), want) {
 		t.Fatalf(".goreleaser.yaml must contain %q", want)
 	}

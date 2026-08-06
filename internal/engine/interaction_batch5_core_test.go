@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 const batch5CoreIntegrityMessage = "execution session integrity lost after copied text update failed"

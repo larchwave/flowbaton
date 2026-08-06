@@ -8,7 +8,7 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
-	"github.com/nohavewho/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/engine"
 )
 
 // fakeModel is a scripted llms.Model: it records the messages/options it was

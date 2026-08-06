@@ -14,7 +14,7 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 
-	"github.com/nohavewho/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/engine"
 )
 
 // Engine is a screenshot-driven AIPredictionEngine backed by one llms.Model.

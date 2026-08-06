@@ -11,8 +11,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/nohavewho/flowbaton/internal/hierarchy"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // RegexError identifies an invalid selector expression without panicking.

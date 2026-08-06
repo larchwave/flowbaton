@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // specs/05-command-semantics-addendum.md §2 defines the contract. §2.1 fixes

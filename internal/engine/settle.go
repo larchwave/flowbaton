@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // WaitForHierarchySettle confirms settling only after two equal, non-loading

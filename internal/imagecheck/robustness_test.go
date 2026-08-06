@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/imagecheck"
+	"github.com/larchwave/flowbaton/internal/imagecheck"
 )
 
 func TestCheckDoesNotMutateEncodedInputs(t *testing.T) {

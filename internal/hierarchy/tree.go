@@ -1,6 +1,6 @@
 package hierarchy
 
-import "github.com/nohavewho/flowbaton/internal/device"
+import "github.com/larchwave/flowbaton/internal/device"
 
 // Element is a normalized hierarchy node with explicit geometry, ancestry, and
 // stable preorder identity. Node.Children is cleared; Children is authoritative.

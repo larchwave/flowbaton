@@ -134,7 +134,7 @@ func TestAndroidJVMDeclarationsSemanticallyMatchCanonicalDescriptor(t *testing.T
 	want := renderAndroidSemanticManifest(descriptor)
 	got := readSemanticSourceConstant(
 		t,
-		filepath.Join("..", "..", "drivers", "android", "core", "src", "main", "java", "dev", "nohavewho", "flowbaton", "driver", "contract", "AndroidWireContractV0.java"),
+		filepath.Join("..", "..", "drivers", "android", "core", "src", "main", "java", "dev", "larchwave", "flowbaton", "driver", "contract", "AndroidWireContractV0.java"),
 		regexp.MustCompile(`(?s)SEMANTIC_MANIFEST\s*=\s*String\.join\(\s*"\\n"\s*,(.*?)\);`),
 	)
 	assertSemanticManifestEqual(t, got, want)

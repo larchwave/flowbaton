@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestDefaultFileLoaderCanonicalizesSymlinkAliasesAndLoadsOnce(t *testing.T) {

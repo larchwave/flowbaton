@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/hierarchy"
-	"github.com/nohavewho/flowbaton/internal/matching"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
+	"github.com/larchwave/flowbaton/internal/matching"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // lookupPollInterval is the host retry cadence for an ordinary timed lookup.

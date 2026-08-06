@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nohavewho/flowbaton/internal/web"
+	"github.com/larchwave/flowbaton/internal/web"
 )
 
 // webChromeOptions turns the operator's flags into a browser configuration.

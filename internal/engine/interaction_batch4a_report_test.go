@@ -6,10 +6,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/engine"
-	"github.com/nohavewho/flowbaton/internal/model"
-	"github.com/nohavewho/flowbaton/internal/report"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/report"
 )
 
 func TestInteractionBatch4AActualRootLifecycleResultAndReportProjection(t *testing.T) {

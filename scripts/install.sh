@@ -3,7 +3,7 @@
 # SHA-256 against the published checksums file, and installs the flowbaton
 # binary. Fails closed on any mismatch.
 #
-#   curl -fsSL https://github.com/nohavewho/flowbaton/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/larchwave/flowbaton/releases/latest/download/install.sh | sh
 #
 # Environment overrides:
 #   FLOWBATON_VERSION      release version without the leading "v" (default: latest)
@@ -11,7 +11,7 @@
 #   FLOWBATON_BASE_URL     release download base (default: GitHub releases)
 set -eu
 
-REPO="nohavewho/flowbaton"
+REPO="larchwave/flowbaton"
 INSTALL_DIR="${FLOWBATON_INSTALL_DIR:-/usr/local/bin}"
 
 fail() {

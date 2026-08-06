@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/nohavewho/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 func TestRefreshMatchesExactlyOneNodeByAttributesIgnoringBounds(t *testing.T) {

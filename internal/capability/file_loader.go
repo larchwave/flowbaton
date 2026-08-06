@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nohavewho/flowbaton/internal/flow"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/flow"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // ErrFlowDirectory identifies a path that resolves to a directory rather than

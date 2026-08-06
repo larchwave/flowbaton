@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/nohavewho/flowbaton/internal/workspace"
+	"github.com/larchwave/flowbaton/internal/workspace"
 )
 
 // Splitting a run across devices.

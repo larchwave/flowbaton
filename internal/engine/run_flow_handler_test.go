@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/capability"
-	"github.com/nohavewho/flowbaton/internal/enginetest"
-	"github.com/nohavewho/flowbaton/internal/js"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/capability"
+	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/js"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestCompileRunFlowRequiresExactlyOnePrecompiledSource(t *testing.T) {

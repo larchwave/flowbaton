@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/enginetest"
-	"github.com/nohavewho/flowbaton/internal/workspace"
+	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/workspace"
 )
 
 // --shard-split and --shard-all distribute planned flows across device shards.

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nohavewho/flowbaton/internal/device"
-	"github.com/nohavewho/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestAssertVisibleReusesOneInteractionAdjustedAbsoluteDeadline(t *testing.T) {
