@@ -49,6 +49,24 @@ sboms:
   - id: archives
     artifacts: archive
 
+homebrew_casks:
+  - name: flowbaton
+    repository:
+      owner: nohavewho
+      name: homebrew-flowbaton
+      branch: main
+    homepage: 'https://github.com/nohavewho/flowbaton'
+    description: 'Pre-alpha mobile UI automation toolkit: Go CLI, Android agent, iOS Simulator runner'
+    license: Apache-2.0
+    binaries: [flowbaton]
+    hooks:
+      post:
+        # The binary is not notarized; clear the quarantine bit so it runs.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/flowbaton"]
+          end
+
 snapshot:
   version_template: '{{ incpatch .Version }}-next'
 
@@ -56,6 +74,9 @@ release:
   draft: true
   replace_existing_draft: false
   make_latest: false
+  extra_files:
+    - glob: ./scripts/install.sh
+    - glob: ./scripts/install.ps1
 
 source:
   enabled: false
