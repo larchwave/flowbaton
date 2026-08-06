@@ -225,22 +225,29 @@ func copyTextFromAcceptedElement(_, accepted *hierarchy.Element) (string, error)
 	if accepted == nil {
 		return "", NewConfigurationError("copyTextFrom stability returned no element", nil)
 	}
-	return copyTextFromElementValue(accepted), nil
+	value, copyable := copyTextFromElementValue(accepted)
+	if !copyable {
+		return "", NewOperationError("copyTextFrom target has no text to copy", nil)
+	}
+	return value, nil
 }
 
-// copyTextFromElementValue returns an empty string when the target has no
-// copyable attribute. Only a missing target is an error.
-func copyTextFromElementValue(element *hierarchy.Element) string {
+// copyTextFromElementValue returns the target's copyable text and whether the
+// target carried any copyable attribute at all. A present-but-empty text
+// attribute is copyable and wins over accessibility and hint text; an element
+// carrying none of the three attributes has no text to copy, which the caller
+// turns into a command failure.
+func copyTextFromElementValue(element *hierarchy.Element) (string, bool) {
 	if element == nil {
-		return ""
+		return "", false
 	}
 	attributes := element.Node.Attributes
 	for _, name := range []string{"text", "accessibilityText", "hintText"} {
 		if value, exists := attributes[name]; exists {
-			return strings.Clone(value)
+			return strings.Clone(value), true
 		}
 	}
-	return ""
+	return "", false
 }
 
 func compilePasteText(command model.Command) (any, error) {

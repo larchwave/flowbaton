@@ -464,12 +464,14 @@ func TestInteractionBatch5CopyLookupStabilityPrecedenceAndOptionalPolicy(t *test
 		}
 	})
 
-	// A target with no copyable attribute copies an empty string. Only a target
-	// that cannot be found fails.
+	// A target that carries no copyable attribute at all has no text to copy and
+	// fails the command. An optional target warns instead. A present-but-empty
+	// text attribute is still copyable and is covered by the precedence cases
+	// above.
 	for _, optional := range []bool{false, true} {
-		name := "required no attribute copies the empty string"
+		name := "required no attribute fails"
 		if optional {
-			name = "optional no attribute copies the empty string"
+			name = "optional no attribute warns"
 		}
 		t.Run(name, func(t *testing.T) {
 			optionalFlag := (*bool)(nil)
@@ -478,17 +480,22 @@ func TestInteractionBatch5CopyLookupStabilityPrecedenceAndOptionalPolicy(t *test
 			}
 			driver, clock, lookup := batch5CopyLookup(map[string]string{})
 			setterCalls := 0
-			copied := "retained"
 			result, runErr := executeBatch5CoreCommandForTest(
 				t, context.Background(), batch5CopyIDCommand("target", optionalFlag, nil),
-				driver, clock, lookup, "retained", func(value string) error {
+				driver, clock, lookup, "retained", func(string) error {
 					setterCalls++
-					copied = strings.Clone(value)
 					return nil
 				},
 			)
-			if runErr != nil || result.Outcome() != Completed || setterCalls != 1 || copied != "" {
-				t.Fatalf("no attribute = result %#v copied %q calls %d error %v", result, copied, setterCalls, runErr)
+			if setterCalls != 0 {
+				t.Fatalf("no attribute reached setter = calls %d", setterCalls)
+			}
+			if optional {
+				if runErr != nil || result.Outcome() != Warned || result.ProductError() == nil {
+					t.Fatalf("optional no attribute = result %#v error %v", result, runErr)
+				}
+			} else if runErr == nil || result.Outcome() != Failed {
+				t.Fatalf("required no attribute = result %#v error %v", result, runErr)
 			}
 		})
 	}
