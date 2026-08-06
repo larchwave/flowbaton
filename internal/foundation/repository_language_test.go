@@ -35,7 +35,6 @@ var blockedFamilies = []encodedFamily{
 	{value: "626c61636b626f78"},
 	{value: "626c61636b20626f78"},
 	{value: "626c61636b5f626f78"},
-	{value: "70726f76656e616e6365"},
 	{value: "6d6967726174696f6e"},
 	{value: "6c6567616379"},
 	{value: "686973746f726963616c"},
