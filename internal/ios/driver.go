@@ -51,7 +51,7 @@ type Driver struct {
 	// base URL it talks to; a sharded run needs the number in failure messages.
 	port   int
 	client *Client
-	simctl *Simctl
+	simctl DeviceTools
 
 	// launchedMu guards launchedAppID, which the runner needs and only this
 	// driver knows. See defaultAppIDs.
@@ -103,9 +103,10 @@ type iosRecording struct {
 	outputPath string
 }
 
-// NewDriver binds a runner client and a simctl surface to one udid.
+// NewDriver binds a runner client and a device-tools surface to one udid.
+// The simulator passes Simctl; a physical device passes its own DeviceTools.
 func NewDriver(
-	udid string, port int, client *Client, simctl *Simctl, runner *RunnerBundle,
+	udid string, port int, client *Client, simctl DeviceTools, runner *RunnerBundle,
 ) *Driver {
 	return &Driver{
 		udid:           udid,
