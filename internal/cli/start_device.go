@@ -280,12 +280,13 @@ func realWaitReady(ctx context.Context, platform, target string) error {
 			if serialErr != nil {
 				return serialErr
 			}
-			if serial != "" {
-				output, propErr := exec.CommandContext(ctx, adb, "-s", serial,
-					"shell", "getprop", "sys.boot_completed").CombinedOutput()
-				if propErr == nil && strings.TrimSpace(string(output)) == "1" {
-					return nil
-				}
+			if serial != "" && androidDeviceReady(
+				adbProperty(ctx, adb, serial, "sys.boot_completed"),
+				adbProperty(ctx, adb, serial, "init.svc.bootanim"),
+				exec.CommandContext(ctx, adb, "-s", serial,
+					"shell", "pm", "path", "android").Run(),
+			) {
+				return nil
 			}
 			select {
 			case <-ctx.Done():
@@ -296,6 +297,28 @@ func realWaitReady(ctx context.Context, platform, target string) error {
 	default:
 		return fmt.Errorf("unsupported readiness platform %q", platform)
 	}
+}
+
+// androidDeviceReady decides Android readiness from three signals together:
+// the boot property, the boot-animation service state, and a package-manager
+// probe. The property alone flips well before the device can serve its first
+// session, so start-device also waits for the animation to stop and for the
+// package service to answer.
+func androidDeviceReady(bootCompleted, bootAnimation string, packageManager error) bool {
+	return strings.TrimSpace(bootCompleted) == "1" &&
+		strings.TrimSpace(bootAnimation) == "stopped" &&
+		packageManager == nil
+}
+
+// adbProperty reads one system property; a probe failure reads as "", which
+// androidDeviceReady treats as not ready, and the poll loop retries.
+func adbProperty(ctx context.Context, adb, serial, property string) string {
+	output, err := exec.CommandContext(ctx, adb, "-s", serial,
+		"shell", "getprop", property).CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	return string(output)
 }
 
 func realConfigureLocale(ctx context.Context, platform, target, locale string) error {

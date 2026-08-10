@@ -348,7 +348,10 @@ func (runner MCPRunner) server() *mcp.Server {
 			"Requires platform (ios|android). iOS boots the simulator named by udid; " +
 			"Android launches the AVD named by udid, or the first installed one when " +
 			"udid is empty. Set forceCreate to build a fresh device first; osVersion, " +
-			"deviceLocale, deviceModel, and systemImage (Android-only) apply then.",
+			"deviceLocale, deviceModel, and systemImage (Android-only) apply then. " +
+			"A just-started device can still be slow to serve its first session; " +
+			"if that session times out, retry, or extend the handshake with the " +
+			"FLOWBATON_DRIVER_STARTUP_TIMEOUT environment variable (milliseconds).",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in startDeviceToolInput) (*mcp.CallToolResult, any, error) {
 		args := []string{"-p", in.Platform}
 		if in.UDID != "" {

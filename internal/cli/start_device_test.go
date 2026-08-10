@@ -394,3 +394,26 @@ func TestStartDeviceRefusesAnUnknownPlatform(t *testing.T) {
 		t.Fatalf("the refusal did not name the bad platform: %q", stderr)
 	}
 }
+
+func TestAndroidDeviceReadyRequiresAllThreeSignals(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name          string
+		bootCompleted string
+		bootAnimation string
+		packageErr    error
+		want          bool
+	}{
+		{"all signals ready", "1\n", "stopped\n", nil, true},
+		{"boot property unset", "", "stopped", nil, false},
+		{"boot property zero", "0", "stopped", nil, false},
+		{"boot animation still running", "1", "running", nil, false},
+		{"package manager not serving", "1", "stopped", errors.New("cmd: Can't find service: package"), false},
+	}
+	for _, testCase := range cases {
+		if got := androidDeviceReady(testCase.bootCompleted, testCase.bootAnimation, testCase.packageErr); got != testCase.want {
+			t.Errorf("%s: androidDeviceReady = %v, want %v", testCase.name, got, testCase.want)
+		}
+	}
+}
