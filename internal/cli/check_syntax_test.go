@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/larchwave/flowbaton/internal/model"
@@ -244,6 +245,49 @@ func TestNewParserCheckerResolvesStdinLinksFromSourceBaseDir(t *testing.T) {
 
 	if err := NewParserChecker().Check(context.Background(), source); err != nil {
 		t.Fatalf("Check stdin graph from Source.BaseDir: %v", err)
+	}
+}
+
+func TestNewParserCheckerRefusesAConfinedLinkOutsideTheBaseDirectory(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.yaml")
+	if err := os.WriteFile(outside, []byte("appId: outside\n---\n- launchApp\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := "appId: root\n---\n- runFlow:\n    file: " + outside + "\n"
+	err := NewParserChecker().Check(context.Background(), Source{
+		Name: "-", BaseDir: base, ConfineTo: base, Data: []byte(root),
+	})
+	if err == nil {
+		t.Fatal("an absolute linked flow outside the MCP base directory was accepted")
+	}
+	if !strings.Contains(err.Error(), "outside") {
+		t.Fatalf("escape error = %v, want a clear outside-base diagnostic", err)
+	}
+}
+
+func TestNewParserCheckerRefusesAConfinedSymlinkThatLeavesTheBaseDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows developer mode or elevation is required for symlink creation")
+	}
+
+	base := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.yaml")
+	if err := os.WriteFile(outside, []byte("appId: outside\n---\n- launchApp\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "linked.yaml")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	root := "appId: root\n---\n- runFlow:\n    file: linked.yaml\n"
+	err := NewParserChecker().Check(context.Background(), Source{
+		Name: "-", BaseDir: base, ConfineTo: base, Data: []byte(root),
+	})
+	if err == nil || !strings.Contains(err.Error(), "outside") {
+		t.Fatalf("symlink escape error = %v", err)
 	}
 }
 

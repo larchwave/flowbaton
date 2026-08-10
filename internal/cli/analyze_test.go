@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// specs/03-cli-tooling.md:47 requires an insights HTML report and
-// ai-(flow).json. Refuse --analyze until a local writer produces both outputs.
+// --analyze is absent from specs/03-cli-tooling.md. It must be rejected as an
+// unknown option rather than retained as a planned flag with invented output.
 
 func TestAnalyzeIsRefusedRatherThanIgnored(t *testing.T) {
 	t.Parallel()
@@ -18,10 +18,10 @@ func TestAnalyzeIsRefusedRatherThanIgnored(t *testing.T) {
 	_, stderr, code := runSessionWithArgs(t, permissiveDriver(), []string{
 		"--analyze", filepath.Join(dir, "passing.yaml"),
 	})
-	if code == ExitOK {
-		t.Fatal("--analyze exited cleanly having produced no analysis")
+	if code != ExitInvalid {
+		t.Fatalf("exit = %d, want usage error %d", code, ExitInvalid)
 	}
-	if !strings.Contains(stderr, "--analyze") {
+	if !strings.Contains(stderr, "unknown option") || !strings.Contains(stderr, "--analyze") {
 		t.Fatalf("the refusal did not name the flag: %q", stderr)
 	}
 }

@@ -41,7 +41,7 @@ func TestGenerateCompletionListsEverySubcommand(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("exit = %d", code)
 	}
-	for _, command := range []string{"check-syntax", "test", "list-devices", "hierarchy", "query"} {
+	for _, command := range TopLevelSubcommands {
 		if !strings.Contains(stdout, command) {
 			t.Fatalf("completion is missing subcommand %q\n%s", command, stdout)
 		}

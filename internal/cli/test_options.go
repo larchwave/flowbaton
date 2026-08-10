@@ -41,7 +41,6 @@ type TestOptions struct {
 	FlattenDebugOutput bool
 	Continuous         bool
 	Headless           bool
-	Analyze            bool
 	ReinstallDriver    bool
 	ScreenSize         string
 	APIURL             string
@@ -112,7 +111,6 @@ func ParseTestOptions(args []string) (TestOptions, error) {
 		"--continuous":           &options.Continuous,
 		"-c":                     &options.Continuous,
 		"--headless":             &options.Headless,
-		"--analyze":              &options.Analyze,
 	}
 	values := map[string]*string{
 		"--config":          &options.ConfigPath,
@@ -211,15 +209,6 @@ func validateTestOptions(options TestOptions) error {
 		return usageErrorf(
 			"invalid value %q for option --format; valid options are: %s",
 			options.Format, strings.Join(reportFormats, ", "))
-	}
-	// specs/03-cli-tooling.md:47 requires insights as HTML plus ai-(flow).json.
-	// Refuse the flag before execution until a local writer implements that
-	// output contract.
-	if options.Analyze {
-		return errors.New(
-			"--analyze is not implemented: it would need the AI insights report " +
-				"(specs/03-cli-tooling.md:47), and the contract's cloud route to it is " +
-				"out of scope (specs/03-cli-tooling.md:50)")
 	}
 	// Expected: this pair parses and is then refused at
 	// runtime, so it exits 1 rather than 2. The command line was well formed;

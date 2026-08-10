@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -18,9 +20,17 @@ import (
 // connected to the same server the CLI runs over stdio — so the tools are
 // exercised end to end without a subprocess.
 
-type stubChecker struct{ err error }
+type stubChecker struct {
+	err     error
+	checked chan Source
+}
 
-func (c stubChecker) Check(context.Context, Source) error { return c.err }
+func (c stubChecker) Check(_ context.Context, source Source) error {
+	if c.checked != nil {
+		c.checked <- source
+	}
+	return c.err
+}
 
 func connectMCP(t *testing.T, runner MCPRunner) *mcp.ClientSession {
 	t.Helper()
@@ -147,6 +157,63 @@ func TestMCPCheckSyntaxToolPassesValidFlow(t *testing.T) {
 	}
 	if !strings.Contains(text, "ok") {
 		t.Fatalf("valid flow did not report ok: %q", text)
+	}
+}
+
+func TestMCPCheckSyntaxUsesAndConfinesTheConfiguredBaseDirectory(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	canonicalBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := make(chan Source, 1)
+	session := connectMCP(t, MCPRunner{BaseDir: base, Checker: stubChecker{checked: checked}})
+	_, isError := callMCPText(t, session, "check_syntax",
+		map[string]string{"name": "flow.yaml", "yaml": "appId: com.example\n---\n- launchApp\n"})
+	if isError {
+		t.Fatal("valid flow was rejected")
+	}
+	source := <-checked
+	if source.BaseDir != canonicalBase || source.ConfineTo != canonicalBase {
+		t.Fatalf("source = %+v, want base and confinement %q", source, canonicalBase)
+	}
+}
+
+func TestResolveMCPBaseDirCanonicalizesASymlink(t *testing.T) {
+	t.Parallel()
+
+	real := t.TempDir()
+	canonicalReal, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := t.TempDir()
+	link := filepath.Join(parent, "workspace")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	got, err := resolveMCPBaseDir(link)
+	if err != nil {
+		t.Fatalf("resolveMCPBaseDir: %v", err)
+	}
+	if got != canonicalReal {
+		t.Fatalf("resolved = %q, want %q", got, canonicalReal)
+	}
+}
+
+func TestResolveMCPBaseDirRejectsAFileAndMissingDirectory(t *testing.T) {
+	t.Parallel()
+
+	file := filepath.Join(t.TempDir(), "flow.yaml")
+	if err := os.WriteFile(file, []byte("appId: example"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{file, filepath.Join(t.TempDir(), "missing")} {
+		if _, err := resolveMCPBaseDir(path); err == nil {
+			t.Fatalf("resolveMCPBaseDir(%q) succeeded", path)
+		}
 	}
 }
 

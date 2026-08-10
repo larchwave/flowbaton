@@ -29,7 +29,12 @@ const (
 type Source struct {
 	Name    string
 	BaseDir string
-	Data    []byte
+	// ConfineTo, when non-empty, requires every linked flow to remain beneath
+	// this directory after symlink evaluation. The CLI leaves it empty because
+	// an operator-selected flow may intentionally link elsewhere; MCP sets it to
+	// --base-dir because inline content is untrusted client input.
+	ConfineTo string
+	Data      []byte
 }
 
 // ResolveLink resolves a parser-produced link against the invocation

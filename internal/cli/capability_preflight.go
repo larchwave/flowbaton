@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/larchwave/flowbaton/internal/capability"
@@ -53,7 +54,33 @@ func (loader *seededFlowLoader) Canonical(ctx context.Context, path string) (str
 	if !filepath.IsAbs(resolved) {
 		resolved = loader.source.ResolveLink(resolved)
 	}
+	if loader.source.ConfineTo != "" {
+		base, err := filepath.EvalSymlinks(loader.source.ConfineTo)
+		if err != nil {
+			return "", fmt.Errorf("linked flow confinement: %w", err)
+		}
+		absolute, err := filepath.Abs(resolved)
+		if err != nil {
+			return "", fmt.Errorf("linked flow path: %w", err)
+		}
+		if !withinDirectory(base, filepath.Clean(absolute)) {
+			return "", fmt.Errorf("linked flow %q resolves outside base directory %s", path, base)
+		}
+		if evaluated, evalErr := filepath.EvalSymlinks(absolute); evalErr == nil &&
+			!withinDirectory(base, evaluated) {
+			return "", fmt.Errorf("linked flow %q resolves outside base directory %s", path, base)
+		}
+	}
 	canonical, err := loader.delegate.Canonical(ctx, resolved)
+	if err == nil && loader.source.ConfineTo != "" {
+		base, baseErr := filepath.EvalSymlinks(loader.source.ConfineTo)
+		if baseErr != nil {
+			return "", fmt.Errorf("linked flow confinement: %w", baseErr)
+		}
+		if !withinDirectory(base, canonical) {
+			return "", fmt.Errorf("linked flow %q resolves outside base directory %s", path, base)
+		}
+	}
 	if err == nil && isSelectedRoot {
 		loader.rootCanonical = canonical
 	}

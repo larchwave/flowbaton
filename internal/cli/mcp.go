@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,9 @@ type MCPRunner struct {
 	ListDevices ListDevicesRunner
 	Hierarchy   HierarchyRunner
 	Query       QueryRunner
+	// BaseDir confines inline flow links exposed through MCP. Run fills it from
+	// --base-dir (or the current working directory).
+	BaseDir string
 }
 
 func (runner MCPRunner) checker() Checker {
@@ -93,11 +97,13 @@ func (runner MCPRunner) server() *mcp.Server {
 		// (passing a fake path made it fail to resolve a nonexistent file), and
 		// relative links resolve against the working directory. in.Name is
 		// intentionally not used as a path — it would be treated as a real file.
-		baseDir, err := os.Getwd()
+		baseDir, err := resolveMCPBaseDir(runner.BaseDir)
 		if err != nil {
-			baseDir = ""
+			return errorResult(fmt.Errorf("mcp: base directory: %w", err)), nil, nil
 		}
-		if err := runner.checker().Check(ctx, Source{Name: "-", BaseDir: baseDir, Data: []byte(in.Yaml)}); err != nil {
+		if err := runner.checker().Check(ctx, Source{
+			Name: "-", BaseDir: baseDir, ConfineTo: baseDir, Data: []byte(in.Yaml),
+		}); err != nil {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
 				IsError: true,
@@ -158,6 +164,12 @@ func (runner MCPRunner) Run(ctx context.Context, args []string, stdin io.Reader,
 	if code != ExitOK {
 		return code
 	}
+	baseDir, err := resolveMCPBaseDir(options.baseDir)
+	if err != nil {
+		fmt.Fprintf(stderr, "mcp: base directory: %v\n", err)
+		return ExitInvalid
+	}
+	runner.BaseDir = baseDir
 	if !options.noViewer {
 		addr, stop, err := startViewer(options.viewerPort, runner.Hierarchy)
 		if err != nil {
@@ -176,6 +188,35 @@ func (runner MCPRunner) Run(ctx context.Context, args []string, stdin io.Reader,
 		return ExitFailure
 	}
 	return ExitOK
+}
+
+// resolveMCPBaseDir returns an existing canonical directory. Canonicalizing
+// once prevents a symlinked --base-dir from weakening later confinement checks.
+func resolveMCPBaseDir(authored string) (string, error) {
+	path := strings.TrimSpace(authored)
+	if path == "" {
+		var err error
+		path, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("current working directory: %w", err)
+		}
+	}
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", authored)
+	}
+	return resolved, nil
 }
 
 type mcpArgs struct {
@@ -231,6 +272,14 @@ func parseMCPArgs(args []string, stderr io.Writer) (mcpArgs, int) {
 		default:
 			fmt.Fprintf(stderr, "mcp: unexpected argument %q\n", arg)
 			return parsed, ExitInvalid
+		}
+	}
+	if strings.TrimSpace(parsed.baseDir) == "" {
+		for _, arg := range args {
+			if arg == "--base-dir" || strings.HasPrefix(arg, "--base-dir=") {
+				fmt.Fprintln(stderr, "mcp: --base-dir must not be empty")
+				return parsed, ExitInvalid
+			}
 		}
 	}
 	return parsed, ExitOK

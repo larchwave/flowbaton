@@ -14,6 +14,7 @@ import (
 var TopLevelSubcommands = []string{
 	"check-syntax",
 	"test",
+	"record",
 	"list-devices",
 	"start-device",
 	"hierarchy",
@@ -21,6 +22,7 @@ var TopLevelSubcommands = []string{
 	"bugreport",
 	"driver-setup",
 	"mcp",
+	"generate-completion",
 }
 
 // GenerateCompletionRunner emits a shell completion script. Pure: no device, no
