@@ -4,16 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os/exec"
-	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
 
-// driver-setup builds the selected platform driver. A simulator build needs no
-// signing; --apple-team-id is passed through for iOS device builds. Android
-// builds and installs its Gradle-produced APK pair.
+// driver-setup installs the selected platform driver from the attested release.
 
 type driverSetupCall struct {
 	platform string
@@ -52,16 +47,19 @@ func TestDriverSetupBuildsIOSByDefault(t *testing.T) {
 	}
 }
 
-func TestDriverSetupPassesTheAppleTeamID(t *testing.T) {
+func TestDriverSetupRefusesTheUnsupportedAppleTeamID(t *testing.T) {
 	t.Parallel()
 
 	calls, runner := driverSetupRecording(nil)
-	_, _, code := runDriverSetup(t, runner, "--apple-team-id", "ABCDE12345")
-	if code != ExitOK {
-		t.Fatalf("exit = %d", code)
+	_, stderr, code := runDriverSetup(t, runner, "--apple-team-id", "ABCDE12345")
+	if code != ExitInvalid {
+		t.Fatalf("exit = %d, want %d", code, ExitInvalid)
 	}
-	if len(*calls) != 1 || (*calls)[0].teamID != "ABCDE12345" {
-		t.Fatalf("build calls = %#v, want the team id passed through", *calls)
+	if len(*calls) != 0 {
+		t.Fatalf("build calls = %#v, want none", *calls)
+	}
+	if !strings.Contains(stderr, "signed iOS Simulator") {
+		t.Fatalf("stderr = %q, want signed-driver explanation", stderr)
 	}
 }
 
@@ -116,50 +114,6 @@ func TestDriverSetupRefusesAnAppleTeamIDForAndroid(t *testing.T) {
 	}
 }
 
-// The Android build installs both APKs where runtime lookup reads them.
-func TestTheAndroidBuildInstallsThePairWhereTheRunLooks(t *testing.T) {
-	source := t.TempDir()
-	app := filepath.Join(source, "agent-debug.apk")
-	test := filepath.Join(source, "agent-debug-androidTest.apk")
-	writeAPK(t, app)
-	writeAPK(t, test)
-	directory := agentHome(t)
-
-	if err := installAndroidAgent(app, test); err != nil {
-		t.Fatalf("installAndroidAgent() error = %v", err)
-	}
-	apks, err := androidAgentAPKs()
-	if err != nil {
-		t.Fatalf("androidAgentAPKs() error = %v", err)
-	}
-	if apks == nil {
-		t.Fatalf("the build left nothing in %s, so -p android still needs adb by hand", directory)
-	}
-}
-
-// A Gradle build that produced nothing must say so here rather than leave the
-// last build in place and let the run drive a stale agent.
-func TestTheAndroidBuildRefusesAMissingOutput(t *testing.T) {
-	source := t.TempDir()
-	app := filepath.Join(source, "agent-debug.apk")
-	writeAPK(t, app)
-	agentHome(t)
-
-	err := installAndroidAgent(app, filepath.Join(source, "absent.apk"))
-	if err == nil {
-		t.Fatal("a missing build output was installed as if it were there")
-	}
-	if !strings.Contains(err.Error(), "absent.apk") {
-		t.Fatalf("the error did not name the missing output: %v", err)
-	}
-	// And it left nothing behind: half an install is refused by
-	// androidAgentAPKs, which would strand the operator on an error instead of
-	// the working operator-started mode.
-	if _, err := androidAgentAPKs(); err != nil {
-		t.Fatalf("the failed build left a half install behind: %v", err)
-	}
-}
-
 func TestDriverSetupRefusesAnUnknownPlatform(t *testing.T) {
 	t.Parallel()
 
@@ -184,93 +138,5 @@ func TestDriverSetupReportsABuildFailure(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "scheme not found") {
 		t.Fatalf("the failure did not carry the xcodebuild error: %q", stderr)
-	}
-}
-
-func TestIOSDriverBuildRequiresXcodeGen(t *testing.T) {
-	t.Parallel()
-
-	runCalled := false
-	err := generateIOSProject(
-		context.Background(),
-		func(string) (string, error) { return "", exec.ErrNotFound },
-		func(context.Context, string, ...string) ([]byte, error) {
-			runCalled = true
-			return nil, nil
-		},
-	)
-	if err == nil {
-		t.Fatal("generateIOSProject() accepted a missing generator")
-	}
-	if runCalled {
-		t.Fatal("generateIOSProject() tried to execute a missing generator")
-	}
-	for _, want := range []string{"xcodegen 2.44.1 is required", "install that release", "PATH"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("generateIOSProject() error = %q, want %q", err, want)
-		}
-	}
-}
-
-func TestIOSDriverBuildGeneratesTheProjectFromTheTrackedSpec(t *testing.T) {
-	t.Parallel()
-
-	type invocation struct {
-		name string
-		args []string
-	}
-	var calls []invocation
-	err := generateIOSProject(
-		context.Background(),
-		func(name string) (string, error) {
-			if name != iosProjectGenerator {
-				t.Fatalf("find(%q), want %q", name, iosProjectGenerator)
-			}
-			return "/tools/xcodegen", nil
-		},
-		func(_ context.Context, name string, args ...string) ([]byte, error) {
-			calls = append(calls, invocation{name: name, args: append([]string(nil), args...)})
-			if reflect.DeepEqual(args, []string{"--version"}) {
-				return []byte("Version: " + iosProjectGeneratorVersion + "\n"), nil
-			}
-			return nil, nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("generateIOSProject() error = %v", err)
-	}
-	want := []invocation{{
-		name: "/tools/xcodegen",
-		args: []string{"--version"},
-	}, {
-		name: "/tools/xcodegen",
-		args: []string{"generate", "--spec", iosRunnerSpec, "--project", "drivers/ios"},
-	}}
-	if !reflect.DeepEqual(calls, want) {
-		t.Fatalf("generator calls = %#v, want %#v", calls, want)
-	}
-}
-
-func TestIOSDriverBuildRejectsAnotherXcodeGenRelease(t *testing.T) {
-	t.Parallel()
-
-	err := generateIOSProject(
-		context.Background(),
-		func(string) (string, error) { return "/tools/xcodegen", nil },
-		func(_ context.Context, _ string, args ...string) ([]byte, error) {
-			if reflect.DeepEqual(args, []string{"--version"}) {
-				return []byte("Version: 2.45.0\n"), nil
-			}
-			t.Fatalf("unexpected generator call after version refusal: %v", args)
-			return nil, nil
-		},
-	)
-	if err == nil {
-		t.Fatal("generateIOSProject() accepted another generator release")
-	}
-	for _, want := range []string{iosProjectGeneratorVersion, "2.45.0", "deterministic", "PATH"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("generateIOSProject() error = %q, want %q", err, want)
-		}
 	}
 }

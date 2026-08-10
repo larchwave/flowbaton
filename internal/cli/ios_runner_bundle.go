@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,18 +12,15 @@ import (
 	"github.com/larchwave/flowbaton/internal/ios"
 )
 
-// driver-setup builds the iOS runner into a fixed derived-data directory under
-// the user's home. Runs discover the prebuilt .xctestrun there and start one
-// managed process per simulator without requiring an Xcode project.
+// Runs prefer the signed release asset installed by driver-setup. The legacy
+// derived-data lookup remains for explicit repository development builds.
 
 const (
 	// iosXCTestRunVariable names the built runner directly, for a build that
 	// lives somewhere else — CI artifacts, a second checkout. The Android
 	// sibling is FLOWBATON_ANDROID_APP_APK.
 	iosXCTestRunVariable = "FLOWBATON_IOS_XCTESTRUN"
-	// iosDerivedDataDirectory is where driver-setup builds. Under the home
-	// rather than in the repo: it is a build cache, it is large, and it must
-	// survive a clean checkout of the tree it was built from.
+	// iosDerivedDataDirectory is the legacy repository-build location.
 	iosDerivedDataDirectory = ".flowbaton/ios-driver"
 )
 
@@ -40,6 +40,13 @@ func iosRunnerBundle() (*ios.RunnerBundle, error) {
 	if override := os.Getenv(iosXCTestRunVariable); override != "" {
 		return &ios.RunnerBundle{XCTestRun: override}, nil
 	}
+	acquired, err := loadCachedDriverAsset(context.Background(), "ios")
+	if err == nil {
+		return iosRunnerBundleAt(acquired.Directory)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("load signed iOS Simulator driver: %w", err)
+	}
 	derived, err := iosDerivedDataPath()
 	if err != nil {
 		return nil, err
@@ -58,5 +65,22 @@ func iosRunnerBundle() (*ios.RunnerBundle, error) {
 		return nil, fmt.Errorf(
 			"%s holds %d built runners (%s); set %s to the one to drive",
 			derived, len(built), filepath.Base(built[0])+", …", iosXCTestRunVariable)
+	}
+}
+
+func iosRunnerBundleAt(directory string) (*ios.RunnerBundle, error) {
+	built, err := filepath.Glob(filepath.Join(directory, "*.xctestrun"))
+	if err != nil {
+		return nil, err
+	}
+	switch len(built) {
+	case 0:
+		return nil, fmt.Errorf("signed iOS driver %s contains no .xctestrun", directory)
+	case 1:
+		return &ios.RunnerBundle{XCTestRun: built[0]}, nil
+	default:
+		sort.Strings(built)
+		return nil, fmt.Errorf("signed iOS driver %s contains %d .xctestrun files (%s)",
+			directory, len(built), filepath.Base(built[0])+", …")
 	}
 }

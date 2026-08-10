@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,7 +13,7 @@ import (
 
 // The Android driver installs the agent and starts instrumentation when the
 // APK pair is available (spec 02 §2.2). The operator may export the pair or use
-// the files installed by driver-setup.
+// the signed release asset installed by driver-setup.
 //
 // Same answer as the iOS runner (ios_runner_bundle.go): a fixed directory under
 // the home that `driver-setup` writes and the run reads. Under the home rather
@@ -47,6 +48,14 @@ func androidAgentAPKs() (*android.AgentAPKs, error) {
 	case app != "" || test != "":
 		return nil, fmt.Errorf("%s and %s must be set together",
 			androidAppAPKVariable, androidTestAPKVariable)
+	}
+
+	acquired, err := loadCachedDriverAsset(context.Background(), "android")
+	if err == nil {
+		return installedAgentAPKs(acquired.Directory)
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("load signed Android driver: %w", err)
 	}
 
 	directory, err := androidAgentPath()

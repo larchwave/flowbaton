@@ -72,6 +72,29 @@ func TestTwoBuiltRunnersAskWhichOne(t *testing.T) {
 	}
 }
 
+func TestSignedRunnerBundleRequiresExactlyOneRootXCTestRun(t *testing.T) {
+	directory := t.TempDir()
+	want := filepath.Join(directory, "FlowBatonIOSRunnerUITests.xctestrun")
+	if err := os.WriteFile(want, []byte("<plist/>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := iosRunnerBundleAt(directory)
+	if err != nil {
+		t.Fatalf("iosRunnerBundleAt() error = %v", err)
+	}
+	if bundle == nil || bundle.XCTestRun != want {
+		t.Fatalf("bundle = %#v, want %s", bundle, want)
+	}
+
+	second := filepath.Join(directory, "another.xctestrun")
+	if err := os.WriteFile(second, []byte("<plist/>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := iosRunnerBundleAt(directory); err == nil {
+		t.Fatal("iosRunnerBundleAt() accepted multiple descriptors")
+	}
+}
+
 func writeXCTestRun(t *testing.T, home, name string) string {
 	t.Helper()
 	products := filepath.Join(home, ".flowbaton", "ios-driver", "Build", "Products")

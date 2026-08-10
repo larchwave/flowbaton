@@ -41,6 +41,17 @@ type AcquiredAsset struct {
 	IdentityPath string
 }
 
+// EnsureCacheRoot creates and validates the manager's cache boundary without
+// acquiring an asset. Metadata stored beside version directories uses the same
+// no-symlink path contract as archive publication.
+func (m Manager) EnsureCacheRoot() error {
+	if m.CacheRoot == "" {
+		return ErrCacheRootRequired
+	}
+	_, err := ensureSecureDirectoryPath(m.CacheRoot, true)
+	return err
+}
+
 type cacheMarker struct {
 	SchemaVersion    string `json:"schema_version"`
 	ManifestVersion  string `json:"manifest_version"`

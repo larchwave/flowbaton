@@ -8,8 +8,8 @@ import (
 )
 
 // realIOSDiagnose collects simulator diagnostics into outputPath via
-// `xcrun simctl diagnose`. The call stays local to the CLI runner (mirroring
-// realIOSDriverBuild's xcodebuild wrap) so bugreport needs no device driver.
+// `xcrun simctl diagnose`. The call stays local to the CLI runner, so
+// bugreport needs no device driver.
 //
 // -b suppresses the Finder reveal so the command stays headless; -X drops the
 // per-diagnostic timeout so a slow collection completes instead of racing the
