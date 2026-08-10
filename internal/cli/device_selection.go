@@ -26,6 +26,11 @@ var androidInventory = func(ctx context.Context) ([]android.Device, error) {
 	return android.ListDevices(ctx, nil)
 }
 
+var (
+	resolveAndroidAgentAPKs = androidAgentAPKs
+	resolveIOSRunnerBundle  = iosRunnerBundle
+)
+
 // resolveAndroidSerial picks the device when the operator named none:
 // exactly one connected device is used, anything else is refused with the
 // candidates named — a guessed device runs the suite somewhere the report
@@ -78,9 +83,13 @@ func newDriver(options TestOptions, udid string, port int, shardNumber int) (dev
 			// every shard on one runner — the failure this batch prevents.
 			return nil, fmt.Errorf("shard %d has no driver port assigned", shardNumber)
 		}
-		bundle, err := iosRunnerBundle()
-		if err != nil {
-			return nil, err
+		var bundle *ios.RunnerBundle
+		if options.ReinstallDriver {
+			var err error
+			bundle, err = resolveIOSRunnerBundle()
+			if err != nil {
+				return nil, err
+			}
 		}
 		return ios.NewDriver(
 			udid,
@@ -103,9 +112,13 @@ func newDriver(options TestOptions, udid string, port int, shardNumber int) (dev
 			// one, and defaulting would put every shard on one agent.
 			return nil, fmt.Errorf("shard %d has no driver port assigned", shardNumber)
 		}
-		apks, err := androidAgentAPKs()
-		if err != nil {
-			return nil, err
+		var apks *android.AgentAPKs
+		if options.ReinstallDriver {
+			var err error
+			apks, err = resolveAndroidAgentAPKs()
+			if err != nil {
+				return nil, err
+			}
 		}
 		return android.NewDriver(serial, port, nil, apks), nil
 	case "web":

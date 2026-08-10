@@ -159,9 +159,8 @@ func defaultEntriesV0() []Entry {
 		}
 		if name == "css" {
 			// Implemented, but only the Web/CDP driver can resolve a css query.
-			// platform-limited is the honest status: the registry's runtime
-			// check is platform-blind, so the driver capability check in the
-			// element lookup is what refuses css on a mobile driver.
+			// platform-limited lets selected-platform preflight refuse css
+			// before a mobile driver is opened.
 			entry.RuntimeStatus = RuntimeStatusPlatformLimited
 			entry.Platforms = []string{"web"}
 			entry.Reason = "CSS selection is resolved by the Web/CDP driver and is web-only"

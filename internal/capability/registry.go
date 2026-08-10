@@ -10,6 +10,17 @@ import (
 // RegistryVersionV0 identifies the first frozen support registry contract.
 const RegistryVersionV0 = "flowbaton.support/v0"
 
+// ExecutionPlatform is the driver surface selected before capability
+// preparation. It is deliberately narrower than the registry's host and
+// physical-device platform vocabulary.
+type ExecutionPlatform string
+
+const (
+	ExecutionPlatformAndroid      ExecutionPlatform = "android"
+	ExecutionPlatformIOSSimulator ExecutionPlatform = "ios-simulator"
+	ExecutionPlatformWeb          ExecutionPlatform = "web"
+)
+
 // FeatureKind identifies the catalog containing an entry.
 type FeatureKind string
 
@@ -197,4 +208,10 @@ var validPlatforms = map[string]bool{
 	"ios-simulator": true,
 	"ios-physical":  true,
 	"web":           true,
+}
+
+var validExecutionPlatforms = map[ExecutionPlatform]bool{
+	ExecutionPlatformAndroid:      true,
+	ExecutionPlatformIOSSimulator: true,
+	ExecutionPlatformWeb:          true,
 }

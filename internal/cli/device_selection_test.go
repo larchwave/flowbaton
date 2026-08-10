@@ -2,10 +2,12 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/larchwave/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/ios"
 )
 
 // Device resolution must never invent a device identifier.
@@ -300,5 +302,45 @@ func TestAndroidAgentAPKsComeFromTheEnvironmentTogether(t *testing.T) {
 	want := android.AgentAPKs{App: "/apks/app.apk", Test: "/apks/test.apk"}
 	if apks == nil || *apks != want {
 		t.Fatalf("androidAgentAPKs() = %+v, want %+v", apks, want)
+	}
+}
+
+func TestNoReinstallDriverSkipsManagedAndroidAssetResolution(t *testing.T) {
+	previous := resolveAndroidAgentAPKs
+	called := false
+	resolveAndroidAgentAPKs = func() (*android.AgentAPKs, error) {
+		called = true
+		return nil, fmt.Errorf("managed Android assets must not be resolved")
+	}
+	t.Cleanup(func() { resolveAndroidAgentAPKs = previous })
+
+	_, err := NewDeviceSession(
+		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}, ReinstallDriver: false},
+		Shard{Device: "emulator-5554", DriverPort: 7001})
+	if err != nil {
+		t.Fatalf("NewDeviceSession() error = %v", err)
+	}
+	if called {
+		t.Fatal("--no-reinstall-driver still resolved managed Android assets")
+	}
+}
+
+func TestNoReinstallDriverSkipsManagedIOSAssetResolution(t *testing.T) {
+	previous := resolveIOSRunnerBundle
+	called := false
+	resolveIOSRunnerBundle = func() (*ios.RunnerBundle, error) {
+		called = true
+		return nil, fmt.Errorf("managed iOS assets must not be resolved")
+	}
+	t.Cleanup(func() { resolveIOSRunnerBundle = previous })
+
+	_, err := NewDeviceSession(
+		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}, ReinstallDriver: false},
+		rootShard("UDID-1"))
+	if err != nil {
+		t.Fatalf("NewDeviceSession() error = %v", err)
+	}
+	if called {
+		t.Fatal("--no-reinstall-driver still resolved managed iOS assets")
 	}
 }

@@ -40,6 +40,86 @@ func TestCheckAnalyzesOnlySelectedRoots(t *testing.T) {
 	}
 }
 
+func TestCheckRejectsFeatureOutsideDeclaredPlatforms(t *testing.T) {
+	t.Parallel()
+
+	root := validFlow("/workspace/mobile.yaml")
+	css := "#submit"
+	root.Commands = []model.Command{{
+		Kind:   model.CommandTapOn,
+		Source: testSource(root.Path, 4, 3),
+		Selector: &model.ElementSelector{
+			CSS:          &css,
+			FieldSources: map[string]model.SourceInfo{"css": testSource(root.Path, 5, 5)},
+		},
+	}}
+	loader := newFakeFlowLoader(map[string]model.Flow{root.Path: root})
+
+	_, err := Check(context.Background(), model.ExecutionPlan{SelectedRoots: []string{root.Path}},
+		WithLoader(loader), WithPlatform("android"))
+	violation := requireViolation(t, err, "unsupported_platform")
+	if violation.FeatureKind != FeatureSelector || violation.FeatureName != "css" || violation.Source.Start.Line != 5 {
+		t.Fatalf("platform violation = %#v", violation)
+	}
+	if !strings.Contains(violation.Message, "android") || !strings.Contains(violation.Message, "web") {
+		t.Fatalf("platform violation message = %q, want selected and supported platforms", violation.Message)
+	}
+}
+
+func TestCheckUsesPlatformsForPlannedFeature(t *testing.T) {
+	t.Parallel()
+
+	root := validFlow("/workspace/keychain.yaml")
+	root.Commands = []model.Command{{
+		Kind:   model.CommandClearKeychain,
+		Source: testSource(root.Path, 4, 3),
+	}}
+	loader := newFakeFlowLoader(map[string]model.Flow{root.Path: root})
+	plan := model.ExecutionPlan{SelectedRoots: []string{root.Path}}
+
+	_, err := Check(context.Background(), plan, WithLoader(loader), WithPlatform(ExecutionPlatformAndroid))
+	violation := requireViolation(t, err, "unsupported_platform")
+	if violation.FeatureName != string(model.CommandClearKeychain) {
+		t.Fatalf("platform violation = %#v", violation)
+	}
+
+	if _, err := Check(context.Background(), plan,
+		WithLoader(newFakeFlowLoader(map[string]model.Flow{root.Path: root})),
+		WithPlatform(ExecutionPlatformIOSSimulator)); err != nil {
+		t.Fatalf("Check(ios-simulator): %v", err)
+	}
+}
+
+func TestCheckAcceptsPlatformLimitedFeatureOnDeclaredPlatform(t *testing.T) {
+	t.Parallel()
+
+	root := validFlow("/workspace/web.yaml")
+	root.Config.AppID = ""
+	root.Config.URL = "https://example.invalid"
+	root.Config.FieldSources = map[string]model.SourceInfo{"url": testSource(root.Path, 2, 1)}
+	loader := newFakeFlowLoader(map[string]model.Flow{root.Path: root})
+
+	if _, err := Check(context.Background(), model.ExecutionPlan{SelectedRoots: []string{root.Path}},
+		WithLoader(loader), WithPlatform("web")); err != nil {
+		t.Fatalf("Check(web): %v", err)
+	}
+}
+
+func TestCheckRejectsUnknownSelectedPlatformBeforeLoading(t *testing.T) {
+	t.Parallel()
+
+	root := validFlow("/workspace/root.yaml")
+	loader := newFakeFlowLoader(map[string]model.Flow{root.Path: root})
+	_, err := Check(context.Background(), model.ExecutionPlan{SelectedRoots: []string{root.Path}},
+		WithLoader(loader), WithPlatform("blackberry"))
+	if err == nil || !strings.Contains(err.Error(), "unknown selected platform") {
+		t.Fatalf("Check() error = %v, want unknown selected platform", err)
+	}
+	if len(loader.loads) != 0 {
+		t.Fatalf("invalid platform loaded flows: %#v", loader.loads)
+	}
+}
+
 func TestCheckLoadsCanonicalDiamondOnceAndRetainsEveryCallSite(t *testing.T) {
 	t.Parallel()
 

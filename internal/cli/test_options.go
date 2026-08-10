@@ -46,7 +46,6 @@ type TestOptions struct {
 	ScreenSize         string
 	APIURL             string
 	APIKey             string
-	AppleTeamID        string
 	Platform           string
 	Devices            []string
 	ShardSplit         int
@@ -125,7 +124,6 @@ func ParseTestOptions(args []string) (TestOptions, error) {
 		"--screen-size":     &options.ScreenSize,
 		"--api-url":         &options.APIURL,
 		"--api-key":         &options.APIKey,
-		"--apple-team-id":   &options.AppleTeamID,
 		"--platform":        &options.Platform,
 		"-p":                &options.Platform,
 	}
@@ -152,6 +150,10 @@ func ParseTestOptions(args []string) (TestOptions, error) {
 		value, consumed, err := nextValue(args, index)
 		if err != nil {
 			return TestOptions{}, err
+		}
+		if argument == "--apple-team-id" {
+			return TestOptions{}, usageErrorf(
+				"option --apple-team-id belongs to flowbaton driver-setup, not flowbaton test")
 		}
 
 		if target, ok := values[argument]; ok {

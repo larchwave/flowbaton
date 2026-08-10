@@ -100,11 +100,8 @@ func TestRegistryDeclaresFailClosedDeferredFeatures(t *testing.T) {
 // The Web/CDP driver implements these three entries. Their capability status
 // must allow preflight to admit the supported surface.
 //
-// css and url are platform-limited rather than planned-v1 because the runtime
-// check in the checker is platform-blind: it looks only at the status, never at
-// Platforms. Declaring them planned-v1 would let a css selector through
-// preflight on Android and iOS too. The real refusal for a mobile driver lives
-// in the element lookup, which asks the driver for the cssSelector capability.
+// css and url are platform-limited so selected-platform preflight can refuse
+// them before Android or iOS driver mutation.
 func TestRegistryDeclaresTheWebSurfaceAsImplemented(t *testing.T) {
 	t.Parallel()
 

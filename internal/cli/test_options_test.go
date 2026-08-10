@@ -207,6 +207,21 @@ func TestReinstallDriverIsNegatableAndDefaultsToTrue(t *testing.T) {
 	}
 }
 
+func TestTestCommandRejectsDriverSetupOnlyAppleTeamID(t *testing.T) {
+	t.Parallel()
+
+	_, err := ParseTestOptions([]string{"--apple-team-id", "ABCDE12345", "one.yaml"})
+	if err == nil {
+		t.Fatal("test accepted the driver-setup-only --apple-team-id flag")
+	}
+	if code := ExitCodeFor(err); code != ExitInvalid {
+		t.Fatalf("exit code = %d, want usage error %d", code, ExitInvalid)
+	}
+	if !strings.Contains(err.Error(), "driver-setup") {
+		t.Fatalf("error = %q, want driver-setup guidance", err)
+	}
+}
+
 func TestBooleanFlagsDoNotSwallowTheNextArgument(t *testing.T) {
 	t.Parallel()
 

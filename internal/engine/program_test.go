@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -22,6 +23,28 @@ func TestPrepareRejectsNilLoaderBeforePreflight(t *testing.T) {
 	var configuration *ConfigurationError
 	if !errors.As(err, &configuration) {
 		t.Fatalf("error = %T %v, want *ConfigurationError", err, err)
+	}
+}
+
+func TestPrepareForPlatformRejectsMismatch(t *testing.T) {
+	t.Parallel()
+
+	canonical := "/workspace/root.yaml"
+	css := "#submit"
+	loader := &boundaryLoader{canonical: canonical, flow: model.Flow{
+		SchemaVersion: model.ASTVersionV0,
+		Path:          canonical,
+		Config:        model.Config{AppID: "com.example.app"},
+		Commands: []model.Command{{
+			Kind:     model.CommandTapOn,
+			Selector: &model.ElementSelector{CSS: &css},
+		}},
+	}}
+
+	_, err := PrepareForPlatform(
+		context.Background(), model.ExecutionPlan{SelectedRoots: []string{canonical}}, loader, "android")
+	if err == nil || !strings.Contains(err.Error(), "unsupported_platform") {
+		t.Fatalf("PrepareForPlatform() error = %v, want unsupported_platform", err)
 	}
 }
 

@@ -24,11 +24,34 @@ type Program struct {
 // Prepare runs capability preflight through a recording cache and retains the
 // validated parsed flows. Executing a Program never reloads source files.
 func Prepare(ctx context.Context, plan model.ExecutionPlan, loader capability.FlowLoader) (*Program, error) {
+	return prepare(ctx, plan, loader)
+}
+
+// PrepareForPlatform performs the same immutable preparation while rejecting
+// features whose registry Platforms do not include the selected driver. It is
+// intended for executable paths before Driver.Open; syntax-only callers may
+// continue to use Prepare.
+func PrepareForPlatform(
+	ctx context.Context,
+	plan model.ExecutionPlan,
+	loader capability.FlowLoader,
+	platform capability.ExecutionPlatform,
+) (*Program, error) {
+	return prepare(ctx, plan, loader, capability.WithPlatform(platform))
+}
+
+func prepare(
+	ctx context.Context,
+	plan model.ExecutionPlan,
+	loader capability.FlowLoader,
+	options ...capability.Option,
+) (*Program, error) {
 	if loader == nil {
 		return nil, NewConfigurationError("engine Prepare requires a flow loader", nil)
 	}
 	recorder := newRecordingLoader(loader)
-	report, err := capability.Check(ctx, plan, capability.WithLoader(recorder))
+	checkOptions := append([]capability.Option{capability.WithLoader(recorder)}, options...)
+	report, err := capability.Check(ctx, plan, checkOptions...)
 	if err != nil {
 		return nil, err
 	}

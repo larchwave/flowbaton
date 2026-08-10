@@ -26,6 +26,7 @@ type Option func(*checkConfig)
 type checkConfig struct {
 	registry Registry
 	loader   FlowLoader
+	platform ExecutionPlatform
 }
 
 // WithLoader supplies a pure flow/resource loader, primarily for deterministic
@@ -40,6 +41,15 @@ func WithLoader(loader FlowLoader) Option {
 func WithRegistry(registry Registry) Option {
 	return func(config *checkConfig) {
 		config.registry = registry
+	}
+}
+
+// WithPlatform limits preflight to the selected execution platform. An empty
+// platform preserves platform-neutral syntax checking; executable callers
+// should pass one of android, ios-simulator, or web before opening a driver.
+func WithPlatform(platform ExecutionPlatform) Option {
+	return func(config *checkConfig) {
+		config.platform = ExecutionPlatform(strings.TrimSpace(string(platform)))
 	}
 }
 
@@ -145,6 +155,9 @@ func Check(ctx context.Context, plan model.ExecutionPlan, options ...Option) (Re
 	if err := config.registry.Validate(); err != nil {
 		return Report{}, fmt.Errorf("support registry: %w", err)
 	}
+	if config.platform != "" && !validExecutionPlatforms[config.platform] {
+		return Report{}, fmt.Errorf("unknown selected platform %q", config.platform)
+	}
 	if config.loader == nil {
 		return Report{}, fmt.Errorf("capability checker requires a flow loader")
 	}
@@ -193,7 +206,7 @@ func Check(ctx context.Context, plan model.ExecutionPlan, options ...Option) (Re
 				colors[frame.path] = visitGray
 				frame.entered = true
 				frame.links = collectLinks(flow)
-				if violation := inspectFlow(flow, config.registry); violation != nil {
+				if violation := inspectFlow(flow, config.registry, config.platform); violation != nil {
 					violation.Chain = chainForStack(stack)
 					return report, *violation
 				}
@@ -275,9 +288,9 @@ func collectLinks(flow model.Flow) []model.FileLink {
 	return links
 }
 
-func inspectFlow(flow model.Flow, registry Registry) *Violation {
+func inspectFlow(flow model.Flow, registry Registry, platform ExecutionPlatform) *Violation {
 	if flow.Config.URL != "" {
-		return unsupportedFeature(registry, FeatureConfigExtension, "url", sourceForField(flow.Config.FieldSources, "url", flow.Config.Source))
+		return unsupportedFeature(registry, FeatureConfigExtension, "url", sourceForField(flow.Config.FieldSources, "url", flow.Config.Source), platform)
 	}
 	extKeys := make([]string, 0, len(flow.Config.Ext))
 	for key := range flow.Config.Ext {
@@ -293,7 +306,7 @@ func inspectFlow(flow model.Flow, registry Registry) *Violation {
 				name += "=<invalid>"
 			}
 		}
-		if violation := unsupportedFeature(registry, FeatureConfigExtension, name, sourceForField(flow.Config.FieldSources, key, flow.Config.Source)); violation != nil {
+		if violation := unsupportedFeature(registry, FeatureConfigExtension, name, sourceForField(flow.Config.FieldSources, key, flow.Config.Source), platform); violation != nil {
 			return violation
 		}
 	}
@@ -310,13 +323,13 @@ func inspectFlow(flow model.Flow, registry Registry) *Violation {
 		index := len(stack) - 1
 		command := stack[index]
 		stack = stack[:index]
-		if violation := unsupportedFeature(registry, FeatureCommand, string(command.Kind), command.Source); violation != nil {
+		if violation := unsupportedFeature(registry, FeatureCommand, string(command.Kind), command.Source, platform); violation != nil {
 			return violation
 		}
-		if violation := inspectCondition(command.Condition, registry, command.Source); violation != nil {
+		if violation := inspectCondition(command.Condition, registry, command.Source, platform); violation != nil {
 			return violation
 		}
-		if violation := inspectSelector(command.Selector, registry, command.Source); violation != nil {
+		if violation := inspectSelector(command.Selector, registry, command.Source, platform); violation != nil {
 			return violation
 		}
 		for childIndex := len(command.Children) - 1; childIndex >= 0; childIndex-- {
@@ -326,22 +339,22 @@ func inspectFlow(flow model.Flow, registry Registry) *Violation {
 	return nil
 }
 
-func inspectCondition(condition *model.Condition, registry Registry, fallback model.SourceInfo) *Violation {
+func inspectCondition(condition *model.Condition, registry Registry, fallback model.SourceInfo, platform ExecutionPlatform) *Violation {
 	if condition == nil {
 		return nil
 	}
 	if condition.Platform != nil && *condition.Platform == model.PlatformWeb {
-		if violation := unsupportedFeature(registry, FeatureDevicePlatform, "web", sourceForField(condition.FieldSources, "platform", fallback)); violation != nil {
+		if violation := unsupportedFeature(registry, FeatureDevicePlatform, "web", sourceForField(condition.FieldSources, "platform", fallback), platform); violation != nil {
 			return violation
 		}
 	}
-	if violation := inspectSelector(condition.Visible, registry, sourceForField(condition.FieldSources, "visible", fallback)); violation != nil {
+	if violation := inspectSelector(condition.Visible, registry, sourceForField(condition.FieldSources, "visible", fallback), platform); violation != nil {
 		return violation
 	}
-	return inspectSelector(condition.NotVisible, registry, sourceForField(condition.FieldSources, "notVisible", fallback))
+	return inspectSelector(condition.NotVisible, registry, sourceForField(condition.FieldSources, "notVisible", fallback), platform)
 }
 
-func inspectSelector(selector *model.ElementSelector, registry Registry, fallback model.SourceInfo) *Violation {
+func inspectSelector(selector *model.ElementSelector, registry Registry, fallback model.SourceInfo, platform ExecutionPlatform) *Violation {
 	if selector == nil {
 		return nil
 	}
@@ -351,7 +364,7 @@ func inspectSelector(selector *model.ElementSelector, registry Registry, fallbac
 		current := stack[index]
 		stack = stack[:index]
 		if current.CSS != nil {
-			if violation := unsupportedFeature(registry, FeatureSelector, "css", sourceForField(current.FieldSources, "css", fallback)); violation != nil {
+			if violation := unsupportedFeature(registry, FeatureSelector, "css", sourceForField(current.FieldSources, "css", fallback), platform); violation != nil {
 				return violation
 			}
 		}
@@ -372,7 +385,7 @@ func inspectSelector(selector *model.ElementSelector, registry Registry, fallbac
 	return nil
 }
 
-func unsupportedFeature(registry Registry, kind FeatureKind, name string, source model.SourceInfo) *Violation {
+func unsupportedFeature(registry Registry, kind FeatureKind, name string, source model.SourceInfo, platform ExecutionPlatform) *Violation {
 	entry, found := registry.Lookup(kind, name)
 	if !found {
 		return &Violation{
@@ -386,7 +399,24 @@ func unsupportedFeature(registry Registry, kind FeatureKind, name string, source
 			FeatureKind: kind, FeatureName: name, Source: source,
 		}
 	}
+	if platform != "" && !entrySupportsPlatform(entry, platform) {
+		return &Violation{
+			Code: "unsupported_platform",
+			Message: fmt.Sprintf("feature does not support selected platform %q; supported: %s",
+				platform, strings.Join(entry.Platforms, ", ")),
+			FeatureKind: kind, FeatureName: name, Source: source,
+		}
+	}
 	return nil
+}
+
+func entrySupportsPlatform(entry Entry, platform ExecutionPlatform) bool {
+	for _, supported := range entry.Platforms {
+		if supported == string(platform) || supported == "all-hosts" {
+			return true
+		}
+	}
+	return false
 }
 
 func pathViolation(path string, source *model.SourceInfo, err error, chain []GraphEdge) Violation {
