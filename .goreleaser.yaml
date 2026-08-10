@@ -55,17 +55,11 @@ homebrew_casks:
       owner: larchwave
       name: homebrew-flowbaton
       branch: main
+      token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
     homepage: 'https://github.com/larchwave/flowbaton'
     description: 'Pre-alpha mobile UI automation toolkit: Go CLI, Android agent, iOS Simulator runner'
     license: Apache-2.0
     binaries: [flowbaton]
-    hooks:
-      post:
-        # The binary is not notarized; clear the quarantine bit so it runs.
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/flowbaton"]
-          end
 
 snapshot:
   version_template: '{{ incpatch .Version }}-next'

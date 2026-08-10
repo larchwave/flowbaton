@@ -1,10 +1,5 @@
 name: Release Publish
 
-# Builds, releases, and attests a tagged version in one trusted CI run so the
-# published archives carry SLSA build provenance bound to their digests. The
-# Homebrew cask push is left to a credentialed maintainer step (it needs write
-# access to the separate tap repository), so it is skipped here.
-
 on:
   push:
     tags:
@@ -17,6 +12,7 @@ env:
   GORELEASER_VERSION: v2.17.0
   SYFT_VERSION: v1.42.3
   GOTOOLCHAIN: local
+  GOFLAGS: -mod=readonly -trimpath
 
 jobs:
   public-oss-boundary:
@@ -30,18 +26,210 @@ jobs:
           REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
         run: test "$REPOSITORY_VISIBILITY" = 'public'
 
-  release:
+  signed-tag:
+    name: Verify signed tag and exact commit
     needs: public-oss-boundary
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
+      contents: read
     steps:
-      - name: Check out source and tags
+      - name: Check out exact release commit and tags
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify GitHub's signed annotated-tag record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/verify-tag.sh "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$GITHUB_SHA"
+
+  go-contract-policy:
+    name: Go, race, contracts, and release policy
+    needs: signed-tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: false
+          cache: false
+      - name: Check formatting
+        shell: bash
+        run: test -z "$(git ls-files -z -- '*.go' | xargs -0 gofmt -l)"
+      - name: Vet
+        run: go vet ./...
+      - name: Test all Go code with race detector
+        run: go test -race ./...
+      - name: Execute contract suites explicitly
+        run: go test ./contracts/... -count=1
+      - name: Check release policy wiring
+        run: scripts/release/static-check.sh
+
+  android-connected:
+    name: Android connected execution and driver assets
+    needs: signed-tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-ci
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android command-line tools
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Build and execute connected Android tests
+        working-directory: drivers/android
+        run: ../../scripts/ci/android-connected.sh
+      - name: Stage the APK pair
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-agent"
+          cp drivers/android/agent/build/outputs/apk/debug/agent-debug.apk "$RUNNER_TEMP/android-agent/agent.apk"
+          cp drivers/android/agent/build/outputs/apk/androidTest/debug/agent-debug-androidTest.apk "$RUNNER_TEMP/android-agent/agent-androidTest.apk"
+      - name: Package host-compatible Android assets
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          export SOURCE_DATE_EPOCH="$epoch"
+          for target in darwin:amd64 darwin:arm64 linux:amd64 windows:amd64; do
+            host_os="${target%%:*}"
+            host_arch="${target##*:}"
+            scripts/release/package-driver-asset.py \
+              --id android-agent --platform android \
+              --host-version "$version" --asset-version "$version" \
+              --host-os "$host_os" --host-arch "$host_arch" \
+              --root "$RUNNER_TEMP/android-agent" \
+              --identity-kind package-identity \
+              --identity-value dev.larchwave.flowbaton \
+              --identity-path agent.apk \
+              --android-api-min 26 --android-api-max 36 \
+              --output "$RUNNER_TEMP/android-assets"
+          done
+      - name: Upload Android release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: driver-android-${{ github.sha }}
+          path: ${{ runner.temp }}/android-assets/
+          if-no-files-found: error
+          retention-days: 3
+
+  ios-simulator:
+    name: iOS Simulator execution and portable runner assets
+    needs: signed-tag
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Run Swift package tests
+        run: swift test --package-path drivers/ios
+      - name: Install XcodeGen 2.44.1
+        shell: bash
+        run: |
+          tool_dir="$RUNNER_TEMP/xcodegen-2.44.1"
+          mkdir -p "$tool_dir"
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$tool_dir/xcodegen.zip" \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip
+          printf '%s  %s\n' 'a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73' "$tool_dir/xcodegen.zip" | shasum -a 256 --check -
+          unzip -q "$tool_dir/xcodegen.zip" -d "$tool_dir"
+          printf '%s\n' "$tool_dir/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Generate and format-check the Xcode project
+        run: |
+          xcodegen generate --spec drivers/ios/project.yml --project drivers/ios
+          xcrun swift-format lint --strict --recursive drivers/ios/Sources drivers/ios/Tests drivers/ios/UITests
+      - name: Execute the real Simulator test
+        run: scripts/ci/ios-simulator-test.sh drivers/ios/FlowBatonIOSRunner.xcodeproj "$RUNNER_TEMP/flowbaton-ios-derived"
+      - name: Package relocatable Simulator runner assets
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          products="$RUNNER_TEMP/flowbaton-ios-derived/Build/Products"
+          test -n "$(find "$products" -maxdepth 1 -name '*.xctestrun' -print -quit)"
+          identity_path=""
+          identity_path="$(cd "$products" && find . -maxdepth 2 -name '*Runner.app' -type d -print -quit | sed 's#^./##')"
+          test -n "$identity_path"
+          xcode_version="$(xcodebuild -version | awk '/^Xcode / {print $2}')"
+          xcode_major="${xcode_version%%.*}"
+          runtime_max="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; values=[r.get("version","") for r in json.load(sys.stdin)["runtimes"] if r.get("isAvailable") and "iOS" in r.get("name","")]; print(max(values,key=lambda v: tuple(map(int,v.split(".")))))')"
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
+          export SOURCE_DATE_EPOCH
+          for arch in amd64 arm64; do
+            scripts/release/package-driver-asset.py \
+              --id ios-simulator-runner --platform ios-simulator \
+              --host-version "$version" --asset-version "$version" \
+              --host-os darwin --host-arch "$arch" \
+              --root "$products" \
+              --identity-kind bundle-signature-identity \
+              --identity-value dev.larchwave.flowbaton.driver.uitests.xctrunner \
+              --identity-path "$identity_path" \
+              --xcode-min "$xcode_version" --xcode-max "${xcode_major}.9999" \
+              --ios-runtime-min 17.0 --ios-runtime-max "$runtime_max" \
+              --output "$RUNNER_TEMP/ios-assets"
+          done
+      - name: Upload iOS release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: driver-ios-${{ github.sha }}
+          path: ${{ runner.temp }}/ios-assets/
+          if-no-files-found: error
+          retention-days: 3
+
+  real-chrome:
+    name: Real Chrome execution
+    needs: signed-tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: false
+          cache: false
+      - name: Execute live Chrome tests
+        shell: bash
+        run: FLOWBATON_WEB_LIVE=1 FLOWBATON_CHROME="$(command -v google-chrome)" go test ./internal/web -run '^TestLiveChrome' -count=1
+
+  build-candidate:
+    name: Build exact release candidate
+    needs: [go-contract-policy, android-connected, ios-simulator, real-chrome]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact release commit and tags
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Install Go
@@ -54,30 +242,193 @@ jobs:
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           syft-version: ${{ env.SYFT_VERSION }}
-      - name: Build and publish the release
+      - name: Download tested mobile driver products
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: driver-*-${{ github.sha }}
+          path: mobile-assets
+          merge-multiple: true
+      - name: Build non-published CLI archives and SBOMs
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
           version: ${{ env.GORELEASER_VERSION }}
-          args: release --clean --skip=homebrew
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Attest build provenance for the shipped archives
+          args: release --clean --skip=publish,homebrew
+      - name: Assemble the complete candidate
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          mkdir candidate
+          find dist -maxdepth 1 -type f \( -name 'flowbaton_*.tar.gz' -o -name 'flowbaton_*.zip' -o -name '*.sbom.json' \) -exec cp {} candidate/ \;
+          cp mobile-assets/*.tar.gz candidate/
+          scripts/release/merge-driver-manifest.py --version "$version" --output candidate/driver-manifest.json mobile-assets/*.asset.json
+          for archive in candidate/*_android-agent_*.tar.gz candidate/*_ios-simulator-runner_*.tar.gz; do
+            syft "$archive" -o "spdx-json=${archive}.spdx.json"
+          done
+          cp scripts/install.sh scripts/install.ps1 candidate/
+          checksums="$RUNNER_TEMP/checksums.txt"
+          (cd candidate && find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#  #' > "$checksums")
+          mv "$checksums" candidate/checksums.txt
+          test -s candidate/driver-manifest.json
+          test -s candidate/checksums.txt
+      - name: Upload immutable release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 3
+
+  attest-candidate:
+    name: Attest every shipped digest
+    needs: build-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    steps:
+      - name: Download exact release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: candidate
+      - name: Recheck candidate digests before attestation
+        run: cd candidate && sha256sum --check checksums.txt
+      - name: Attest build provenance for all release payloads
         id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: |
-            dist/*.tar.gz
-            dist/*.zip
-            dist/checksums.txt
-      - name: Publish the draft and attach the provenance bundle
+          subject-path: candidate/*
+      - name: Stage provenance bundle
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          mkdir provenance
+          cp "$BUNDLE" "provenance/flowbaton_${version}.intoto.jsonl"
+      - name: Upload provenance bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-provenance-${{ github.sha }}
+          path: provenance/
+          if-no-files-found: error
+          retention-days: 3
+
+  clean-host-smoke:
+    name: Clean-host archive and installer smoke (${{ matrix.host }})
+    needs: attest-candidate
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      attestations: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: linux-amd64
+            os: ubuntu-24.04
+          - host: darwin-amd64
+            os: macos-15-intel
+          - host: darwin-arm64
+            os: macos-15
+          - host: windows-amd64
+            os: windows-2025
+    steps:
+      - name: Check out installer smoke harness only
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download exact release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: candidate
+      - name: Install Android identity tools
+        if: runner.os != 'macOS'
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - name: Smoke POSIX installer and production driver provisioning
+        if: runner.os != 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/smoke-posix.sh candidate "${GITHUB_REF_NAME#v}"
+      - name: Smoke Windows installer and production driver provisioning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/smoke-windows.ps1 -Candidate candidate -Version ($env:GITHUB_REF_NAME -replace '^v','')
+
+  publish:
+    name: Publish draft, tap, then release
+    needs: clean-host-smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download exact release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: candidate
+      - name: Download provenance bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-provenance-${{ github.sha }}
+          path: provenance
+      - name: Require dedicated tap credential
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: test -n "$HOMEBREW_TAP_TOKEN"
+      - name: Recheck candidate digests before publication
+        run: cd candidate && sha256sum --check checksums.txt
+      - name: Create draft, update tap, and publish only after both succeed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
           version="${TAG#v}"
-          cp "$BUNDLE" "flowbaton_${version}.intoto.jsonl"
-          gh release upload "$TAG" "flowbaton_${version}.intoto.jsonl" --clobber
+          test -z "$(gh release view "$TAG" --json tagName 2>/dev/null || true)"
+          release_created=0
+          tap_pushed=0
+          published=0
+          rollback_release() {
+            if [[ "$published" == 0 && "$tap_pushed" == 1 ]]; then
+              git -C "$tap" revert --no-edit HEAD || true
+              git -C "$tap" push origin HEAD:main || true
+            fi
+            if [[ "$published" == 0 && "$release_created" == 1 ]]; then
+              gh release delete "$TAG" --yes || true
+            fi
+          }
+          trap rollback_release EXIT
+          gh release create "$TAG" --verify-tag --draft --title "FlowBaton $TAG" --generate-notes candidate/* provenance/*
+          release_created=1
+
+          tap="$RUNNER_TEMP/homebrew-flowbaton"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/larchwave/homebrew-flowbaton.git" "$tap"
+          scripts/release/render-homebrew-cask.py --version "$version" --candidate candidate --output "$tap/Casks/flowbaton.rb"
+          git -C "$tap" config user.name 'flowbaton-release[bot]'
+          git -C "$tap" config user.email '314023723+larchwave@users.noreply.github.com'
+          git -C "$tap" add Casks/flowbaton.rb
+          git -C "$tap" diff --cached --quiet && { echo 'Homebrew cask did not advance' >&2; exit 1; }
+          git -C "$tap" commit -m "flowbaton ${TAG}"
+          git -C "$tap" push origin HEAD:main
+          tap_pushed=1
           gh release edit "$TAG" --draft=false --latest
+          published=1

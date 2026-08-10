@@ -1,7 +1,7 @@
 #!/bin/sh
-# FlowBaton POSIX installer. Downloads a signed release archive, verifies its
-# SHA-256 against the published checksums file, and installs the flowbaton
-# binary. Fails closed on any mismatch.
+# FlowBaton POSIX installer. Downloads a release archive, verifies its GitHub
+# build attestation is bound to this repository, release workflow, and tag,
+# then checks the published SHA-256 before installing the binary.
 #
 #   curl -fsSL https://github.com/larchwave/flowbaton/releases/latest/download/install.sh | sh
 #
@@ -25,6 +25,7 @@ need() {
 
 need curl
 need tar
+need gh
 
 # Resolve platform.
 os="$(uname -s)"
@@ -72,6 +73,12 @@ trap 'rm -rf "$tmp"' EXIT INT TERM
 echo "install: downloading ${asset} (v${version})" >&2
 curl -fsSL "${base}/${asset}" -o "${tmp}/${asset}" || fail "download failed: ${base}/${asset}"
 curl -fsSL "${base}/checksums.txt" -o "${tmp}/checksums.txt" || fail "download failed: checksums.txt"
+
+gh attestation verify "${tmp}/${asset}" \
+	--repo "$REPO" \
+	--signer-workflow "${REPO}/.github/workflows/release-publish.yml" \
+	--source-ref "refs/tags/v${version}" \
+	--deny-self-hosted-runners >/dev/null || fail "GitHub build attestation verification failed for ${asset}"
 
 expected="$(grep " ${asset}\$" "${tmp}/checksums.txt" | awk '{print $1}' | head -n 1)"
 [ -n "$expected" ] || fail "no checksum listed for ${asset}"

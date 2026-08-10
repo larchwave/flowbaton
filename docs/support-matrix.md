@@ -18,5 +18,10 @@ runtime dependencies.
 Unsupported platform operations must fail before device mutation. Missing SDKs,
 driver artifacts, devices, or provider credentials must produce a clear error.
 
+Archive installation requires GitHub CLI attestation verification. Android
+driver provisioning also requires the Android SDK identity tools; iOS Simulator
+driver provisioning requires Xcode and `codesign`. These prerequisites are
+exercised from an empty home directory by the tag release gate.
+
 Physical iOS devices, hosted accounts, billing, telemetry, and remote render
 services are outside the v1 support target.

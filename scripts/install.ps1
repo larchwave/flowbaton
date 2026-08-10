@@ -1,9 +1,9 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  FlowBaton Windows installer. Downloads a signed release archive, verifies its
-  SHA-256 against the published checksums file, and installs flowbaton.exe.
-  Fails closed on any mismatch.
+  FlowBaton Windows installer. Downloads a release archive, verifies its GitHub
+  build attestation is bound to this repository, release workflow, and tag,
+  then checks the published SHA-256 before installing flowbaton.exe.
 
   irm https://github.com/larchwave/flowbaton/releases/latest/download/install.ps1 | iex
 
@@ -37,6 +37,14 @@ try {
 	Write-Host "install: downloading $asset (v$version)"
 	Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "$base/$asset" -OutFile (Join-Path $tmp $asset)
 	Invoke-WebRequest -UseBasicParsing -ErrorAction Stop "$base/checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt')
+
+	if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'install: required tool not found: gh' }
+	& gh attestation verify (Join-Path $tmp $asset) `
+		--repo $repo `
+		--signer-workflow "$repo/.github/workflows/release-publish.yml" `
+		--source-ref "refs/tags/v$version" `
+		--deny-self-hosted-runners | Out-Null
+	if ($LASTEXITCODE -ne 0) { throw "install: GitHub build attestation verification failed for $asset" }
 
 	$expected = (Select-String -Path (Join-Path $tmp 'checksums.txt') -Pattern " $([regex]::Escape($asset))$" -ErrorAction Stop |
 		ForEach-Object { ($_.Line -split '\s+')[0] } | Select-Object -First 1)

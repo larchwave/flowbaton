@@ -227,18 +227,49 @@ func TestWorkflowsFailClosedUnlessRepositoryIsPublic(t *testing.T) {
 			if job == "public-oss-boundary" {
 				continue
 			}
-			wantNeed := "public-oss-boundary"
-			if isCI && job != "repository-language" {
-				wantNeed = "repository-language"
-			}
-			if needs != wantNeed {
-				t.Errorf("%s job %s directly needs %q, want %s", path, job, needs, wantNeed)
+			if !workflowJobNeedsBoundary(jobs, job, map[string]bool{}) {
+				t.Errorf("%s job %s needs %q but has no dependency path to public-oss-boundary", path, job, needs)
 			}
 		}
 		if len(jobs) < 2 {
 			t.Errorf("%s parsed only %d job(s), want a visibility guard and at least one gated job", path, len(jobs))
 		}
 	}
+}
+
+func workflowJobNeedsBoundary(jobs map[string]string, job string, visiting map[string]bool) bool {
+	if job == "public-oss-boundary" {
+		return true
+	}
+	if visiting[job] {
+		return false
+	}
+	visiting[job] = true
+	defer delete(visiting, job)
+	for _, dependency := range parseWorkflowNeeds(jobs[job]) {
+		if _, exists := jobs[dependency]; exists && workflowJobNeedsBoundary(jobs, dependency, visiting) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseWorkflowNeeds(value string) []string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		value = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(value, "["), "]"))
+	}
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	dependencies := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if dependency := strings.TrimSpace(part); dependency != "" {
+			dependencies = append(dependencies, dependency)
+		}
+	}
+	return dependencies
 }
 
 func TestWorkflowJobParserExposesUnknownUngatedJob(t *testing.T) {
@@ -258,6 +289,28 @@ jobs:
 	}
 	if got, ok := jobs["future-job"]; !ok || got != "" {
 		t.Fatalf("future ungated job parsed as needs=%q, present=%t; want present with empty needs", got, ok)
+	}
+}
+
+func TestWorkflowBoundaryDependencyAcceptsFanInAndRejectsCycles(t *testing.T) {
+	jobs := map[string]string{
+		"public-oss-boundary": "",
+		"signed-tag":          "public-oss-boundary",
+		"android":             "[public-oss-boundary, signed-tag]",
+		"ios":                 "signed-tag",
+		"candidate":           "[android, ios]",
+		"cycle-a":             "cycle-b",
+		"cycle-b":             "cycle-a",
+	}
+	for _, job := range []string{"signed-tag", "android", "ios", "candidate"} {
+		if !workflowJobNeedsBoundary(jobs, job, map[string]bool{}) {
+			t.Errorf("%s should have a dependency path to the boundary", job)
+		}
+	}
+	for _, job := range []string{"cycle-a", "cycle-b"} {
+		if workflowJobNeedsBoundary(jobs, job, map[string]bool{}) {
+			t.Errorf("%s cycle was accepted as boundary-gated", job)
+		}
 	}
 }
 

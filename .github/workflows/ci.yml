@@ -123,13 +123,17 @@ jobs:
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
       - name: Install pinned Android SDK packages
         shell: bash
-        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+        run: sdkmanager 'platforms;android-34' 'build-tools;34.0.0' 'platform-tools' 'emulator' 'system-images;android-34;google_apis;x86_64'
       - name: Test core, lint agent, and compile both APKs
         shell: bash
         run: >-
           ./gradlew --no-daemon --dependency-verification strict
           :core:test :agent:lintDebug
           :agent:assembleDebug :agent:assembleDebugAndroidTest
+      - name: Enable emulator acceleration
+        run: sudo chmod 666 /dev/kvm
+      - name: Execute connected instrumentation tests
+        run: ../../scripts/ci/android-connected.sh
 
   ios:
     needs: repository-language
@@ -177,3 +181,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build-for-testing
+      - name: Execute the existing Simulator integration test
+        run: >-
+          scripts/ci/ios-simulator-test.sh
+          drivers/ios/FlowBatonIOSRunner.xcodeproj
+          "$RUNNER_TEMP/flowbaton-ios-execution"
