@@ -266,6 +266,26 @@ func (adb *Adb) Bugreport(ctx context.Context, outputPath string) error {
 	return adb.run(ctx, "bugreport", outputPath)
 }
 
+// ProcessID returns one running process id for an application. The read-only
+// pidof query scopes logcat without changing application state.
+func (adb *Adb) ProcessID(ctx context.Context, appID string) (string, error) {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return "", fmt.Errorf("adb: process lookup requires an application id")
+	}
+	output, err := adb.shellOutput(ctx, "pidof", appID)
+	if err != nil {
+		return "", err
+	}
+	for _, field := range strings.Fields(string(output)) {
+		pid, parseErr := strconv.Atoi(field)
+		if parseErr == nil && pid > 0 {
+			return strconv.Itoa(pid), nil
+		}
+	}
+	return "", fmt.Errorf("adb: pidof %q reported no positive process id", appID)
+}
+
 // ListDevices returns every device adb can currently use. Entries in any
 // other state (offline, unauthorized) are dropped: they cannot run a flow, so
 // offering them as targets would only defer the failure.

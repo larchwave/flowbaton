@@ -845,18 +845,6 @@ func TestDriverRefusesTheOperationsAndroidCannotPerform(t *testing.T) {
 			_, err := driver.QueryOnDeviceElements(ctx, device.QueryRequest{Expression: "x"})
 			return err
 		}},
-		{"StartDeviceLogCapture", func() error {
-			_, err := driver.StartDeviceLogCapture(ctx, device.DeviceLogRequest{OutputDirectory: "x"})
-			return err
-		}},
-		{"StopDeviceLogCapture", func() error {
-			_, err := driver.StopDeviceLogCapture(ctx, device.CaptureID("x"))
-			return err
-		}},
-		{"CollectCrashArtifacts", func() error {
-			_, err := driver.CollectCrashArtifacts(ctx, device.ArtifactRequest{OutputDirectory: "x"})
-			return err
-		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := test.call()
@@ -887,8 +875,8 @@ func TestCapabilitiesReportTheSameRefusals(t *testing.T) {
 		"androidChromeDevTools": true,
 		"screenRecording":       true,
 		"onDeviceQuery":         false,
-		"deviceLogCapture":      false,
-		"crashArtifacts":        false,
+		"deviceLogCapture":      true,
+		"crashArtifacts":        true,
 		"proxy":                 true,
 		"airplaneMode":          true,
 		"backPress":             true,

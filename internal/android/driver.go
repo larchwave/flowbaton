@@ -117,6 +117,12 @@ type Driver struct {
 	// child. It is a field so a test drives the start/stop lifecycle without a
 	// device; nil means spawn for real.
 	spawnRecorder func(ctx context.Context, devicePath string) (screenRecorder, error)
+
+	// diagnosticMu guards the capture sequence and active logcat children.
+	diagnosticMu       sync.Mutex
+	diagnosticSequence uint64
+	deviceLogs         map[device.CaptureID]androidDeviceLog
+	spawnDeviceLog     func(context.Context, *os.File, []string) (deviceLogProcess, error)
 }
 
 // screenRecorder is a running screenrecord child the driver can stop. stop
@@ -333,6 +339,7 @@ func (driver *Driver) awaitAgent(
 // inspects.
 func (driver *Driver) Close(ctx context.Context) error {
 	var cleanupErrs []error
+	cleanupErrs = append(cleanupErrs, driver.drainDeviceLogs(context.WithoutCancel(ctx))...)
 	cleanupErrs = append(cleanupErrs, driver.drainRecordings(context.WithoutCancel(ctx))...)
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordingFinalizeTimeout)
 	defer cancel()
@@ -1022,8 +1029,8 @@ func (driver *Driver) Capabilities() device.Capabilities {
 			"androidChromeDevTools": true,
 			"screenRecording":       true,
 			"onDeviceQuery":         false,
-			"deviceLogCapture":      false,
-			"crashArtifacts":        false,
+			"deviceLogCapture":      true,
+			"crashArtifacts":        true,
 		},
 	}
 }
@@ -1149,28 +1156,4 @@ func (driver *Driver) QueryOnDeviceElements(
 	device.QueryRequest,
 ) ([]device.TreeNode, error) {
 	return nil, fmt.Errorf("%w: the android agent has no on-device query", device.ErrUnsupported)
-}
-
-func (driver *Driver) StartDeviceLogCapture(
-	context.Context,
-	device.DeviceLogRequest,
-) (device.CaptureID, error) {
-	return "", fmt.Errorf(
-		"%w: android log capture is not wired to the logcat reader yet", device.ErrUnsupported)
-}
-
-func (driver *Driver) StopDeviceLogCapture(
-	context.Context,
-	device.CaptureID,
-) ([]device.Artifact, error) {
-	return nil, fmt.Errorf(
-		"%w: android log capture is not wired to the logcat reader yet", device.ErrUnsupported)
-}
-
-func (driver *Driver) CollectCrashArtifacts(
-	context.Context,
-	device.ArtifactRequest,
-) ([]device.Artifact, error) {
-	return nil, fmt.Errorf(
-		"%w: android crash artifact collection is not implemented", device.ErrUnsupported)
 }
