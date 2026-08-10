@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -87,6 +88,11 @@ func TestCapabilitiesReportTheSameRefusals(t *testing.T) {
 		}
 		if supported {
 			t.Fatalf("Capabilities() reports %q supported, but the driver refuses it", feature)
+		}
+	}
+	for _, feature := range []string{"deviceLogCapture", "crashArtifacts"} {
+		if !capabilities.Features[feature] {
+			t.Fatalf("Capabilities() reports real diagnostic feature %q unsupported", feature)
 		}
 	}
 }
@@ -666,6 +672,16 @@ type fakeIOSRecorder struct {
 	stopErr error
 }
 
+type fakeIOSLogProcess struct {
+	stopped bool
+	stopErr error
+}
+
+func (process *fakeIOSLogProcess) stop(context.Context) error {
+	process.stopped = true
+	return process.stopErr
+}
+
 func (r *fakeIOSRecorder) stop() error {
 	r.stopped = true
 	return r.stopErr
@@ -817,6 +833,222 @@ func TestCloseDrainsOutstandingRecordingsIdempotently(t *testing.T) {
 	}
 	if err := driver.Close(context.Background()); err != nil {
 		t.Fatalf("second Close() error = %v", err)
+	}
+}
+
+func TestDeviceLogCaptureStartsStopsAndReturnsANonEmptyArtifact(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	outputDirectory := t.TempDir()
+	process := &fakeIOSLogProcess{}
+	var gotArgs []string
+	driver.spawnDeviceLog = func(_ context.Context, args []string, output io.Writer) (deviceLogProcess, error) {
+		gotArgs = append([]string(nil), args...)
+		if _, err := io.WriteString(output, "{\"eventMessage\":\"probe\"}\n"); err != nil {
+			return nil, err
+		}
+		return process, nil
+	}
+	id, err := driver.StartDeviceLogCapture(
+		context.Background(), device.DeviceLogRequest{OutputDirectory: outputDirectory})
+	if err != nil {
+		t.Fatalf("StartDeviceLogCapture() error = %v", err)
+	}
+	wantArgs := []string{"simctl", "spawn", "UDID-1", "log", "stream", "--style", "ndjson"}
+	if !reflect.DeepEqual(gotArgs, wantArgs) {
+		t.Fatalf("log argv = %#v, want %#v", gotArgs, wantArgs)
+	}
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if err != nil {
+		t.Fatalf("StopDeviceLogCapture() error = %v", err)
+	}
+	if !process.stopped {
+		t.Fatal("StopDeviceLogCapture did not stop the log child")
+	}
+	if len(artifacts) != 1 || artifacts[0].Kind != "log" || artifacts[0].Path == "" {
+		t.Fatalf("artifacts = %#v, want one log", artifacts)
+	}
+	resolvedOutputDirectory, err := filepath.EvalSymlinks(outputDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(artifacts[0].Path) != resolvedOutputDirectory {
+		t.Fatalf("artifact path = %q, want it under %q", artifacts[0].Path, outputDirectory)
+	}
+}
+
+func TestDeviceLogCaptureRejectsUnknownEmptyAndFailedCaptures(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	if _, err := driver.StopDeviceLogCapture(context.Background(), "unknown"); err == nil {
+		t.Fatal("StopDeviceLogCapture accepted an unknown id")
+	}
+	driver.spawnDeviceLog = func(context.Context, []string, io.Writer) (deviceLogProcess, error) {
+		return &fakeIOSLogProcess{}, nil
+	}
+	id, err := driver.StartDeviceLogCapture(
+		context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := driver.StopDeviceLogCapture(context.Background(), id); err == nil {
+		t.Fatal("StopDeviceLogCapture accepted an empty artifact")
+	}
+
+	driver.spawnDeviceLog = func(context.Context, []string, io.Writer) (deviceLogProcess, error) {
+		return &fakeIOSLogProcess{stopErr: errors.New("log child failed")}, nil
+	}
+	id, err = driver.StartDeviceLogCapture(
+		context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := driver.StopDeviceLogCapture(context.Background(), id); err == nil ||
+		!strings.Contains(err.Error(), "log child failed") {
+		t.Fatalf("StopDeviceLogCapture error = %v, want child failure", err)
+	}
+}
+
+func TestDeviceLogCaptureSpawnFailureRemovesThePartialArtifact(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	driver.spawnDeviceLog = func(context.Context, []string, io.Writer) (deviceLogProcess, error) {
+		return nil, errors.New("spawn refused")
+	}
+	if _, err := driver.StartDeviceLogCapture(
+		context.Background(), device.DeviceLogRequest{OutputDirectory: directory}); err == nil {
+		t.Fatal("StartDeviceLogCapture swallowed a spawn failure")
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("spawn failure left partial artifacts: %v", entries)
+	}
+}
+
+func TestDeviceLogCaptureHonorsCancellationAndCloseDrains(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	driver.spawnDeviceLog = func(ctx context.Context, _ []string, _ io.Writer) (deviceLogProcess, error) {
+		return nil, ctx.Err()
+	}
+	if _, err := driver.StartDeviceLogCapture(
+		cancelled, device.DeviceLogRequest{OutputDirectory: t.TempDir()}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("StartDeviceLogCapture error = %v, want context.Canceled", err)
+	}
+
+	first := &fakeIOSLogProcess{}
+	second := &fakeIOSLogProcess{}
+	processes := []deviceLogProcess{first, second}
+	driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
+		if _, err := io.WriteString(output, "log\n"); err != nil {
+			return nil, err
+		}
+		process := processes[0]
+		processes = processes[1:]
+		return process, nil
+	}
+	for range 2 {
+		if _, err := driver.StartDeviceLogCapture(
+			context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := driver.Close(context.Background()); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if !first.stopped || !second.stopped {
+		t.Fatalf("Close stopped first=%v second=%v, want both", first.stopped, second.stopped)
+	}
+	if err := driver.Close(context.Background()); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+}
+
+func TestCrashArtifactsRunBoundedDiagnoseAndValidateResults(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	runner.run = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		for _, argument := range args {
+			if strings.HasPrefix(argument, "--output=") {
+				path := strings.TrimPrefix(argument, "--output=")
+				if err := os.WriteFile(filepath.Join(path, "diagnose.tar.gz"), []byte("archive"), 0o600); err != nil {
+					return nil, err
+				}
+			}
+		}
+		return nil, nil
+	}
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	artifacts, err := driver.CollectCrashArtifacts(
+		context.Background(), device.ArtifactRequest{OutputDirectory: t.TempDir()})
+	if err != nil {
+		t.Fatalf("CollectCrashArtifacts() error = %v", err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Kind != "crash" ||
+		filepath.Base(artifacts[0].Path) != "diagnose.tar.gz" {
+		t.Fatalf("artifacts = %#v, want diagnose.tar.gz crash artifact", artifacts)
+	}
+	if len(runner.calls) != 1 || !slices.Contains(runner.calls[0], "-b") {
+		t.Fatalf("diagnose calls = %#v, want one background-safe invocation", runner.calls)
+	}
+}
+
+func TestCrashArtifactFailureRemovesThePartialDiagnoseDirectory(t *testing.T) {
+	t.Parallel()
+
+	outputDirectory := t.TempDir()
+	var diagnoseDirectory string
+	runner := &recordingRunner{run: func(ctx context.Context, _ string, args ...string) ([]byte, error) {
+		if _, ok := ctx.Deadline(); !ok {
+			return nil, errors.New("diagnose context has no deadline")
+		}
+		for _, argument := range args {
+			if strings.HasPrefix(argument, "--output=") {
+				diagnoseDirectory = strings.TrimPrefix(argument, "--output=")
+				if err := os.WriteFile(filepath.Join(diagnoseDirectory, "partial.tar.gz"), []byte("partial"), 0o600); err != nil {
+					return nil, err
+				}
+			}
+		}
+		return nil, errors.New("diagnose failed")
+	}}
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	if _, err := driver.CollectCrashArtifacts(
+		context.Background(), device.ArtifactRequest{OutputDirectory: outputDirectory}); err == nil {
+		t.Fatal("CollectCrashArtifacts swallowed diagnose failure")
+	}
+	if diagnoseDirectory == "" {
+		t.Fatal("diagnose was not invoked")
+	}
+	if _, err := os.Stat(diagnoseDirectory); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed diagnose directory still exists: %v", err)
+	}
+}
+
+func TestCrashArtifactsRejectEmptyResultsAndAppSpecificPretence(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriverWithSimctl(
+		t, func(http.ResponseWriter, *http.Request) {}, &recordingRunner{})
+	if _, err := driver.CollectCrashArtifacts(
+		context.Background(), device.ArtifactRequest{OutputDirectory: t.TempDir()}); err == nil {
+		t.Fatal("CollectCrashArtifacts accepted an empty diagnose result")
+	}
+	if _, err := driver.CollectCrashArtifacts(context.Background(), device.ArtifactRequest{
+		OutputDirectory: t.TempDir(), AppID: "com.example.a",
+	}); !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("app-filtered CollectCrashArtifacts error = %v, want ErrUnsupported", err)
 	}
 }
 

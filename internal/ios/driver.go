@@ -66,6 +66,10 @@ type Driver struct {
 	// It is a field so a test drives the start/stop lifecycle without a booted
 	// simulator; nil means spawn for real.
 	spawnRecorder func(ctx context.Context, args []string) (screenRecorder, error)
+	// logMu guards deviceLogs, the long-lived unified-log captures in flight.
+	logMu          sync.Mutex
+	deviceLogs     map[device.CaptureID]iosDeviceLog
+	spawnDeviceLog func(context.Context, []string, io.Writer) (deviceLogProcess, error)
 	// ClearAppState preserves the installed bundle across the uninstall. These
 	// seams keep the filesystem work deterministic in tests.
 	makeTemporaryDirectory func() (string, error)
@@ -131,8 +135,9 @@ func (driver *Driver) Open(ctx context.Context) error {
 // inspect after a failed run, and the session that booted it is the one that
 // should decide its fate. An operator-started runner is left alone for the
 // same reason.
-func (driver *Driver) Close(context.Context) error {
-	return errors.Join(driver.stopAllRecordings(), driver.stopRunnerProcess())
+func (driver *Driver) Close(ctx context.Context) error {
+	return errors.Join(
+		driver.stopAllRecordings(), driver.stopAllDeviceLogs(ctx), driver.stopRunnerProcess())
 }
 
 func (driver *Driver) DeviceInfo(ctx context.Context) (device.DeviceInfo, error) {
@@ -819,8 +824,8 @@ func (driver *Driver) Capabilities() device.Capabilities {
 			"androidChromeDevTools": false,
 			"screenRecording":       true,
 			"onDeviceQuery":         false,
-			"deviceLogCapture":      false,
-			"crashArtifacts":        false,
+			"deviceLogCapture":      true,
+			"crashArtifacts":        true,
 			"browserChoice":         false,
 			"backPress":             false,
 		},
@@ -879,22 +884,266 @@ func (driver *Driver) QueryOnDeviceElements(
 }
 
 func (driver *Driver) StartDeviceLogCapture(
-	context.Context,
-	device.DeviceLogRequest,
+	ctx context.Context,
+	request device.DeviceLogRequest,
 ) (device.CaptureID, error) {
-	return "", fmt.Errorf("%w: iOS log capture is not wired to a stop path", device.ErrUnsupported)
+	if strings.TrimSpace(request.AppID) != "" {
+		return "", fmt.Errorf(
+			"%w: iOS unified-log capture is device-wide and cannot filter bundle %q",
+			device.ErrUnsupported, request.AppID)
+	}
+	directory, err := prepareIOSArtifactDirectory(request.OutputDirectory)
+	if err != nil {
+		return "", err
+	}
+	output, err := os.CreateTemp(directory, "ios-device-log-*.ndjson")
+	if err != nil {
+		return "", fmt.Errorf("creating iOS device-log artifact: %w", err)
+	}
+	outputPath := output.Name()
+	spawn := driver.spawnDeviceLog
+	if spawn == nil {
+		spawn = realIOSDeviceLog
+	}
+	process, err := spawn(
+		ctx,
+		[]string{"simctl", "spawn", driver.udid, "log", "stream", "--style", "ndjson"},
+		output,
+	)
+	if err != nil {
+		_ = output.Close()
+		_ = os.Remove(outputPath)
+		return "", fmt.Errorf("starting iOS device-log capture: %w", err)
+	}
+	id := device.CaptureID(outputPath)
+	driver.logMu.Lock()
+	if driver.deviceLogs == nil {
+		driver.deviceLogs = map[device.CaptureID]iosDeviceLog{}
+	}
+	driver.deviceLogs[id] = iosDeviceLog{process: process, output: output, outputPath: outputPath}
+	driver.logMu.Unlock()
+	return id, nil
 }
 
 func (driver *Driver) StopDeviceLogCapture(
-	context.Context,
-	device.CaptureID,
+	ctx context.Context,
+	id device.CaptureID,
 ) ([]device.Artifact, error) {
-	return nil, fmt.Errorf("%w: iOS log capture is not wired to a stop path", device.ErrUnsupported)
+	driver.logMu.Lock()
+	capture, ok := driver.deviceLogs[id]
+	delete(driver.deviceLogs, id)
+	driver.logMu.Unlock()
+	if !ok {
+		return nil, fmt.Errorf("no iOS device-log capture is running for %q", id)
+	}
+	stopContext, cancel := context.WithTimeout(ctx, iosDiagnosticStopTimeout)
+	defer cancel()
+	if err := stopIOSDeviceLog(stopContext, capture); err != nil {
+		return nil, err
+	}
+	return []device.Artifact{{Kind: "log", Path: capture.outputPath}}, nil
 }
 
 func (driver *Driver) CollectCrashArtifacts(
-	context.Context,
-	device.ArtifactRequest,
+	ctx context.Context,
+	request device.ArtifactRequest,
 ) ([]device.Artifact, error) {
-	return nil, fmt.Errorf("%w: iOS crash artifact collection is not implemented", device.ErrUnsupported)
+	if strings.TrimSpace(request.AppID) != "" {
+		return nil, fmt.Errorf(
+			"%w: simctl diagnose is device-wide and cannot filter bundle %q",
+			device.ErrUnsupported, request.AppID)
+	}
+	directory, err := prepareIOSArtifactDirectory(request.OutputDirectory)
+	if err != nil {
+		return nil, err
+	}
+	diagnoseDirectory, err := os.MkdirTemp(directory, "ios-crash-")
+	if err != nil {
+		return nil, fmt.Errorf("creating iOS diagnose directory: %w", err)
+	}
+	keep := false
+	defer func() {
+		if !keep {
+			_ = os.RemoveAll(diagnoseDirectory)
+		}
+	}()
+	diagnoseContext, cancel := context.WithTimeout(ctx, iosDiagnoseOuterTimeout)
+	defer cancel()
+	if err := driver.simctl.Diagnose(
+		diagnoseContext, diagnoseDirectory, iosDiagnoseCommandTimeout); err != nil {
+		return nil, err
+	}
+	artifacts, err := collectIOSCrashArtifacts(diagnoseDirectory)
+	if err != nil {
+		return nil, err
+	}
+	keep = true
+	return artifacts, nil
+}
+
+const (
+	iosDiagnosticStopTimeout  = 10 * time.Second
+	iosDiagnoseCommandTimeout = 30 * time.Second
+	iosDiagnoseOuterTimeout   = 45 * time.Second
+)
+
+type deviceLogProcess interface {
+	stop(context.Context) error
+}
+
+type iosDeviceLog struct {
+	process    deviceLogProcess
+	output     *os.File
+	outputPath string
+}
+
+func prepareIOSArtifactDirectory(requested string) (string, error) {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return "", fmt.Errorf("iOS diagnostic output directory is empty")
+	}
+	absolute, err := filepath.Abs(requested)
+	if err != nil {
+		return "", fmt.Errorf("resolving iOS diagnostic output directory: %w", err)
+	}
+	if err := os.MkdirAll(absolute, 0o700); err != nil {
+		return "", fmt.Errorf("creating iOS diagnostic output directory: %w", err)
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", fmt.Errorf("resolving iOS diagnostic output directory symlinks: %w", err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("inspecting iOS diagnostic output directory: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("iOS diagnostic output path %q is not a directory", resolved)
+	}
+	return resolved, nil
+}
+
+func realIOSDeviceLog(
+	ctx context.Context,
+	args []string,
+	output io.Writer,
+) (deviceLogProcess, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, "xcrun", args...)
+	cmd.Stdout = output
+	cmd.Stderr = output
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	return &execDeviceLogProcess{cmd: cmd, done: done}, nil
+}
+
+type execDeviceLogProcess struct {
+	cmd  *exec.Cmd
+	done <-chan error
+}
+
+func (process *execDeviceLogProcess) stop(ctx context.Context) error {
+	select {
+	case err := <-process.done:
+		return err
+	default:
+	}
+	if err := process.cmd.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
+	select {
+	case err := <-process.done:
+		return allowInterruptExit(err)
+	case <-ctx.Done():
+		killErr := process.cmd.Process.Kill()
+		select {
+		case waitErr := <-process.done:
+			return errors.Join(ctx.Err(), killErr, waitErr)
+		case <-time.After(time.Second):
+			return errors.Join(ctx.Err(), killErr, errors.New("timed out waiting for killed iOS log child"))
+		}
+	}
+}
+
+func allowInterruptExit(err error) error {
+	if err == nil {
+		return nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok &&
+			status.Signaled() && status.Signal() == syscall.SIGINT {
+			return nil
+		}
+	}
+	return err
+}
+
+func stopIOSDeviceLog(ctx context.Context, capture iosDeviceLog) error {
+	stopErr := capture.process.stop(ctx)
+	closeErr := capture.output.Close()
+	artifactErr := validateIOSDiagnosticArtifact(capture.outputPath)
+	return errors.Join(stopErr, closeErr, artifactErr)
+}
+
+func (driver *Driver) stopAllDeviceLogs(ctx context.Context) error {
+	driver.logMu.Lock()
+	captures := driver.deviceLogs
+	driver.deviceLogs = nil
+	driver.logMu.Unlock()
+	ids := make([]string, 0, len(captures))
+	for id := range captures {
+		ids = append(ids, string(id))
+	}
+	slices.Sort(ids)
+	stopContext, cancel := context.WithTimeout(
+		context.WithoutCancel(ctx), iosDiagnosticStopTimeout)
+	defer cancel()
+	errs := make([]error, 0, len(ids))
+	for _, rawID := range ids {
+		if err := stopIOSDeviceLog(stopContext, captures[device.CaptureID(rawID)]); err != nil {
+			errs = append(errs, fmt.Errorf("device-log capture %q: %w", rawID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func validateIOSDiagnosticArtifact(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return fmt.Errorf("validating iOS diagnostic artifact %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return fmt.Errorf("iOS diagnostic artifact %q is not a non-empty regular file", path)
+	}
+	return nil
+}
+
+func collectIOSCrashArtifacts(directory string) ([]device.Artifact, error) {
+	var artifacts []device.Artifact
+	err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if err := validateIOSDiagnosticArtifact(path); err != nil {
+			return err
+		}
+		artifacts = append(artifacts, device.Artifact{Kind: "crash", Path: path})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("collecting iOS diagnose artifacts: %w", err)
+	}
+	if len(artifacts) == 0 {
+		return nil, fmt.Errorf("simctl diagnose produced no crash artifacts in %q", directory)
+	}
+	return artifacts, nil
 }

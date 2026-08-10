@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The HTTP runner drives on-screen interaction. Device lifecycle operations —
@@ -84,6 +85,15 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 			name: "install",
 			call: func(ctx context.Context, simctl *Simctl) error { return simctl.Install(ctx, "/tmp/Probe.app") },
 			want: []string{"simctl", "install", udid, "/tmp/Probe.app"},
+		},
+		{
+			name: "diagnose",
+			call: func(ctx context.Context, simctl *Simctl) error {
+				return simctl.Diagnose(ctx, "/tmp/diagnose", 30*time.Second)
+			},
+			want: []string{
+				"simctl", "diagnose", "-b", "--timeout=30", "--output=/tmp/diagnose", "--udid=" + udid,
+			},
 		},
 		{
 			name: "resetKeychain",
@@ -238,10 +248,14 @@ type recordingRunner struct {
 	calls  [][]string
 	output []byte
 	err    error
+	run    func(context.Context, string, ...string) ([]byte, error)
 }
 
-func (runner *recordingRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+func (runner *recordingRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	runner.calls = append(runner.calls, append([]string{name}, args...))
+	if runner.run != nil {
+		return runner.run(ctx, name, args...)
+	}
 	return runner.output, runner.err
 }
 

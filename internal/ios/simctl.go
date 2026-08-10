@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // The simctl half of the iOS host side. specs/02-device-drivers.md line 65
@@ -148,6 +149,22 @@ func (simctl *Simctl) AppContainer(ctx context.Context, bundleID string) (string
 
 func (simctl *Simctl) Install(ctx context.Context, appPath string) error {
 	return simctl.run(ctx, []string{"install", simctl.udid, appPath}, true)
+}
+
+// Diagnose collects a device-scoped archive without opening Finder. Both the
+// host context and simctl's own timeout bound collection.
+func (simctl *Simctl) Diagnose(ctx context.Context, outputDirectory string, timeout time.Duration) error {
+	seconds := int64((timeout + time.Second - 1) / time.Second)
+	if seconds <= 0 {
+		return fmt.Errorf("simctl diagnose timeout must be positive")
+	}
+	return simctl.run(ctx, []string{
+		"diagnose",
+		"-b",
+		"--timeout=" + strconv.FormatInt(seconds, 10),
+		"--output=" + outputDirectory,
+		"--udid=" + simctl.udid,
+	}, true)
 }
 
 // ResetKeychain clears the whole simulator keychain, which is what
