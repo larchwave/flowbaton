@@ -1,69 +1,85 @@
 # FlowBaton
 
-FlowBaton is a pre-alpha mobile UI automation toolkit. It provides a Go CLI,
-an Android device agent, and an iOS Simulator runner under the Apache-2.0
-license.
+**Mobile UI tests that fail only when your app breaks.**
 
-The repository currently supports local development and device testing. A
-public v1 release has not been published.
+One Go binary drives Android devices and iOS Simulators from plain YAML flows.
+No server process, no JVM, no device cloud required.
 
-## Requirements
+[![CI](https://github.com/larchwave/flowbaton/actions/workflows/ci.yml/badge.svg)](https://github.com/larchwave/flowbaton/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/larchwave/flowbaton)](https://github.com/larchwave/flowbaton/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/larchwave/flowbaton)](https://goreportcard.com/report/github.com/larchwave/flowbaton)
+[![License](https://img.shields.io/github/license/larchwave/flowbaton)](LICENSE)
 
-- Go 1.25 or newer
-- Android SDK and Java 17 for Android work
-- Xcode with an installed iOS Simulator runtime for iOS work
-- XcodeGen 2.44.1 for the iOS Xcode project
-
-## Build and test
-
-```sh
-go test ./...
-go vet ./...
-go build -o ./flowbaton ./cmd/flowbaton
-./flowbaton --version
+```yaml
+appId: com.example.app
+---
+- launchApp
+- tapOn: "Log in"
+- inputText: "demo@example.com"
+- tapOn: "Continue"
+- assertVisible: "Welcome back"
 ```
 
-Android checks:
+## Install
 
 ```sh
-cd drivers/android
-./gradlew --no-daemon --dependency-verification strict \
-  :core:test :agent:lintDebug :agent:assembleDebug :agent:assembleDebugAndroidTest
+brew install larchwave/flowbaton/flowbaton
 ```
 
-iOS checks:
+Or with Go:
 
 ```sh
-xcodegen generate --spec drivers/ios/project.yml --project drivers/ios
-swift test --package-path drivers/ios
-xcrun swift-format lint --strict --recursive \
-  drivers/ios/Sources drivers/ios/Tests drivers/ios/UITests
-xcodebuild -project drivers/ios/FlowBatonIOSRunner.xcodeproj \
-  -scheme FlowBatonIOSRunnerUITests \
-  -destination 'generic/platform=iOS Simulator' \
-  build-for-testing
+go install github.com/larchwave/flowbaton/cmd/flowbaton@latest
 ```
 
-## CLI
-
-Inspect a flow without starting a device:
+Archives for macOS, Linux, and Windows are on the
+[releases page](https://github.com/larchwave/flowbaton/releases). Every archive
+carries SLSA provenance:
 
 ```sh
-printf 'appId: com.example.app\n---\n- tapOn: "Continue"\n' | \
-  go run ./cmd/flowbaton check-syntax -
+gh attestation verify flowbaton_*_darwin_arm64.tar.gz --repo larchwave/flowbaton
+```
+
+## Quick start
+
+Check a flow without starting a device:
+
+```sh
+printf 'appId: com.example.app\n---\n- tapOn: "Continue"\n' | flowbaton check-syntax -
 ```
 
 Prepare a platform driver and run a flow:
 
 ```sh
-go run ./cmd/flowbaton driver-setup -p android
-go run ./cmd/flowbaton test -p android --device emulator-5554 path/to/flow.yaml
+flowbaton driver-setup -p android
+flowbaton test -p android --device emulator-5554 path/to/flow.yaml
 ```
 
-The device example requires a configured Android SDK, a running emulator, and a
-flow file for the application under test.
+The Android run needs a configured Android SDK and a running emulator or
+connected device. For iOS Simulators use `-p ios` with Xcode and an installed
+Simulator runtime. Run `flowbaton` with no arguments to print the command
+summary.
 
-Use `go run ./cmd/flowbaton` to print the current command summary.
+## Why FlowBaton
+
+- **One static binary.** The Go host and the on-device drivers ship together.
+  Nothing else to install, no background server to babysit.
+- **Deterministic on purpose.** The host and the drivers speak frozen,
+  machine-readable contracts (`contracts/`), and selector semantics are pinned
+  by tests. An upgrade will not quietly change what `tapOn` matches.
+- **Preflight before mutation.** An unsupported capability fails the run
+  before FlowBaton touches your device. No half-configured emulators.
+- **AI is optional and yours.** Bring your own key for AI-assisted commands.
+  Without a key those commands fail closed instead of silently degrading. No
+  telemetry either way.
+- **Auditable releases.** Archives are built by a pinned least-privilege CI
+  workflow and ship SLSA provenance you can verify yourself.
+
+## Status
+
+Pre-alpha. Android devices and emulators plus iOS Simulators work today.
+Command surface and contracts are versioned; expect breaking changes between
+pre-1.0 releases.
 
 ## Project documents
 
@@ -75,3 +91,13 @@ Use `go run ./cmd/flowbaton` to print the current command summary.
 
 The machine-readable API contracts live in `contracts/`. Product behavior is
 specified in `specs/`.
+
+## Community
+
+- Questions and ideas: [GitHub Discussions](https://github.com/larchwave/flowbaton/discussions)
+- Bugs: [issues](https://github.com/larchwave/flowbaton/issues)
+- Want to help? Read [CONTRIBUTING.md](CONTRIBUTING.md) — it also holds the
+  build-from-source and platform check commands.
+
+If FlowBaton is useful to you, star the repository — it helps other people
+find it.

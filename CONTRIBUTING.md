@@ -12,6 +12,13 @@ drivers, tests, and documentation.
 - Add no runtime dependency without the license and notice updates required by
   `docs/dependency-policy.md`.
 
+## Build requirements
+
+- Go 1.25 or newer
+- Android SDK and Java 17 for Android work
+- Xcode with an installed iOS Simulator runtime for iOS work
+- XcodeGen 2.44.1 for the iOS Xcode project
+
 ## Local checks
 
 Run the checks that cover your change. Go changes normally require:
@@ -23,10 +30,26 @@ gofmt -l .
 git diff --check
 ```
 
-Android changes also require the Gradle checks in `README.md`. iOS changes also
-require XcodeGen 2.44.1, the Swift package tests, strict formatting of Sources,
-Tests, and UITests, and the generic Simulator build-for-testing command in
-`README.md`.
+Android changes also require:
+
+```sh
+cd drivers/android
+./gradlew --no-daemon --dependency-verification strict \
+  :core:test :agent:lintDebug :agent:assembleDebug :agent:assembleDebugAndroidTest
+```
+
+iOS changes also require:
+
+```sh
+xcodegen generate --spec drivers/ios/project.yml --project drivers/ios
+swift test --package-path drivers/ios
+xcrun swift-format lint --strict --recursive \
+  drivers/ios/Sources drivers/ios/Tests drivers/ios/UITests
+xcodebuild -project drivers/ios/FlowBatonIOSRunner.xcodeproj \
+  -scheme FlowBatonIOSRunnerUITests \
+  -destination 'generic/platform=iOS Simulator' \
+  build-for-testing
+```
 
 ## Commit messages
 
