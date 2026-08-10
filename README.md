@@ -10,6 +10,12 @@ No server process, no JVM, no device cloud required.
 [![Go Report Card](https://goreportcard.com/badge/github.com/larchwave/flowbaton)](https://goreportcard.com/report/github.com/larchwave/flowbaton)
 [![License](https://img.shields.io/github/license/larchwave/flowbaton)](LICENSE)
 
+<p align="center">
+  <img src="docs/assets/demo.gif" width="280" alt="A FlowBaton flow driving the Android Settings app on an emulator">
+</p>
+<p align="center"><sub>Captured with <code>flowbaton record</code> — the same
+command you get out of the box.</sub></p>
+
 ```yaml
 appId: com.example.app
 ---
