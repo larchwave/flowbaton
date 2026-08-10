@@ -15,7 +15,7 @@ import (
 // hierarchy. These tests drive its handlers with httptest, injecting a fake
 // hierarchy source, so no device is needed.
 
-func viewerFetching(fetch func(ctx context.Context, platform, udid string, _ []string) (device.TreeNode, error)) http.Handler {
+func viewerFetching(fetch func(ctx context.Context, platform, udid string, _ []string, _ string) (device.TreeNode, error)) http.Handler {
 	return viewerHandler(HierarchyRunner{Fetch: fetch})
 }
 
@@ -23,7 +23,7 @@ func TestViewerHierarchyEndpointReturnsTheTree(t *testing.T) {
 	t.Parallel()
 
 	var gotPlatform, gotUDID string
-	handler := viewerFetching(func(_ context.Context, platform, udid string, _ []string) (device.TreeNode, error) {
+	handler := viewerFetching(func(_ context.Context, platform, udid string, _ []string, _ string) (device.TreeNode, error) {
 		gotPlatform, gotUDID = platform, udid
 		return device.TreeNode{Attributes: map[string]string{"text": "Login"}}, nil
 	})
@@ -49,7 +49,7 @@ func TestViewerHierarchyEndpointRequiresAKnownPlatform(t *testing.T) {
 	t.Parallel()
 
 	called := false
-	handler := viewerFetching(func(context.Context, string, string, []string) (device.TreeNode, error) {
+	handler := viewerFetching(func(context.Context, string, string, []string, string) (device.TreeNode, error) {
 		called = true
 		return device.TreeNode{}, nil
 	})
@@ -69,7 +69,7 @@ func TestViewerHierarchyEndpointRequiresAKnownPlatform(t *testing.T) {
 func TestViewerHierarchyEndpointSurfacesAFetchError(t *testing.T) {
 	t.Parallel()
 
-	handler := viewerFetching(func(context.Context, string, string, []string) (device.TreeNode, error) {
+	handler := viewerFetching(func(context.Context, string, string, []string, string) (device.TreeNode, error) {
 		return device.TreeNode{}, errors.New("runner not reachable")
 	})
 
@@ -87,7 +87,7 @@ func TestViewerHierarchyEndpointSurfacesAFetchError(t *testing.T) {
 func TestViewerPageRenders(t *testing.T) {
 	t.Parallel()
 
-	handler := viewerFetching(func(context.Context, string, string, []string) (device.TreeNode, error) {
+	handler := viewerFetching(func(context.Context, string, string, []string, string) (device.TreeNode, error) {
 		return device.TreeNode{}, nil
 	})
 
@@ -105,7 +105,7 @@ func TestViewerPageRenders(t *testing.T) {
 func TestViewerUnknownPathIs404(t *testing.T) {
 	t.Parallel()
 
-	handler := viewerFetching(func(context.Context, string, string, []string) (device.TreeNode, error) {
+	handler := viewerFetching(func(context.Context, string, string, []string, string) (device.TreeNode, error) {
 		return device.TreeNode{}, nil
 	})
 
@@ -121,7 +121,7 @@ func TestStartViewerBindsAndServes(t *testing.T) {
 	t.Parallel()
 
 	addr, stop, err := startViewer(0, HierarchyRunner{
-		Fetch: func(context.Context, string, string, []string) (device.TreeNode, error) {
+		Fetch: func(context.Context, string, string, []string, string) (device.TreeNode, error) {
 			return device.TreeNode{Attributes: map[string]string{"text": "Login"}}, nil
 		},
 	})

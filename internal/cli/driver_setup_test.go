@@ -12,14 +12,13 @@ import (
 
 type driverSetupCall struct {
 	platform string
-	teamID   string
 }
 
 func driverSetupRecording(err error) (*[]driverSetupCall, DriverSetupRunner) {
 	var calls []driverSetupCall
 	runner := DriverSetupRunner{
-		Build: func(_ context.Context, platform, teamID string) error {
-			calls = append(calls, driverSetupCall{platform: platform, teamID: teamID})
+		Build: func(_ context.Context, platform string) error {
+			calls = append(calls, driverSetupCall{platform: platform})
 			return err
 		},
 	}
@@ -47,7 +46,7 @@ func TestDriverSetupBuildsIOSByDefault(t *testing.T) {
 	}
 }
 
-func TestDriverSetupRefusesTheUnsupportedAppleTeamID(t *testing.T) {
+func TestDriverSetupRefusesRemovedOptions(t *testing.T) {
 	t.Parallel()
 
 	calls, runner := driverSetupRecording(nil)
@@ -58,8 +57,8 @@ func TestDriverSetupRefusesTheUnsupportedAppleTeamID(t *testing.T) {
 	if len(*calls) != 0 {
 		t.Fatalf("build calls = %#v, want none", *calls)
 	}
-	if !strings.Contains(stderr, "signed iOS Simulator") {
-		t.Fatalf("stderr = %q, want signed-driver explanation", stderr)
+	if !strings.Contains(stderr, "unexpected argument") || !strings.Contains(stderr, "--apple-team-id") {
+		t.Fatalf("stderr = %q, want removed-option usage error", stderr)
 	}
 }
 
@@ -96,24 +95,6 @@ func TestDriverSetupNamesTheIOSPlatformItBuilt(t *testing.T) {
 	}
 }
 
-// --apple-team-id is an iOS signing detail; accepting it for android would
-// promise a signing step there is none of.
-func TestDriverSetupRefusesAnAppleTeamIDForAndroid(t *testing.T) {
-	t.Parallel()
-
-	calls, runner := driverSetupRecording(nil)
-	_, stderr, code := runDriverSetup(t, runner, "-p", "android", "--apple-team-id", "ABCDE12345")
-	if code != ExitInvalid {
-		t.Fatalf("exit = %d, want %d", code, ExitInvalid)
-	}
-	if len(*calls) != 0 {
-		t.Fatalf("built despite the bad flag combination: %#v", *calls)
-	}
-	if !strings.Contains(stderr, "--apple-team-id") {
-		t.Fatalf("the refusal did not name the flag: %q", stderr)
-	}
-}
-
 func TestDriverSetupRefusesAnUnknownPlatform(t *testing.T) {
 	t.Parallel()
 
@@ -130,7 +111,7 @@ func TestDriverSetupReportsABuildFailure(t *testing.T) {
 	t.Parallel()
 
 	_, stderr, code := runDriverSetup(t,
-		DriverSetupRunner{Build: func(context.Context, string, string) error {
+		DriverSetupRunner{Build: func(context.Context, string) error {
 			return errors.New("xcodebuild: scheme not found")
 		}})
 	if code != ExitFailure {

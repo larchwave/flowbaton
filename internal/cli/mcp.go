@@ -135,7 +135,8 @@ func (runner MCPRunner) server() *mcp.Server {
 		Name:        "hierarchy",
 		Description: "Dump the current view hierarchy of a device as JSON. Requires platform (ios|android) and a device udid; on iOS pass appId for the app in front, or the springboard's tree comes back instead.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in deviceToolInput) (*mcp.CallToolResult, any, error) {
-		tree, err := runner.Hierarchy.fetch()(ctx, in.Platform, in.UDID, appIDFilter(in.AppID))
+		tree, err := runner.Hierarchy.fetch()(
+			ctx, in.Platform, in.UDID, appIDFilter(in.AppID), "")
 		if err != nil {
 			return errorResult(err), nil, nil
 		}

@@ -88,7 +88,7 @@ func TestMCPHierarchyToolReturnsTheTree(t *testing.T) {
 	runner := MCPRunner{
 		Checker: stubChecker{},
 		Hierarchy: HierarchyRunner{
-			Fetch: func(_ context.Context, platform, udid string, _ []string) (device.TreeNode, error) {
+			Fetch: func(_ context.Context, platform, udid string, _ []string, _ string) (device.TreeNode, error) {
 				return device.TreeNode{Attributes: map[string]string{"text": "Login"}}, nil
 			},
 		},
@@ -109,7 +109,7 @@ func TestMCPHierarchyToolSurfacesAFetchError(t *testing.T) {
 	runner := MCPRunner{
 		Checker: stubChecker{},
 		Hierarchy: HierarchyRunner{
-			Fetch: func(_ context.Context, _, _ string, _ []string) (device.TreeNode, error) {
+			Fetch: func(_ context.Context, _, _ string, _ []string, _ string) (device.TreeNode, error) {
 				return device.TreeNode{}, errors.New("runner not reachable")
 			},
 		},

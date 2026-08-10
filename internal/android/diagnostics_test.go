@@ -91,8 +91,12 @@ func TestDeviceLogCaptureUsesSafeUniqueIDsAndExactArgv(t *testing.T) {
 	if artifacts[0].Metadata["serial"] != testSerial {
 		t.Fatalf("artifact metadata = %#v, want serial %q", artifacts[0].Metadata, testSerial)
 	}
-	if filepath.Dir(artifacts[0].Path) != directory {
-		t.Fatalf("artifact path = %q, want it inside %q", artifacts[0].Path, directory)
+	resolvedDirectory, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(artifacts[0].Path) != resolvedDirectory {
+		t.Fatalf("artifact path = %q, want it inside %q", artifacts[0].Path, resolvedDirectory)
 	}
 	if _, err := driver.StopDeviceLogCapture(context.Background(), id); err == nil {
 		t.Fatal("a duplicate stop accepted an already-finalized capture id")
@@ -291,6 +295,46 @@ func TestCopyBoundedDeviceLogStopsAtTheByteLimit(t *testing.T) {
 	}
 }
 
+func TestADBDeviceLogStopWaitsForTheWriterAfterItsContextExpires(t *testing.T) {
+	t.Parallel()
+
+	output, err := os.CreateTemp(t.TempDir(), "device-log-*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = writer.Close() })
+	done := make(chan error, 1)
+	copyDone := make(chan error, 1)
+	process := &adbDeviceLogProcess{
+		cancel: func() {}, done: done, copyDone: copyDone, output: output, reader: reader,
+	}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		done <- nil
+	}()
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		_, writeErr := output.WriteString("late but complete\n")
+		copyDone <- writeErr
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+	if err := process.stop(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stop error = %v, want deadline plus completed writer cleanup", err)
+	}
+	contents, err := os.ReadFile(output.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "late but complete\n" {
+		t.Fatalf("artifact = %q, writer was not drained before close", contents)
+	}
+}
+
 func TestCrashArtifactsRunBoundedBugreportAndValidateOutput(t *testing.T) {
 	t.Parallel()
 
@@ -304,18 +348,34 @@ func TestCrashArtifactsRunBoundedBugreportAndValidateOutput(t *testing.T) {
 	driver := NewDriver(testSerial, 7001, runner, nil)
 	artifacts, err := driver.CollectCrashArtifacts(context.Background(), device.ArtifactRequest{
 		OutputDirectory: directory,
-		AppID:           "com.example.app",
 	})
 	if err != nil {
 		t.Fatalf("CollectCrashArtifacts() error = %v", err)
 	}
 	if len(artifacts) != 1 || artifacts[0].Kind != "crash-artifact" ||
-		artifacts[0].Metadata["app_id"] != "com.example.app" {
+		artifacts[0].Metadata["serial"] != testSerial {
 		t.Fatalf("artifacts = %#v", artifacts)
 	}
 	want := []string{"-s", testSerial, "bugreport", artifacts[0].Path}
 	if got := runner.calls[0][1:]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("bugreport argv = %v, want %v", got, want)
+	}
+}
+
+func TestCrashArtifactsRejectAppFilteringBeforeADB(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	driver := NewDriver(testSerial, 7001, runner, nil)
+	_, err := driver.CollectCrashArtifacts(context.Background(), device.ArtifactRequest{
+		OutputDirectory: t.TempDir(),
+		AppID:           "com.example.app",
+	})
+	if !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("app-filtered crash collection error = %v, want ErrUnsupported", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("app-filtered crash collection reached adb: %v", runner.calls)
 	}
 }
 
@@ -433,5 +493,22 @@ func TestDiagnosticDirectoryMustBeARealDirectory(t *testing.T) {
 		OutputDirectory: link,
 	}); err == nil {
 		t.Fatal("CollectCrashArtifacts accepted a symlink output directory")
+	}
+}
+
+func TestDiagnosticDirectoryCreationIsPrivate(t *testing.T) {
+	t.Parallel()
+
+	directory := filepath.Join(t.TempDir(), "private")
+	resolved, err := prepareDiagnosticDirectory(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("diagnostic directory mode = %o, want no group/other access", info.Mode().Perm())
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,10 +23,10 @@ import (
 // known tree without a device. The default opens the real driver, snapshots,
 // and closes it.
 type HierarchyRunner struct {
-	Fetch func(ctx context.Context, platform, udid string, appIDs []string) (device.TreeNode, error)
+	Fetch func(ctx context.Context, platform, udid string, appIDs []string, target string) (device.TreeNode, error)
 }
 
-func (runner HierarchyRunner) fetch() func(context.Context, string, string, []string) (device.TreeNode, error) {
+func (runner HierarchyRunner) fetch() func(context.Context, string, string, []string, string) (device.TreeNode, error) {
 	if runner.Fetch != nil {
 		return runner.Fetch
 	}
@@ -37,8 +38,8 @@ func (runner HierarchyRunner) fetch() func(context.Context, string, string, []st
 // left empty — with no flow there is no declared app; Android returns the full
 // tree and iOS the foreground app's.
 func realHierarchyFetch(
-	ctx context.Context, platform, udid string, appIDs []string,
-) (device.TreeNode, error) {
+	ctx context.Context, platform, udid string, appIDs []string, target string,
+) (tree device.TreeNode, resultErr error) {
 	port, err := diagnosticPort(platform, os.Environ())
 	if err != nil {
 		return device.TreeNode{}, err
@@ -50,7 +51,18 @@ func realHierarchyFetch(
 	if err := driver.Open(ctx); err != nil {
 		return device.TreeNode{}, err
 	}
-	defer func() { _ = driver.Close(ctx) }()
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), deviceSessionCleanupTimeout)
+		defer cancel()
+		resultErr = errors.Join(resultErr, driver.Close(cleanupCtx))
+	}()
+	if target == "devtools" {
+		if err := driver.SetAndroidChromeDevToolsEnabled(
+			ctx, device.ChromeDevToolsRequest{Enabled: true}); err != nil {
+			return device.TreeNode{}, err
+		}
+	}
 	return driver.ContentDescriptor(ctx, device.ContentDescriptorRequest{AppIDs: appIDs})
 }
 
@@ -66,7 +78,8 @@ func (runner HierarchyRunner) Run(ctx context.Context, args []string, stdout, st
 			"hierarchy: no app named, so this is the springboard's tree, not an app's; "+
 				"pass --app-id <bundle-id> for the app in front")
 	}
-	tree, err := runner.fetch()(ctx, options.platform, options.udid, options.appIDs())
+	tree, err := runner.fetch()(
+		ctx, options.platform, options.udid, options.appIDs(), options.target)
 	if err != nil {
 		fmt.Fprintf(stderr, "hierarchy: %v\n", err)
 		return ExitFailure
@@ -92,6 +105,7 @@ type hierarchyArgs struct {
 	platform string
 	udid     string
 	appID    string
+	target   string
 	csv      bool
 }
 
@@ -142,11 +156,14 @@ func parseHierarchyArgs(args []string, stderr io.Writer) (hierarchyArgs, int) {
 			parsed.appID = strings.TrimPrefix(arg, "--app-id=")
 		case arg == "--csv" || arg == "--compact":
 			parsed.csv = true
-		case arg == "--target" || strings.HasPrefix(arg, "--target="):
-			// --target=devtools (Android WebView) is spec'd but not built.
-			// Refuse rather than dump the native tree under a WebView flag.
-			fmt.Fprintln(stderr, "hierarchy: --target (devtools WebView) is not supported yet")
-			return parsed, ExitInvalid
+		case arg == "--target":
+			value, ok := needsValue()
+			if !ok {
+				return parsed, ExitInvalid
+			}
+			parsed.target = value
+		case strings.HasPrefix(arg, "--target="):
+			parsed.target = strings.TrimPrefix(arg, "--target=")
 		default:
 			fmt.Fprintf(stderr, "hierarchy: unexpected argument %q\n", arg)
 			return parsed, ExitInvalid
@@ -160,6 +177,14 @@ func parseHierarchyArgs(args []string, stderr io.Writer) (hierarchyArgs, int) {
 		return parsed, ExitInvalid
 	default:
 		fmt.Fprintf(stderr, "hierarchy: unknown platform %q (want ios or android)\n", parsed.platform)
+		return parsed, ExitInvalid
+	}
+	if parsed.target != "" && parsed.target != "devtools" {
+		fmt.Fprintf(stderr, "hierarchy: unknown target %q (want devtools)\n", parsed.target)
+		return parsed, ExitInvalid
+	}
+	if parsed.target == "devtools" && parsed.platform != "android" {
+		fmt.Fprintln(stderr, "hierarchy: target devtools is Android-only")
 		return parsed, ExitInvalid
 	}
 	return parsed, ExitOK

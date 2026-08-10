@@ -207,7 +207,7 @@ func TestReinstallDriverIsNegatableAndDefaultsToTrue(t *testing.T) {
 	}
 }
 
-func TestTestCommandRejectsDriverSetupOnlyAppleTeamID(t *testing.T) {
+func TestTestCommandRejectsRemovedAppleTeamID(t *testing.T) {
 	t.Parallel()
 
 	_, err := ParseTestOptions([]string{"--apple-team-id", "ABCDE12345", "one.yaml"})
@@ -217,8 +217,8 @@ func TestTestCommandRejectsDriverSetupOnlyAppleTeamID(t *testing.T) {
 	if code := ExitCodeFor(err); code != ExitInvalid {
 		t.Fatalf("exit code = %d, want usage error %d", code, ExitInvalid)
 	}
-	if !strings.Contains(err.Error(), "driver-setup") {
-		t.Fatalf("error = %q, want driver-setup guidance", err)
+	if !strings.Contains(err.Error(), "unknown option") {
+		t.Fatalf("error = %q, want unknown-option guidance", err)
 	}
 }
 

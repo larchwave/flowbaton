@@ -149,11 +149,6 @@ func ParseTestOptions(args []string) (TestOptions, error) {
 		if err != nil {
 			return TestOptions{}, err
 		}
-		if argument == "--apple-team-id" {
-			return TestOptions{}, usageErrorf(
-				"option --apple-team-id belongs to flowbaton driver-setup, not flowbaton test")
-		}
-
 		if target, ok := values[argument]; ok {
 			*target = value
 			index += consumed

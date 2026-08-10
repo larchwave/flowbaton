@@ -28,7 +28,8 @@ func viewerHandler(hier HierarchyRunner) http.Handler {
 			http.Error(w, "platform query parameter is required: ios or android", http.StatusBadRequest)
 			return
 		}
-		tree, err := hier.fetch()(r.Context(), platform, udid, appIDFilter(r.URL.Query().Get("appId")))
+		tree, err := hier.fetch()(
+			r.Context(), platform, udid, appIDFilter(r.URL.Query().Get("appId")), "")
 		if err != nil {
 			// The device is outside the viewer, so a fetch failure is a bad
 			// gateway, not the client's fault.

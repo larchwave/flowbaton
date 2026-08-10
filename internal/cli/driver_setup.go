@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -15,20 +14,17 @@ import (
 // DriverSetupRunner builds the driver. The build is a field so a test can
 // record the invocation without running xcodebuild.
 type DriverSetupRunner struct {
-	Build func(ctx context.Context, platform, teamID string) error
+	Build func(ctx context.Context, platform string) error
 }
 
-func (runner DriverSetupRunner) build() func(context.Context, string, string) error {
+func (runner DriverSetupRunner) build() func(context.Context, string) error {
 	if runner.Build != nil {
 		return runner.Build
 	}
 	return realDriverBuild
 }
 
-func realDriverBuild(ctx context.Context, platform, teamID string) error {
-	if teamID != "" {
-		return errors.New("--apple-team-id is not supported by the signed iOS Simulator driver")
-	}
+func realDriverBuild(ctx context.Context, platform string) error {
 	_, err := acquireDriverAsset(ctx, platform)
 	return err
 }
@@ -45,11 +41,11 @@ func tailOf(output []byte) string {
 }
 
 func (runner DriverSetupRunner) Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	platform, teamID, code := parseDriverSetupArgs(args, stderr)
+	platform, code := parseDriverSetupArgs(args, stderr)
 	if code != ExitOK {
 		return code
 	}
-	if err := runner.build()(ctx, platform, teamID); err != nil {
+	if err := runner.build()(ctx, platform); err != nil {
 		fmt.Fprintf(stderr, "driver-setup: %v\n", err)
 		return ExitFailure
 	}
@@ -57,7 +53,7 @@ func (runner DriverSetupRunner) Run(ctx context.Context, args []string, stdout, 
 	return ExitOK
 }
 
-func parseDriverSetupArgs(args []string, stderr io.Writer) (platform, teamID string, code int) {
+func parseDriverSetupArgs(args []string, stderr io.Writer) (platform string, code int) {
 	platform = "ios"
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -73,41 +69,22 @@ func parseDriverSetupArgs(args []string, stderr io.Writer) (platform, teamID str
 		case arg == "-p" || arg == "--platform":
 			value, ok := needsValue()
 			if !ok {
-				return "", "", ExitInvalid
+				return "", ExitInvalid
 			}
 			platform = value
 		case strings.HasPrefix(arg, "--platform="):
 			platform = strings.TrimPrefix(arg, "--platform=")
-		case arg == "--apple-team-id":
-			value, ok := needsValue()
-			if !ok {
-				return "", "", ExitInvalid
-			}
-			teamID = value
-		case strings.HasPrefix(arg, "--apple-team-id="):
-			teamID = strings.TrimPrefix(arg, "--apple-team-id=")
 		default:
 			fmt.Fprintf(stderr, "driver-setup: unexpected argument %q\n", arg)
-			return "", "", ExitInvalid
+			return "", ExitInvalid
 		}
 	}
 
 	switch platform {
-	case "ios":
-		if teamID != "" {
-			fmt.Fprintln(stderr, "driver-setup: --apple-team-id is not supported by the signed iOS Simulator driver")
-			return "", "", ExitInvalid
-		}
-	case "android":
-		// Signing is an iOS detail; accepting the flag here would promise a
-		// signing step the Gradle build does not have.
-		if teamID != "" {
-			fmt.Fprintln(stderr, "driver-setup: --apple-team-id is an iOS signing detail and does not apply to android")
-			return "", "", ExitInvalid
-		}
+	case "ios", "android":
 	default:
 		fmt.Fprintf(stderr, "driver-setup: unknown platform %q (supported: ios, android)\n", platform)
-		return "", "", ExitInvalid
+		return "", ExitInvalid
 	}
-	return platform, teamID, ExitOK
+	return platform, ExitOK
 }

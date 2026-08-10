@@ -18,7 +18,7 @@ import (
 
 func hierarchyRunnerReturning(node device.TreeNode, err error) HierarchyRunner {
 	return HierarchyRunner{
-		Fetch: func(_ context.Context, _ string, _ string, _ []string) (device.TreeNode, error) {
+		Fetch: func(_ context.Context, _ string, _ string, _ []string, _ string) (device.TreeNode, error) {
 			return node, err
 		},
 	}
@@ -125,22 +125,28 @@ func TestHierarchyReportsAFetchFailure(t *testing.T) {
 	}
 }
 
-func TestHierarchyRefusesAnUnsupportedTarget(t *testing.T) {
+func TestHierarchyPassesTheDevToolsTargetToAndroidFetch(t *testing.T) {
 	t.Parallel()
 
-	// --target=devtools (Android WebView) is spec'd but not built. Refusing is
-	// honest; silently dumping the native tree instead would be a wrong answer
-	// dressed as a right one.
-	_, stderr, code := runHierarchy(t, hierarchyRunnerReturning(sampleTree(), nil),
+	var gotTarget string
+	runner := HierarchyRunner{Fetch: func(
+		_ context.Context, _, _ string, _ []string, target string,
+	) (device.TreeNode, error) {
+		gotTarget = target
+		return sampleTree(), nil
+	}}
+	_, stderr, code := runHierarchy(t, runner,
 		"-p", "android", "--target", "devtools")
-	if code != ExitInvalid {
-		t.Fatalf("exit = %d, want %d", code, ExitInvalid)
+	if code != ExitOK {
+		t.Fatalf("exit = %d, want %d; stderr: %s", code, ExitOK, stderr)
 	}
-	// The message must say the feature is known-but-unbuilt, not "unknown flag":
-	// an operator who reads "not supported yet" learns the WebView dump exists
-	// and is coming, which "unexpected argument" would not tell them.
-	if !strings.Contains(stderr, "devtools") || !strings.Contains(stderr, "not supported") {
-		t.Fatalf("the refusal did not name the unsupported target clearly: %q", stderr)
+	if gotTarget != "devtools" {
+		t.Fatalf("target = %q, want devtools", gotTarget)
+	}
+
+	_, stderr, code = runHierarchy(t, runner, "-p", "ios", "--target=devtools")
+	if code != ExitInvalid || !strings.Contains(stderr, "Android-only") {
+		t.Fatalf("iOS devtools exit/stderr = %d/%q, want Android-only usage error", code, stderr)
 	}
 }
 
@@ -172,7 +178,7 @@ func TestHierarchyCanBeAskedAboutOneApp(t *testing.T) {
 
 	var gotAppIDs []string
 	runner := HierarchyRunner{
-		Fetch: func(_ context.Context, _, _ string, appIDs []string) (device.TreeNode, error) {
+		Fetch: func(_ context.Context, _, _ string, appIDs []string, _ string) (device.TreeNode, error) {
 			gotAppIDs = appIDs
 			return device.TreeNode{Attributes: map[string]string{"text": "root"}}, nil
 		},
@@ -193,7 +199,7 @@ func TestHierarchyOnIOSSaysWhoseTreeItIsShowing(t *testing.T) {
 	t.Parallel()
 
 	runner := HierarchyRunner{
-		Fetch: func(context.Context, string, string, []string) (device.TreeNode, error) {
+		Fetch: func(context.Context, string, string, []string, string) (device.TreeNode, error) {
 			return device.TreeNode{}, nil
 		},
 	}

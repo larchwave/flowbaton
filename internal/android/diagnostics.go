@@ -163,6 +163,11 @@ func (driver *Driver) CollectCrashArtifacts(
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if appID := strings.TrimSpace(request.AppID); appID != "" {
+		return nil, fmt.Errorf(
+			"%w: adb bugreport is device-wide and cannot filter application %q",
+			device.ErrUnsupported, appID)
+	}
 	directory, err := prepareDiagnosticDirectory(request.OutputDirectory)
 	if err != nil {
 		return nil, err
@@ -191,11 +196,10 @@ func (driver *Driver) CollectCrashArtifacts(
 		}
 		return nil, fmt.Errorf("collecting Android crash artifacts: %w", err)
 	}
-	metadata := map[string]string{"serial": driver.serial}
-	if appID := strings.TrimSpace(request.AppID); appID != "" {
-		metadata["app_id"] = appID
-	}
-	return []device.Artifact{{Kind: "crash-artifact", Path: path, Metadata: metadata}}, nil
+	return []device.Artifact{{
+		Kind: "crash-artifact", Path: path,
+		Metadata: map[string]string{"serial": driver.serial},
+	}}, nil
 }
 
 func prepareDiagnosticDirectory(raw string) (string, error) {
@@ -203,18 +207,25 @@ func prepareDiagnosticDirectory(raw string) (string, error) {
 	if directory == "" {
 		return "", fmt.Errorf("Android diagnostics require an output directory")
 	}
-	directory = filepath.Clean(directory)
-	if err := os.MkdirAll(directory, 0o755); err != nil {
+	absolute, err := filepath.Abs(directory)
+	if err != nil {
+		return "", fmt.Errorf("resolving Android diagnostic directory %q: %w", directory, err)
+	}
+	if err := os.MkdirAll(absolute, 0o700); err != nil {
 		return "", fmt.Errorf("creating Android diagnostic directory %q: %w", directory, err)
 	}
-	info, err := os.Lstat(directory)
+	info, err := os.Lstat(absolute)
 	if err != nil {
 		return "", fmt.Errorf("checking Android diagnostic directory %q: %w", directory, err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return "", fmt.Errorf("Android diagnostic output %q is not a real directory", directory)
 	}
-	return directory, nil
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", fmt.Errorf("resolving Android diagnostic directory %q: %w", directory, err)
+	}
+	return resolved, nil
 }
 
 func (driver *Driver) reserveDiagnosticFileLocked(
@@ -351,6 +362,12 @@ func (process *adbDeviceLogProcess) stop(ctx context.Context) error {
 		case <-ctx.Done():
 			errs = append(errs, ctx.Err())
 			_ = process.reader.Close()
+			select {
+			case <-process.done:
+			case <-time.After(diagnosticStopGrace):
+				errs = append(errs, fmt.Errorf(
+					"adb logcat did not stop within %v", diagnosticStopGrace))
+			}
 		}
 	}
 	if naturallyExited && waitErr != nil {
@@ -362,6 +379,13 @@ func (process *adbDeviceLogProcess) stop(ctx context.Context) error {
 	case <-ctx.Done():
 		errs = append(errs, ctx.Err())
 		_ = process.reader.Close()
+		select {
+		case copyErr := <-process.copyDone:
+			errs = append(errs, copyErr)
+		case <-time.After(diagnosticStopGrace):
+			errs = append(errs, fmt.Errorf(
+				"Android device-log writer did not stop within %v", diagnosticStopGrace))
+		}
 	}
 	if syncErr := process.output.Sync(); syncErr != nil {
 		errs = append(errs, syncErr)
