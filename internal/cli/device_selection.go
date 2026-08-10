@@ -10,6 +10,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/android"
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/iosdevice"
 	"github.com/larchwave/flowbaton/internal/web"
 )
 
@@ -25,6 +26,17 @@ import (
 var androidInventory = func(ctx context.Context) ([]android.Device, error) {
 	return android.ListDevices(ctx, nil)
 }
+
+// The two iOS inventories: simulators from simctl, hardware from usbmuxd.
+// Variables so tests need neither Xcode nor an attached phone.
+var (
+	iosSimulatorInventory = func(ctx context.Context) ([]ios.Device, error) {
+		return ios.NewSimctl("", nil).ListDevices(ctx)
+	}
+	iosPhysicalInventory = func(ctx context.Context) ([]iosdevice.Device, error) {
+		return iosdevice.ListDevices(ctx)
+	}
+)
 
 var (
 	resolveAndroidAgentAPKs = androidAgentAPKs
@@ -55,6 +67,40 @@ func resolveAndroidSerial(ctx context.Context) (string, error) {
 		strings.Join(serials, ", "))
 }
 
+// resolveIOSFlavor decides whether a udid names a simulator or attached
+// hardware by membership, not by guessing at udid shapes. Either inventory
+// may be absent on this machine (no Xcode, no usbmuxd); only a udid that
+// neither can account for is an error, and that error names both.
+func resolveIOSFlavor(ctx context.Context, udid string) (iosRunnerFlavor, error) {
+	simulators, simulatorErr := iosSimulatorInventory(ctx)
+	for _, entry := range simulators {
+		if entry.UDID == udid {
+			return iosRunnerFlavorSimulator, nil
+		}
+	}
+	physical, physicalErr := iosPhysicalInventory(ctx)
+	for _, entry := range physical {
+		if entry.UDID == udid {
+			return iosRunnerFlavorDevice, nil
+		}
+	}
+	report := func(err error) string {
+		if err != nil {
+			return err.Error()
+		}
+		return "not listed"
+	}
+	err := fmt.Errorf(
+		"device %q is neither a simulator (simctl: %s) nor an attached iOS device (usbmuxd: %s)",
+		udid, report(simulatorErr), report(physicalErr))
+	// Surface a cancellation as itself so callers can tell "you stopped the
+	// run" from "the device is unknown".
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", fmt.Errorf("%w: %w", ctxErr, err)
+	}
+	return "", err
+}
+
 // NewDeviceSession builds a session for one shard, or explains why it cannot.
 func NewDeviceSession(ctx context.Context, options TestOptions, shard Shard) (DeviceSession, error) {
 	driver, err := newDriver(ctx, options, shard.Device, shard.DriverPort, shard.Count())
@@ -73,9 +119,9 @@ func NewDeviceSession(ctx context.Context, options TestOptions, shard Shard) (De
 
 func newDriver(ctx context.Context, options TestOptions, udid string, port int, shardNumber int) (device.Driver, error) {
 	switch strings.ToLower(options.Platform) {
-	case "ios":
+	case "ios", "ios-physical":
 		if udid == "" {
-			return nil, fmt.Errorf("a simulator udid is required: pass --device <udid>")
+			return nil, fmt.Errorf("a device udid is required: pass --device <udid>")
 		}
 		if port <= 0 {
 			// Fails closed rather than defaulting to the contract port: a zero
@@ -83,13 +129,32 @@ func newDriver(ctx context.Context, options TestOptions, udid string, port int, 
 			// every shard on one runner — the failure this batch prevents.
 			return nil, fmt.Errorf("shard %d has no driver port assigned", shardNumber)
 		}
-		var bundle *ios.RunnerBundle
-		if options.ReinstallDriver {
-			var err error
-			bundle, err = resolveIOSRunnerBundle(ctx)
+		// "ios" resolves the flavor from the inventories; "ios-physical" (the
+		// serve inventory's explicit token) skips the lookup — the operator
+		// already said which flavor this is.
+		flavor := iosRunnerFlavorDevice
+		if strings.ToLower(options.Platform) == "ios" {
+			resolved, err := resolveIOSFlavor(ctx, udid)
 			if err != nil {
 				return nil, err
 			}
+			flavor = resolved
+		}
+		var bundle *ios.RunnerBundle
+		if options.ReinstallDriver {
+			var err error
+			bundle, err = resolveIOSRunnerBundle(ctx, flavor)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if flavor == iosRunnerFlavorDevice {
+			return iosdevice.NewDriver(
+				udid,
+				port,
+				ios.NewClient(ios.DefaultBaseURL(port)),
+				bundle,
+			), nil
 		}
 		return ios.NewDriver(
 			udid,

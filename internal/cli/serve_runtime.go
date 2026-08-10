@@ -635,7 +635,7 @@ func validateServeDevice(entry serveDevice) error {
 	}
 	document, found := serveDriverContract(entry.Platform)
 	if !found {
-		return errors.New("platform must be android, ios, or web")
+		return errors.New("platform must be android, ios, ios-physical, or web")
 	}
 	if entry.Platform == "web" && entry.ReinstallDriver {
 		return errors.New("web inventory entries cannot reinstall a device driver")
@@ -666,7 +666,13 @@ func validateServeCapabilities(driver device.Driver, entry serveDevice) error {
 		return errors.New("driver is required")
 	}
 	capabilities := driver.Capabilities()
-	if string(capabilities.Platform) != entry.Platform {
+	expected := entry.Platform
+	if expected == "ios-physical" {
+		// The physical driver executes the shared "ios" surface; the inventory
+		// token names the flavor, not a second driver platform.
+		expected = "ios"
+	}
+	if string(capabilities.Platform) != expected {
 		return fmt.Errorf("driver platform %q does not match inventory platform %q", capabilities.Platform, entry.Platform)
 	}
 	for _, capability := range entry.Capabilities {
@@ -696,6 +702,8 @@ func serveDriverContract(platform string) (drivercontract.Document, bool) {
 		return drivercontract.Android(), true
 	case "ios":
 		return drivercontract.IOSSimulator(), true
+	case "ios-physical":
+		return drivercontract.IOSPhysical(), true
 	case "web":
 		return drivercontract.Web(), true
 	default:

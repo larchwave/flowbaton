@@ -2,10 +2,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/larchwave/flowbaton/internal/android"
-	"github.com/larchwave/flowbaton/internal/ios"
 )
 
 // A sharded run uses all attached devices for the selected platform unless
@@ -44,13 +44,20 @@ func attachedDevices(ctx context.Context, platform string) ([]string, error) {
 		}
 		return serials, nil
 	case "ios":
-		devices, err := ios.NewSimctl("", nil).ListDevices(ctx)
-		if err != nil {
-			return nil, err
-		}
-		udids := make([]string, 0, len(devices))
-		for _, device := range devices {
+		// Simulators and attached hardware shard together under one platform
+		// token. Either tool may be absent on this machine; only both failing
+		// with nothing listed is an error.
+		simulators, simulatorErr := iosSimulatorInventory(ctx)
+		physical, physicalErr := iosPhysicalInventory(ctx)
+		udids := make([]string, 0, len(simulators)+len(physical))
+		for _, device := range simulators {
 			udids = append(udids, device.UDID)
+		}
+		for _, device := range physical {
+			udids = append(udids, device.UDID)
+		}
+		if len(udids) == 0 && simulatorErr != nil && physicalErr != nil {
+			return nil, errors.Join(simulatorErr, physicalErr)
 		}
 		return udids, nil
 	default:

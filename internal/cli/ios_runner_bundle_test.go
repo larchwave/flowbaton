@@ -17,7 +17,7 @@ import (
 func TestTheRunnerBundleComesFromTheOverrideWhenSet(t *testing.T) {
 	t.Setenv(iosXCTestRunVariable, "/somewhere/Custom.xctestrun")
 
-	bundle, err := iosRunnerBundle(context.Background())
+	bundle, err := iosRunnerBundle(context.Background(), iosRunnerFlavorSimulator)
 	if err != nil {
 		t.Fatalf("iosRunnerBundle() error = %v", err)
 	}
@@ -31,7 +31,7 @@ func TestNoBuiltRunnerLeavesTheOperatorInCharge(t *testing.T) {
 	t.Setenv(iosXCTestRunVariable, "")
 	t.Setenv("HOME", t.TempDir())
 
-	bundle, err := iosRunnerBundle(context.Background())
+	bundle, err := iosRunnerBundle(context.Background(), iosRunnerFlavorSimulator)
 	if err != nil {
 		t.Fatalf("iosRunnerBundle() error = %v", err)
 	}
@@ -46,7 +46,7 @@ func TestTheRunnerBundleIsFoundWhereDriverSetupPutIt(t *testing.T) {
 	t.Setenv("HOME", home)
 	built := writeXCTestRun(t, home, "FlowBatonIOSRunnerUITests_iphonesimulator26.2-arm64.xctestrun")
 
-	bundle, err := iosRunnerBundle(context.Background())
+	bundle, err := iosRunnerBundle(context.Background(), iosRunnerFlavorSimulator)
 	if err != nil {
 		t.Fatalf("iosRunnerBundle() error = %v", err)
 	}
@@ -55,16 +55,42 @@ func TestTheRunnerBundleIsFoundWhereDriverSetupPutIt(t *testing.T) {
 	}
 }
 
-// Two builds for different destinations both leave a file behind. Picking one
+// One build per destination is the normal state after building for both a
+// simulator and a device: each flavor picks its own file, no question asked.
+func TestEachFlavorPicksItsOwnBuiltRunner(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv(iosXCTestRunVariable, "")
+	t.Setenv("HOME", home)
+	simulator := writeXCTestRun(t, home, "one_iphonesimulator26.2-arm64.xctestrun")
+	device := writeXCTestRun(t, home, "two_iphoneos26.2-arm64.xctestrun")
+
+	bundle, err := iosRunnerBundle(context.Background(), iosRunnerFlavorSimulator)
+	if err != nil {
+		t.Fatalf("simulator flavor: %v", err)
+	}
+	if bundle == nil || bundle.XCTestRun != simulator {
+		t.Fatalf("simulator bundle = %+v, want %s", bundle, simulator)
+	}
+
+	bundle, err = iosRunnerBundle(context.Background(), iosRunnerFlavorDevice)
+	if err != nil {
+		t.Fatalf("device flavor: %v", err)
+	}
+	if bundle == nil || bundle.XCTestRun != device {
+		t.Fatalf("device bundle = %+v, want %s", bundle, device)
+	}
+}
+
+// Two builds for the SAME destination are genuinely ambiguous. Picking one
 // at random would silently drive the wrong runner, so it asks instead.
-func TestTwoBuiltRunnersAskWhichOne(t *testing.T) {
+func TestTwoBuiltRunnersOfOneFlavorAskWhichOne(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(iosXCTestRunVariable, "")
 	t.Setenv("HOME", home)
 	writeXCTestRun(t, home, "one_iphonesimulator26.2-arm64.xctestrun")
-	writeXCTestRun(t, home, "two_iphoneos26.2-arm64.xctestrun")
+	writeXCTestRun(t, home, "two_iphonesimulator26.2-arm64.xctestrun")
 
-	_, err := iosRunnerBundle(context.Background())
+	_, err := iosRunnerBundle(context.Background(), iosRunnerFlavorSimulator)
 	if err == nil {
 		t.Fatal("two built runners were accepted without a word")
 	}
@@ -79,7 +105,7 @@ func TestSignedRunnerBundleRequiresExactlyOneRootXCTestRun(t *testing.T) {
 	if err := os.WriteFile(want, []byte("<plist/>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	bundle, err := iosRunnerBundleAt(directory)
+	bundle, err := iosRunnerBundleAt(directory, iosRunnerFlavorSimulator)
 	if err != nil {
 		t.Fatalf("iosRunnerBundleAt() error = %v", err)
 	}
@@ -91,7 +117,7 @@ func TestSignedRunnerBundleRequiresExactlyOneRootXCTestRun(t *testing.T) {
 	if err := os.WriteFile(second, []byte("<plist/>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := iosRunnerBundleAt(directory); err == nil {
+	if _, err := iosRunnerBundleAt(directory, iosRunnerFlavorSimulator); err == nil {
 		t.Fatal("iosRunnerBundleAt() accepted multiple descriptors")
 	}
 }

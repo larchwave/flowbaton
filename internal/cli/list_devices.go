@@ -9,6 +9,7 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/android"
 	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/iosdevice"
 	"github.com/larchwave/flowbaton/internal/web"
 )
 
@@ -16,12 +17,13 @@ import (
 // Android, and the web pseudo-device. It reads inventory only; nothing is
 // booted, installed, or changed.
 
-// ListDevicesRunner holds the two listing calls behind fields so a test can
+// ListDevicesRunner holds the listing calls behind fields so a test can
 // stand in a fake without a simulator or an attached phone. The defaults reach
 // real tooling.
 type ListDevicesRunner struct {
-	IOS     func(context.Context) ([]ios.Device, error)
-	Android func(context.Context) ([]android.Device, error)
+	IOS         func(context.Context) ([]ios.Device, error)
+	IOSPhysical func(context.Context) ([]iosdevice.Device, error)
+	Android     func(context.Context) ([]android.Device, error)
 }
 
 func (runner ListDevicesRunner) iosList() func(context.Context) ([]ios.Device, error) {
@@ -29,6 +31,13 @@ func (runner ListDevicesRunner) iosList() func(context.Context) ([]ios.Device, e
 		return runner.IOS
 	}
 	return ios.NewSimctl("", nil).ListDevices
+}
+
+func (runner ListDevicesRunner) iosPhysicalList() func(context.Context) ([]iosdevice.Device, error) {
+	if runner.IOSPhysical != nil {
+		return runner.IOSPhysical
+	}
+	return iosdevice.ListDevices
 }
 
 func (runner ListDevicesRunner) androidList() func(context.Context) ([]android.Device, error) {
@@ -62,12 +71,23 @@ func (runner ListDevicesRunner) Run(ctx context.Context, args []string, stdout, 
 		devices, err := runner.iosList()(ctx)
 		if err != nil {
 			fmt.Fprintf(stderr, "ios: %v\n", err)
-			failed = failed || explicit
 		}
 		for _, d := range devices {
 			fmt.Fprintln(stdout, formatIOSDevice(d))
 			listed++
 		}
+		physical, physicalErr := runner.iosPhysicalList()(ctx)
+		if physicalErr != nil {
+			fmt.Fprintf(stderr, "ios devices: %v\n", physicalErr)
+		}
+		for _, d := range physical {
+			fmt.Fprintln(stdout, formatIOSPhysicalDevice(d))
+			listed++
+		}
+		// One inventory failing is a note — a Linux host has no simctl, a
+		// mac without usbmuxd running has no hardware list. Both failing
+		// under an explicit -p ios is the failure the operator asked about.
+		failed = failed || (explicit && err != nil && physicalErr != nil)
 	}
 	if wantAndroid {
 		devices, err := runner.androidList()(ctx)
@@ -134,6 +154,10 @@ func formatIOSDevice(d ios.Device) string {
 		line += fmt.Sprintf(" (%s)", d.Runtime)
 	}
 	return line
+}
+
+func formatIOSPhysicalDevice(d iosdevice.Device) string {
+	return fmt.Sprintf("ios\t%s\tattached\tphysical device", d.UDID)
 }
 
 func formatAndroidDevice(d android.Device) string {

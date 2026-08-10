@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/iosdevice"
 	"github.com/larchwave/flowbaton/internal/workspace"
 )
 
@@ -150,5 +152,58 @@ func TestAnUnshardedRunDoesNotListDevices(t *testing.T) {
 	}
 	if listed {
 		t.Fatal("an unsharded run listed devices")
+	}
+}
+
+// The direct inventory: simulators and attached hardware shard together
+// under one platform token. The fake inventories come from the package-wide
+// init in device_selection_test.go.
+func TestIOSInventoryUnionsSimulatorsAndHardware(t *testing.T) {
+	t.Parallel()
+
+	pool, err := attachedDevices(context.Background(), "ios")
+	if err != nil {
+		t.Fatalf("attachedDevices() error = %v", err)
+	}
+	want := []string{"UDID-1", "UDID-2", "udid-one", "udid-two", "solo-udid", "00008110-PHYS"}
+	if len(pool) != len(want) {
+		t.Fatalf("pool = %v, want %v", pool, want)
+	}
+	for i, udid := range want {
+		if pool[i] != udid {
+			t.Fatalf("pool = %v, want %v", pool, want)
+		}
+	}
+}
+
+// A machine with only one of the two iOS tools still shards across what the
+// working tool lists; only both failing with nothing found is an error.
+func TestIOSInventoryToleratesOneAbsentTool(t *testing.T) {
+	previousSim, previousPhys := iosSimulatorInventory, iosPhysicalInventory
+	t.Cleanup(func() {
+		iosSimulatorInventory, iosPhysicalInventory = previousSim, previousPhys
+	})
+
+	iosSimulatorInventory = func(context.Context) ([]ios.Device, error) {
+		return nil, errors.New("xcrun: command not found")
+	}
+	iosPhysicalInventory = func(context.Context) ([]iosdevice.Device, error) {
+		return []iosdevice.Device{{UDID: "00008110-ONLY"}}, nil
+	}
+	pool, err := attachedDevices(context.Background(), "ios")
+	if err != nil {
+		t.Fatalf("a missing simctl sank the hardware listing: %v", err)
+	}
+	if len(pool) != 1 || pool[0] != "00008110-ONLY" {
+		t.Fatalf("pool = %v, want the attached phone alone", pool)
+	}
+
+	iosPhysicalInventory = func(context.Context) ([]iosdevice.Device, error) {
+		return nil, errors.New("connect to usbmuxd: no such file")
+	}
+	if _, err := attachedDevices(context.Background(), "ios"); err == nil {
+		t.Fatal("both tools failing with nothing listed must be an error")
+	} else if !strings.Contains(err.Error(), "usbmuxd") || !strings.Contains(err.Error(), "xcrun") {
+		t.Fatalf("error = %q, want both tool failures carried", err)
 	}
 }

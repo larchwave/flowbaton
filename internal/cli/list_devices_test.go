@@ -9,6 +9,7 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/android"
 	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/iosdevice"
 )
 
 // list-devices is the operator diagnostic named in G006: "what can I target?"
@@ -20,8 +21,9 @@ func listDevicesWith(
 	androidDevices []android.Device, androidErr error,
 ) ListDevicesRunner {
 	return ListDevicesRunner{
-		IOS:     func(context.Context) ([]ios.Device, error) { return iosDevices, iosErr },
-		Android: func(context.Context) ([]android.Device, error) { return androidDevices, androidErr },
+		IOS:         func(context.Context) ([]ios.Device, error) { return iosDevices, iosErr },
+		IOSPhysical: func(context.Context) ([]iosdevice.Device, error) { return nil, nil },
+		Android:     func(context.Context) ([]android.Device, error) { return androidDevices, androidErr },
 	}
 }
 
@@ -144,6 +146,62 @@ func TestListDevicesSkipsAnAbsentToolWhenListingEverything(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "adb") {
 		t.Fatalf("the adb trouble was swallowed silently: %q", stderr)
+	}
+}
+
+// An attached iPhone lists alongside the simulators, labeled so the operator
+// can tell hardware from a simulator with a similar name.
+func TestListDevicesLabelsPhysicalIOSRows(t *testing.T) {
+	t.Parallel()
+
+	runner := listDevicesWith(
+		[]ios.Device{{UDID: "AAAA", Name: "iPhone", State: "Booted"}}, nil,
+		nil, nil,
+	)
+	runner.IOSPhysical = func(context.Context) ([]iosdevice.Device, error) {
+		return []iosdevice.Device{{UDID: "00008110-PHYS"}}, nil
+	}
+	stdout, _, code := runListDevices(t, runner, "-p", "ios")
+	if code != ExitOK {
+		t.Fatalf("exit = %d", code)
+	}
+	if !strings.Contains(stdout, "00008110-PHYS") {
+		t.Fatalf("the attached phone was not listed\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "physical device") {
+		t.Fatalf("the hardware row is not labeled as physical\n%s", stdout)
+	}
+}
+
+// One iOS inventory failing is a note (a Linux host has no simctl); both
+// failing under an explicit -p ios is the failure the operator asked about.
+func TestListDevicesFailsOnlyWhenBothIOSInventoriesError(t *testing.T) {
+	t.Parallel()
+
+	runner := listDevicesWith(nil, errors.New("xcrun: command not found"), nil, nil)
+	runner.IOSPhysical = func(context.Context) ([]iosdevice.Device, error) {
+		return []iosdevice.Device{{UDID: "00008110-PHYS"}}, nil
+	}
+	stdout, stderr, code := runListDevices(t, runner, "-p", "ios")
+	if code != ExitOK {
+		t.Fatalf("exit = %d, want %d (a missing simctl must not sink the hardware listing)", code, ExitOK)
+	}
+	if !strings.Contains(stdout, "00008110-PHYS") {
+		t.Fatalf("the attached phone was not listed\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "xcrun") {
+		t.Fatalf("the simctl trouble was swallowed silently: %q", stderr)
+	}
+
+	runner.IOSPhysical = func(context.Context) ([]iosdevice.Device, error) {
+		return nil, errors.New("connect to usbmuxd: no such file")
+	}
+	_, stderr, code = runListDevices(t, runner, "-p", "ios")
+	if code != ExitFailure {
+		t.Fatalf("exit = %d, want %d with both inventories broken", code, ExitFailure)
+	}
+	if !strings.Contains(stderr, "usbmuxd") || !strings.Contains(stderr, "xcrun") {
+		t.Fatalf("stderr = %q, want both tool failures reported", stderr)
 	}
 }
 

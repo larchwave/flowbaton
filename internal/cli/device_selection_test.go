@@ -9,7 +9,24 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/android"
 	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/iosdevice"
 )
+
+// newDriver resolves an iOS udid's flavor by inventory membership. The tests
+// in this package run in parallel, so per-test seam swaps would race; the
+// whole package therefore sees one fake inventory, and the tests that need a
+// different one swap it without t.Parallel and restore via t.Cleanup.
+func init() {
+	iosSimulatorInventory = func(context.Context) ([]ios.Device, error) {
+		return []ios.Device{
+			{UDID: "UDID-1"}, {UDID: "UDID-2"},
+			{UDID: "udid-one"}, {UDID: "udid-two"}, {UDID: "solo-udid"},
+		}, nil
+	}
+	iosPhysicalInventory = func(context.Context) ([]iosdevice.Device, error) {
+		return []iosdevice.Device{{UDID: "00008110-PHYS"}}, nil
+	}
+}
 
 // Device resolution must never invent a device identifier.
 //
@@ -69,6 +86,71 @@ func TestIOSResolvesToADriverNamedForItsSimulator(t *testing.T) {
 	}
 	if got := string(session.Driver.Capabilities().Platform); got != "ios" {
 		t.Fatalf("platform = %q, want ios", got)
+	}
+}
+
+func TestIOSPhysicalUdidResolvesToTheDeviceDriver(t *testing.T) {
+	t.Parallel()
+
+	session, err := NewDeviceSession(context.Background(),
+		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}}, rootShard("00008110-PHYS"))
+	if err != nil {
+		t.Fatalf("NewDeviceSession() error = %v", err)
+	}
+	if !strings.HasPrefix(session.Driver.Name(), "ios-device:00008110-PHYS") {
+		t.Fatalf("driver name = %q, want the physical-device driver", session.Driver.Name())
+	}
+}
+
+func TestUnknownIOSUdidNamesBothInventories(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewDeviceSession(context.Background(),
+		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}}, rootShard("UDID-NOWHERE"))
+	if err == nil {
+		t.Fatal("an unknown udid built a session")
+	}
+	for _, fragment := range []string{"UDID-NOWHERE", "simctl", "usbmuxd"} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("error = %q, want it to mention %q", err, fragment)
+		}
+	}
+}
+
+func TestExplicitIOSPhysicalTokenSkipsInventoryResolution(t *testing.T) {
+	t.Parallel()
+
+	// The udid is in NEITHER fake inventory: the explicit token must not
+	// consult them — the serve inventory already named the flavor.
+	session, err := NewDeviceSession(context.Background(),
+		TestOptions{Platform: "ios-physical", Roots: []string{"flow.yaml"}},
+		rootShard("00008110-UNLISTED"))
+	if err != nil {
+		t.Fatalf("NewDeviceSession() error = %v", err)
+	}
+	if !strings.HasPrefix(session.Driver.Name(), "ios-device:00008110-UNLISTED") {
+		t.Fatalf("driver name = %q, want the physical-device driver", session.Driver.Name())
+	}
+}
+
+func TestPhysicalIOSReinstallResolvesTheDeviceFlavor(t *testing.T) {
+	previous := resolveIOSRunnerBundle
+	var asked iosRunnerFlavor
+	resolveIOSRunnerBundle = func(_ context.Context, flavor iosRunnerFlavor) (*ios.RunnerBundle, error) {
+		asked = flavor
+		return nil, nil
+	}
+	t.Cleanup(func() { resolveIOSRunnerBundle = previous })
+
+	_, err := NewDeviceSession(context.Background(),
+		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}, ReinstallDriver: true},
+		rootShard("00008110-PHYS"))
+	if err != nil {
+		t.Fatalf("NewDeviceSession() error = %v", err)
+	}
+	if asked != iosRunnerFlavorDevice {
+		t.Fatalf("bundle resolved for flavor %q, want %q — a simulator build cannot run on hardware",
+			asked, iosRunnerFlavorDevice)
 	}
 }
 
@@ -351,7 +433,7 @@ func TestNoReinstallDriverSkipsManagedAndroidAssetResolution(t *testing.T) {
 func TestNoReinstallDriverSkipsManagedIOSAssetResolution(t *testing.T) {
 	previous := resolveIOSRunnerBundle
 	called := false
-	resolveIOSRunnerBundle = func(context.Context) (*ios.RunnerBundle, error) {
+	resolveIOSRunnerBundle = func(context.Context, iosRunnerFlavor) (*ios.RunnerBundle, error) {
 		called = true
 		return nil, fmt.Errorf("managed iOS assets must not be resolved")
 	}
@@ -393,7 +475,7 @@ func TestCanceledContextReachesManagedAssetVerification(t *testing.T) {
 					return nil, ctx.Err()
 				}
 			case "ios":
-				resolveIOSRunnerBundle = func(ctx context.Context) (*ios.RunnerBundle, error) {
+				resolveIOSRunnerBundle = func(ctx context.Context, _ iosRunnerFlavor) (*ios.RunnerBundle, error) {
 					called = true
 					return nil, ctx.Err()
 				}
