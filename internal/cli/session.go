@@ -164,7 +164,7 @@ func (session DeviceSession) dependencies(options TestOptions) (engine.Dependenc
 	// AI commands need a provider; with none configured this is a nil engine and
 	// they fail closed when no provider is configured. A
 	// misconfigured provider (unknown name) is a loud error, not a silent skip.
-	aiEngine, err := aiengine.FromEnv(os.Getenv)
+	aiEngine, err := aiengine.FromEnv(aiEnvironment(options, os.Getenv))
 	if err != nil {
 		return engine.Dependencies{}, fmt.Errorf("device session: ai engine: %w", err)
 	}
@@ -196,6 +196,25 @@ func (session DeviceSession) dependencies(options TestOptions) (engine.Dependenc
 		InputGenerator:      NewInputGenerator(),
 		ImageChecker:        ImageChecker{},
 	}, nil
+}
+
+// aiEnvironment gives explicit CLI values precedence without changing the
+// provider selected by FLOWBATON_AI_PROVIDER. The generic --api-key applies to
+// whichever supported provider FromEnv selects.
+func aiEnvironment(options TestOptions, getenv func(string) string) func(string) string {
+	return func(name string) string {
+		switch name {
+		case "FLOWBATON_AI_BASE_URL":
+			if value := strings.TrimSpace(options.APIURL); value != "" {
+				return value
+			}
+		case "OPENAI_API_KEY", "ANTHROPIC_API_KEY":
+			if value := strings.TrimSpace(options.APIKey); value != "" {
+				return value
+			}
+		}
+		return getenv(name)
+	}
 }
 
 // executionID derives a run identity from the clock the run itself uses, so a

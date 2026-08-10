@@ -134,7 +134,7 @@ func (runner TestRunner) runOnce(
 	}
 	// Preflight covers EVERY selected flow, not just one shard's, so an
 	// unsupported command fails the run before any device is acquired.
-	program, err := engine.Prepare(ctx, plan.ExecutionPlan(), loader)
+	program, err := prepareForSelectedPlatform(ctx, plan.ExecutionPlan(), loader, options.Platform)
 	if err != nil {
 		return runAttempt{reportTestError(stderr, err, false), watched, snapshot}
 	}
@@ -250,8 +250,8 @@ func (runner TestRunner) executeShard(
 ) shardOutcome {
 	// Preparing per shard rather than slicing one program: a Program is built
 	// from a root set, and a shard's root set is its own.
-	program, err := engine.Prepare(
-		ctx, model.ExecutionPlan{SelectedRoots: shard.Roots}, loader)
+	program, err := prepareForSelectedPlatform(
+		ctx, model.ExecutionPlan{SelectedRoots: shard.Roots}, loader, options.Platform)
 	if err != nil {
 		return shardOutcome{err: err}
 	}
@@ -267,6 +267,29 @@ func (runner TestRunner) executeShard(
 	// directory is its own, and a merged result list has lost that.
 	writeDebugArtifacts(stderr, options, shard, results)
 	return shardOutcome{results: results, err: err}
+}
+
+// prepareForSelectedPlatform preserves the existing host-only validation order
+// when no platform was supplied, while executable runs with a selected driver
+// enforce every registry entry's Platforms declaration before session creation.
+func prepareForSelectedPlatform(
+	ctx context.Context,
+	plan model.ExecutionPlan,
+	loader capability.FlowLoader,
+	platform string,
+) (*engine.Program, error) {
+	switch strings.ToLower(strings.TrimSpace(platform)) {
+	case "":
+		return engine.Prepare(ctx, plan, loader)
+	case "android":
+		return engine.PrepareForPlatform(ctx, plan, loader, capability.ExecutionPlatformAndroid)
+	case "ios":
+		return engine.PrepareForPlatform(ctx, plan, loader, capability.ExecutionPlatformIOSSimulator)
+	case "web":
+		return engine.PrepareForPlatform(ctx, plan, loader, capability.ExecutionPlatformWeb)
+	default:
+		return nil, fmt.Errorf("unsupported platform %q; supported: ios, android, web", platform)
+	}
 }
 
 func (runner TestRunner) session(shard Shard, options TestOptions) (TestSession, error) {

@@ -435,6 +435,30 @@ func repeatValue[T any](value T) []enginetest.Result[T] {
 	return results
 }
 
+func TestAICommandLineConfigurationOverridesProviderEnvironment(t *testing.T) {
+	environment := map[string]string{
+		"FLOWBATON_AI_BASE_URL": "https://environment.invalid",
+		"OPENAI_API_KEY":        "environment-openai",
+		"ANTHROPIC_API_KEY":     "environment-anthropic",
+		"FLOWBATON_AI_PROVIDER": "anthropic",
+	}
+	getenv := aiEnvironment(TestOptions{
+		APIURL: "https://command-line.invalid",
+		APIKey: "command-line-key",
+	}, func(name string) string { return environment[name] })
+
+	for name, want := range map[string]string{
+		"FLOWBATON_AI_BASE_URL": "https://command-line.invalid",
+		"OPENAI_API_KEY":        "command-line-key",
+		"ANTHROPIC_API_KEY":     "command-line-key",
+		"FLOWBATON_AI_PROVIDER": "anthropic",
+	} {
+		if got := getenv(name); got != want {
+			t.Errorf("getenv(%s) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 // advancingClock never blocks. A real clock would make every wait in a flow
 // take its documented time, which turns a 17-second lookup budget into a
 // 17-second test.
