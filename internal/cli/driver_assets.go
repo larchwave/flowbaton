@@ -147,7 +147,7 @@ func localAppleToolchain(ctx context.Context) (string, string, error) {
 	if len(versions) == 0 {
 		return "", "", errors.New("no available iOS Simulator runtime was reported by simctl")
 	}
-	sort.Slice(versions, func(i, j int) bool { return compareNumericVersions(versions[i], versions[j]) > 0 })
+	sort.Slice(versions, func(i, j int) bool { return orderNumericVersions(versions[i], versions[j]) > 0 })
 	return fields[1], versions[0], nil
 }
 
@@ -164,7 +164,7 @@ func numericVersion(value string) []int {
 	return result
 }
 
-func compareNumericVersions(left, right string) int {
+func orderNumericVersions(left, right string) int {
 	a := numericVersion(left)
 	b := numericVersion(right)
 	for index := 0; index < len(a) || index < len(b); index++ {

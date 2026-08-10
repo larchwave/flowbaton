@@ -9,7 +9,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/assets"
 )
 
-func TestDriverVersionComparisonIsNumeric(t *testing.T) {
+func TestDriverVersionOrderIsNumeric(t *testing.T) {
 	for _, test := range []struct {
 		left, right string
 		want        int
@@ -18,8 +18,8 @@ func TestDriverVersionComparisonIsNumeric(t *testing.T) {
 		{left: "26", right: "26.0", want: 0},
 		{left: "16.4", right: "17.0", want: -1},
 	} {
-		if got := compareNumericVersions(test.left, test.right); got != test.want {
-			t.Errorf("compareNumericVersions(%q, %q) = %d, want %d", test.left, test.right, got, test.want)
+		if got := orderNumericVersions(test.left, test.right); got != test.want {
+			t.Errorf("orderNumericVersions(%q, %q) = %d, want %d", test.left, test.right, got, test.want)
 		}
 	}
 }

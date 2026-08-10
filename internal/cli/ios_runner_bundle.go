@@ -12,7 +12,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/ios"
 )
 
-// Runs prefer the signed release asset installed by driver-setup. The legacy
+// Runs prefer the signed release asset installed by driver-setup. The
 // derived-data lookup remains for explicit repository development builds.
 
 const (
@@ -20,7 +20,7 @@ const (
 	// lives somewhere else — CI artifacts, a second checkout. The Android
 	// sibling is FLOWBATON_ANDROID_APP_APK.
 	iosXCTestRunVariable = "FLOWBATON_IOS_XCTESTRUN"
-	// iosDerivedDataDirectory is the legacy repository-build location.
+	// iosDerivedDataDirectory is the source-tree build location.
 	iosDerivedDataDirectory = ".flowbaton/ios-driver"
 )
 
