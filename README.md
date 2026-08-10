@@ -24,6 +24,7 @@ appId: com.example.app
 
 ```sh
 brew tap larchwave/flowbaton
+brew trust larchwave/flowbaton
 brew install flowbaton
 ```
 
@@ -58,8 +59,22 @@ flowbaton test -p android --device emulator-5554 path/to/flow.yaml
 
 The Android run needs a configured Android SDK and a running emulator or
 connected device. For iOS Simulators use `-p ios` with Xcode and an installed
-Simulator runtime. Run `flowbaton` with no arguments to print the command
-summary.
+Simulator runtime. Record a run to a video with
+`flowbaton record path/to/flow.yaml`. Run `flowbaton` with no arguments to
+print the command summary.
+
+## Use it from a coding agent
+
+FlowBaton ships an MCP server inside the same binary:
+
+```sh
+flowbaton mcp
+```
+
+Point your agent's MCP configuration at that command and it gets
+`check_syntax`, `list_devices`, `hierarchy`, and `query` tools against
+connected devices and Simulators. `AGENTS.md` in this repository gives agents
+a short tour of the CLI and the flow shape.
 
 ## Why FlowBaton
 

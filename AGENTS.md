@@ -9,8 +9,15 @@ agent, and an iOS Simulator runner. Test flows are plain YAML.
 flowbaton check-syntax <file|->        # validate a flow without a device
 flowbaton driver-setup -p <platform>   # prepare the android or ios driver
 flowbaton test -p <platform> --device <id> <flow.yaml>
+flowbaton record <flow.yaml> [out]     # run a flow and capture a video
+flowbaton list-devices [-p platform]   # connected devices and simulators
+flowbaton hierarchy -p <platform>      # dump the current UI tree
+flowbaton mcp                          # serve these as MCP tools over stdio
 flowbaton                              # print the command summary
 ```
+
+Prefer `flowbaton mcp` when you can register MCP servers: it exposes
+`check_syntax`, `list_devices`, `hierarchy`, and `query` without shelling out.
 
 ## Flow shape
 
