@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -22,11 +23,48 @@ type fakeStore struct {
 	acquire  sessionstore.AcquireInput
 	apply    sessionstore.MutationInput
 	waits    int
+	nonceErr error
 }
 
 func (store *fakeStore) Ping(context.Context) error { return nil }
 func (store *fakeStore) ConsumeTokenNonce(context.Context, string, string, time.Time) error {
-	return nil
+	return store.nonceErr
+}
+
+func TestTokenNonceFailureDoesNotClaimReplay(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	integration, _ := integrationv1.NewDocument(integrationv1.Executable{Version: "0.2.0", BinarySHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", License: "Apache-2.0", ProcessID: 1}, []string{"authenticated-remote-ipc"}, integrationv1.Protocols{FlowContract: "v1", DeviceSession: "v1", Report: "v1"}, []integrationv1.AuthProfile{integrationv1.RemoteCloudMacProfile()}, []string{"tap"})
+	certificateDigest := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	bindingDigest := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	store := &fakeStore{
+		identity: sessionstore.Identity{CertificateFingerprint: certificateDigest, TenantID: "tenant-1", PrincipalID: "principal-1"},
+		nonceErr: errors.New("database unavailable"),
+	}
+	handler, err := New(Config{Store: store, Issuer: auth.Issuer{KeyID: "key-1", PrivateKey: privateKey, Now: func() time.Time { return now }}, Verifier: auth.Verifier{Keys: map[string]ed25519.PublicKey{"key-1": publicKey}, Now: func() time.Time { return now }}, Integration: integration, RequestIdentity: func(*http.Request) (string, string, error) { return certificateDigest, bindingDigest, nil }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/session-tokens", bytes.NewBufferString(`{"nonce":"nonce-1234567890","scopes":["device-session"]}`))
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusInternalServerError || !bytes.Contains(recorder.Body.Bytes(), []byte(`"code":"INTERNAL"`)) || bytes.Contains(recorder.Body.Bytes(), []byte("NONCE_REPLAY")) {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestDurationFromMillisecondsRejectsOverflow(t *testing.T) {
+	t.Parallel()
+
+	if _, err := durationFromMilliseconds(maxDurationMilliseconds + 1); err == nil {
+		t.Fatal("overflowing millisecond duration was accepted")
+	}
+	got, err := durationFromMilliseconds(maxDurationMilliseconds)
+	if err != nil || got <= 0 {
+		t.Fatalf("largest safe duration = %v, %v", got, err)
+	}
 }
 func (store *fakeStore) ResolveIdentity(context.Context, string) (sessionstore.Identity, error) {
 	return store.identity, nil

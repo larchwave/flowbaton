@@ -20,6 +20,7 @@ import (
 )
 
 const maxRequestBody = 1 << 20
+const maxDurationMilliseconds = int64((1<<63)-1) / int64(time.Millisecond)
 
 type RequestIdentity func(*http.Request) (certificateFingerprint, channelBindingSHA256 string, err error)
 
@@ -127,7 +128,11 @@ func (handler *Handler) issueToken(writer http.ResponseWriter, request *http.Req
 		ttl = 5 * time.Minute
 	}
 	if err := handler.config.Store.ConsumeTokenNonce(request.Context(), fingerprint, input.Nonce, now.Add(ttl)); err != nil {
-		writeError(writer, http.StatusConflict, "NONCE_REPLAY", "token nonce has already been used")
+		if errors.Is(err, sessionstore.ErrConflict) {
+			writeError(writer, http.StatusConflict, "NONCE_REPLAY", "token nonce has already been used")
+		} else {
+			writeError(writer, http.StatusInternalServerError, "INTERNAL", "token nonce could not be stored")
+		}
 		return
 	}
 	token, err := handler.config.Issuer.Issue(auth.Claims{TenantID: identity.TenantID, PrincipalID: identity.PrincipalID, CertificateFingerprint: fingerprint, ChannelBindingSHA256: binding, Nonce: input.Nonce, Scopes: input.Scopes})
@@ -210,7 +215,12 @@ func (handler *Handler) request(writer http.ResponseWriter, request *http.Reques
 	if err := decodeRequest(writer, request, &input); err != nil {
 		return
 	}
-	result, err := handler.config.Store.Apply(request.Context(), sessionstore.MutationInput{SessionID: request.PathValue("sessionID"), TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestID: input.RequestID, Type: input.Type, IdempotencyKey: input.IdempotencyKey, Generation: input.Generation, FencingTokenSHA256: input.FencingTokenSHA256, Payload: input.Payload, CommandPayload: input.CommandPayload, RequestedExtension: time.Duration(input.RequestedExtensionMS) * time.Millisecond, LastAcknowledgedEvent: input.LastAcknowledgedEvent, Now: handler.now()})
+	requestedExtension, err := durationFromMilliseconds(input.RequestedExtensionMS)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "requested extension is outside the supported duration range")
+		return
+	}
+	result, err := handler.config.Store.Apply(request.Context(), sessionstore.MutationInput{SessionID: request.PathValue("sessionID"), TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestID: input.RequestID, Type: input.Type, IdempotencyKey: input.IdempotencyKey, Generation: input.Generation, FencingTokenSHA256: input.FencingTokenSHA256, Payload: input.Payload, CommandPayload: input.CommandPayload, RequestedExtension: requestedExtension, LastAcknowledgedEvent: input.LastAcknowledgedEvent, Now: handler.now()})
 	if err != nil {
 		writeStoreError(writer, err)
 		return
@@ -220,6 +230,13 @@ func (handler *Handler) request(writer http.ResponseWriter, request *http.Reques
 		status = http.StatusAccepted
 	}
 	writeJSON(writer, status, result)
+}
+
+func durationFromMilliseconds(value int64) (time.Duration, error) {
+	if value < 0 || value > maxDurationMilliseconds {
+		return 0, sessionstore.ErrInvalidArgument
+	}
+	return time.Duration(value) * time.Millisecond, nil
 }
 
 func (handler *Handler) events(writer http.ResponseWriter, request *http.Request, claims auth.Claims) {
