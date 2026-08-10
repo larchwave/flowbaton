@@ -64,10 +64,18 @@ flowbaton test -p android --device emulator-5554 path/to/flow.yaml
 ```
 
 The Android run needs a configured Android SDK and a running emulator or
-connected device. For iOS Simulators use `-p ios` with Xcode and an installed
-Simulator runtime. Record a run to a video with
-`flowbaton record path/to/flow.yaml`. Run `flowbaton` with no arguments to
-print the command summary.
+connected device.
+
+For iOS Simulators (needs Xcode and an installed Simulator runtime):
+
+```sh
+flowbaton driver-setup -p ios
+flowbaton test -p ios --device <simulator-udid> path/to/flow.yaml
+```
+
+Find a booted Simulator's UDID with `xcrun simctl list devices booted`.
+Record a run to a video with `flowbaton record path/to/flow.yaml`. Run
+`flowbaton` with no arguments to print the command summary.
 
 Ready-made flows that run against the stock Android Settings app (no app to
 build) live in
