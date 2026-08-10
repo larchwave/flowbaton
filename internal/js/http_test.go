@@ -326,6 +326,105 @@ func TestHTTPMultipartRejectsOversizedFile(t *testing.T) {
 	}
 }
 
+func TestHTTPMultipartRejectsExcessivePartsAndAggregateSize(t *testing.T) {
+	t.Parallel()
+
+	t.Run("part count", func(t *testing.T) {
+		t.Parallel()
+		implementation := newRuntimeWithConfig(t, Config{Random: rand.New(rand.NewSource(53))}).(*runtime)
+		form := make(map[string]any, MaxMultipartParts+1)
+		for index := 0; index <= MaxMultipartParts; index++ {
+			form[strconv.Itoa(index)] = "value"
+		}
+		if _, _, err := implementation.requestBody(map[string]any{"multipartForm": form}); err == nil || !strings.Contains(err.Error(), "maximum") {
+			t.Fatalf("requestBody() error = %v, want part-count limit", err)
+		}
+	})
+
+	t.Run("aggregate encoded bytes", func(t *testing.T) {
+		t.Parallel()
+		scriptDir := t.TempDir()
+		for _, name := range []string{"one.bin", "two.bin"} {
+			file, err := os.Create(filepath.Join(scriptDir, name))
+			if err != nil {
+				t.Fatalf("Create(%s) error = %v", name, err)
+			}
+			if err := file.Truncate(MaxMultipartFileSize); err != nil {
+				_ = file.Close()
+				t.Fatalf("Truncate(%s) error = %v", name, err)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatalf("Close(%s) error = %v", name, err)
+			}
+		}
+
+		implementation := newRuntimeWithConfig(t, Config{Random: rand.New(rand.NewSource(59))}).(*runtime)
+		implementation.scriptDir = scriptDir
+		form := map[string]any{
+			"one": map[string]any{"filePath": "one.bin"},
+			"two": map[string]any{"filePath": "two.bin"},
+		}
+		if _, _, err := implementation.requestBody(map[string]any{"multipartForm": form}); err == nil || !strings.Contains(err.Error(), "multipart request exceeds") {
+			t.Fatalf("requestBody() error = %v, want aggregate byte limit", err)
+		}
+	})
+}
+
+func TestHTTPResponseBodyIsBoundedAndCancellationAware(t *testing.T) {
+	t.Parallel()
+
+	t.Run("overflow", func(t *testing.T) {
+		t.Parallel()
+		implementation := newRuntimeWithConfig(t, Config{
+			Random: rand.New(rand.NewSource(61)),
+			HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(io.LimitReader(repeatingByteReader{}, MaxHTTPResponseSize+1)),
+					Request:    request,
+				}, nil
+			})},
+		}).(*runtime)
+		if _, err := implementation.executeHTTPRequest("http://example.test", http.MethodGet, nil); err == nil || !strings.Contains(err.Error(), "body exceeds") {
+			t.Fatalf("executeHTTPRequest() error = %v, want response-size limit", err)
+		}
+	})
+
+	t.Run("cancellation while reading", func(t *testing.T) {
+		t.Parallel()
+		started := make(chan struct{})
+		implementation := newRuntimeWithConfig(t, Config{
+			Random: rand.New(rand.NewSource(67)),
+			HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       &contextReadCloser{ctx: request.Context(), started: started},
+					Request:    request,
+				}, nil
+			})},
+		}).(*runtime)
+		ctx, cancel := context.WithCancel(context.Background())
+		implementation.evalContext = ctx
+		done := make(chan error, 1)
+		go func() {
+			_, err := implementation.executeHTTPRequest("http://example.test", http.MethodGet, nil)
+			done <- err
+		}()
+		<-started
+		cancel()
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("executeHTTPRequest() error = %v, want context.Canceled", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("response read did not stop after cancellation")
+		}
+	})
+}
+
 func TestHTTPTransportErrorsAndBinaryTextBodies(t *testing.T) {
 	t.Parallel()
 
@@ -372,6 +471,28 @@ type roundTripFunc func(request *http.Request) (*http.Response, error)
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)
 }
+
+type repeatingByteReader struct{}
+
+func (repeatingByteReader) Read(contents []byte) (int, error) {
+	for index := range contents {
+		contents[index] = 'x'
+	}
+	return len(contents), nil
+}
+
+type contextReadCloser struct {
+	ctx     context.Context
+	started chan<- struct{}
+}
+
+func (r *contextReadCloser) Read([]byte) (int, error) {
+	close(r.started)
+	<-r.ctx.Done()
+	return 0, r.ctx.Err()
+}
+
+func (*contextReadCloser) Close() error { return nil }
 
 func newRuntimeWithConfig(t *testing.T, config Config) Runtime {
 	t.Helper()

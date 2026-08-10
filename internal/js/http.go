@@ -22,9 +22,18 @@ import (
 // DefaultHTTPTimeout matches the product runtime's read, write, and call limit.
 const DefaultHTTPTimeout = 5 * time.Minute
 
-// MaxMultipartFileSize bounds each file buffered into a JavaScript-authored
-// multipart request. The full body is assembled in memory before transport.
-const MaxMultipartFileSize int64 = 16 << 20
+const (
+	// MaxMultipartFileSize bounds each file buffered into a JavaScript-authored
+	// multipart request.
+	MaxMultipartFileSize int64 = 16 << 20
+	// MaxMultipartParts bounds metadata work before the multipart body is built.
+	MaxMultipartParts = 64
+	// MaxMultipartRequestSize bounds the complete encoded multipart body,
+	// including fields, file contents, headers, boundaries, and closing bytes.
+	MaxMultipartRequestSize int64 = 20 << 20
+	// MaxHTTPResponseSize bounds response data exposed to JavaScript.
+	MaxHTTPResponseSize int64 = 16 << 20
+)
 
 func newHTTPClient(configured *http.Client) *http.Client {
 	if configured != nil {
@@ -123,9 +132,12 @@ func (r *runtime) executeHTTPRequest(url, method string, params map[string]any) 
 	var responseBody any
 	if response.Body != nil {
 		defer response.Body.Close()
-		contents, readErr := io.ReadAll(response.Body)
+		contents, readErr := io.ReadAll(io.LimitReader(response.Body, MaxHTTPResponseSize+1))
 		if readErr != nil {
 			return nil, fmt.Errorf("read HTTP response: %w", readErr)
+		}
+		if int64(len(contents)) > MaxHTTPResponseSize {
+			return nil, fmt.Errorf("read HTTP response: body exceeds %d bytes", MaxHTTPResponseSize)
 		}
 		responseBody = string(contents)
 	}
@@ -143,8 +155,14 @@ func (r *runtime) executeHTTPRequest(url, method string, params map[string]any) 
 
 func (r *runtime) requestBody(params map[string]any) (io.Reader, string, error) {
 	if multipartForm, ok := params["multipartForm"].(map[string]any); ok {
+		if len(multipartForm) > MaxMultipartParts {
+			return nil, "", fmt.Errorf("multipart request has %d parts; maximum is %d", len(multipartForm), MaxMultipartParts)
+		}
 		var buffer bytes.Buffer
-		writer := multipart.NewWriter(&buffer)
+		writer := multipart.NewWriter(&boundedMultipartWriter{
+			destination: &buffer,
+			maximum:     MaxMultipartRequestSize,
+		})
 		keys := make([]string, 0, len(multipartForm))
 		for key := range multipartForm {
 			keys = append(keys, key)
@@ -164,6 +182,26 @@ func (r *runtime) requestBody(params map[string]any) (io.Reader, string, error) 
 		return strings.NewReader(body), "", nil
 	}
 	return nil, "", nil
+}
+
+type boundedMultipartWriter struct {
+	destination *bytes.Buffer
+	maximum     int64
+}
+
+func (w *boundedMultipartWriter) Write(contents []byte) (int, error) {
+	remaining := w.maximum - int64(w.destination.Len())
+	if remaining <= 0 {
+		return 0, fmt.Errorf("multipart request exceeds %d bytes", w.maximum)
+	}
+	if int64(len(contents)) <= remaining {
+		return w.destination.Write(contents)
+	}
+	written, err := w.destination.Write(contents[:int(remaining)])
+	if err != nil {
+		return written, err
+	}
+	return written, fmt.Errorf("multipart request exceeds %d bytes", w.maximum)
 }
 
 func (r *runtime) writeMultipartPart(writer *multipart.Writer, name string, value any) error {

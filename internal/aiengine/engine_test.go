@@ -166,6 +166,27 @@ func TestGenerateJSONErrors(t *testing.T) {
 		}
 	})
 
+	t.Run("duplicate assertion fields are rejected", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"pass":false,"pass":true,"reasoning":"ok"}`}, "")
+		if result, err := e.PerformAssertion(context.Background(), pngFixture, "x"); err == nil || result.Pass || !strings.Contains(err.Error(), `duplicate object key "pass"`) {
+			t.Fatalf("PerformAssertion() = %#v, %v; want duplicate-key schema error", result, err)
+		}
+	})
+
+	t.Run("duplicate defect fields are rejected", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"defects":["hidden"],"defects":[],"reasoning":"ok"}`}, "")
+		if result, err := e.FindDefects(context.Background(), pngFixture); err == nil || result.Pass || !strings.Contains(err.Error(), `duplicate object key "defects"`) {
+			t.Fatalf("FindDefects() = %#v, %v; want duplicate-key schema error", result, err)
+		}
+	})
+
+	t.Run("duplicate keys in nested objects are rejected before typed decode", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"pass":true,"reasoning":"ok","details":{"value":1,"value":2}}`}, "")
+		if _, err := e.PerformAssertion(context.Background(), pngFixture, "x"); err == nil || !strings.Contains(err.Error(), `duplicate object key "value"`) {
+			t.Fatalf("PerformAssertion() error = %v, want nested duplicate-key error", err)
+		}
+	})
+
 	t.Run("trailing content is rejected", func(t *testing.T) {
 		e := NewFromModel(&fakeModel{reply: `{"text":"value","reasoning":"ok"} trailing`}, "")
 		if _, err := e.ExtractText(context.Background(), pngFixture, "x"); err == nil || !strings.Contains(err.Error(), "trailing") {
