@@ -38,6 +38,7 @@ archives:
     files:
       - LICENSE
       - NOTICE.md
+      - THIRD_PARTY_NOTICES.md
       - README.md
       - docs/support-matrix.md
 

@@ -142,3 +142,9 @@ specified in `specs/`.
 
 If FlowBaton is useful to you, star the repository — it helps other people
 find it.
+
+## License
+
+FlowBaton is licensed under the [Apache License 2.0](LICENSE). Third-party
+components and their licenses are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
