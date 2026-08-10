@@ -22,8 +22,12 @@ A public release requires:
 - a clean signed tag;
 - green Go, Android, iOS, contract, and policy checks;
 - signed archives and a checksum file;
+- native Developer ID signatures and accepted Apple notarization for every
+  Darwin CLI archive, with Gatekeeper assessment on Intel and Apple silicon;
 - an SBOM and build attestation bound to the shipped digests;
-- installation smoke checks on every advertised host;
+- installation smoke checks on every advertised host, including a real
+  `brew install --cask` from the exact signed candidate on both Mac
+  architectures before the tap advances;
 - at least one Android and one iOS Simulator execution smoke;
 - anonymous retrieval of every required surface in
   `governance/public-delivery-surfaces.json`;
@@ -38,9 +42,23 @@ refuses lightweight or GitHub-unverified tags and binds every gate, candidate
 archive, SBOM, checksum, installer, driver manifest, and provenance statement
 to the tag's exact commit. The release stays draft until clean-host installer
 smokes pass on Linux amd64, Windows amd64, macOS amd64, and macOS arm64 and the
-versioned Homebrew cask has advanced. A failure after the draft is created
-deletes that draft; a failure while advancing the tap attempts to revert the
-tap commit.
+architecture-specific iOS Simulator packages have each executed on their
+matching native release host. Darwin signing runs only in the protected
+`release-signing` environment and fails closed unless the Developer ID
+certificate and App Store Connect notary API key are present. Those credentials
+must be dedicated to release signing; the notary key needs only the App Store
+Connect access required by `notarytool`, and the tap token needs contents access
+only to `larchwave/homebrew-flowbaton`.
+
+The candidate cask must install successfully through Homebrew on Intel and
+Apple silicon before the tap advances. After the draft becomes public, a fresh
+empty-home process with no GitHub, tap, or Apple credentials probes every
+required entry in `governance/public-delivery-surfaces.json`. It checks the
+public repository and exact tag, downloads every asset and installer, verifies
+the checksum set, verifies the attestation bundle against the repository,
+workflow, and tag, checks the published cask, and reads the release policy from
+the exact commit. Any failure deletes the release and reverts the tap commit;
+rollback failure is itself a hard failure requiring owner intervention.
 
 Installers require the GitHub CLI and verify the downloaded archive with
 `gh attestation verify`, constrained to `larchwave/flowbaton`, the release tag,
@@ -49,7 +67,7 @@ match by itself is not release identity evidence.
 
 The driver assets are separate attested release archives. `android-agent`
 contains `agent.apk` and `agent-androidTest.apk`. `ios-simulator-runner`
-contains one relocatable `.xctestrun` plus every referenced product. The
+contains one relocatable `.xctestrun` plus every required product. The
 attested `driver-manifest.json` is generated from the shipped bytes and is the
 only release-eligible manifest; the committed fixture manifest remains
 representative and cannot resolve in production.

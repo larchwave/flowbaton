@@ -134,10 +134,20 @@ jobs:
           retention-days: 3
 
   ios-simulator:
-    name: iOS Simulator execution and portable runner assets
+    name: iOS Simulator native package (${{ matrix.host }})
     needs: signed-tag
-    runs-on: macos-15
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: darwin-amd64
+            os: macos-15-intel
+            arch: amd64
+          - host: darwin-arm64
+            os: macos-15
+            arch: arm64
     steps:
       - name: Check out exact release commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -163,7 +173,7 @@ jobs:
           xcrun swift-format lint --strict --recursive drivers/ios/Sources drivers/ios/Tests drivers/ios/UITests
       - name: Execute the real Simulator test
         run: scripts/ci/ios-simulator-test.sh drivers/ios/FlowBatonIOSRunner.xcodeproj "$RUNNER_TEMP/flowbaton-ios-derived"
-      - name: Package relocatable Simulator runner assets
+      - name: Package the native Simulator runner asset
         shell: bash
         run: |
           tag="$GITHUB_REF_NAME"
@@ -178,23 +188,28 @@ jobs:
           runtime_max="$(xcrun simctl list runtimes -j | python3 -c 'import json,sys; values=[r.get("version","") for r in json.load(sys.stdin)["runtimes"] if r.get("isAvailable") and "iOS" in r.get("name","")]; print(max(values,key=lambda v: tuple(map(int,v.split(".")))))')"
           SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
           export SOURCE_DATE_EPOCH
-          for arch in amd64 arm64; do
-            scripts/release/package-driver-asset.py \
-              --id ios-simulator-runner --platform ios-simulator \
-              --host-version "$version" --asset-version "$version" \
-              --host-os darwin --host-arch "$arch" \
-              --root "$products" \
-              --identity-kind bundle-signature-identity \
-              --identity-value dev.larchwave.flowbaton.driver.uitests.xctrunner \
-              --identity-path "$identity_path" \
-              --xcode-min "$xcode_version" --xcode-max "${xcode_major}.9999" \
-              --ios-runtime-min 17.0 --ios-runtime-max "$runtime_max" \
-              --output "$RUNNER_TEMP/ios-assets"
-          done
+          scripts/release/package-driver-asset.py \
+            --id ios-simulator-runner --platform ios-simulator \
+            --host-version "$version" --asset-version "$version" \
+            --host-os darwin --host-arch "${{ matrix.arch }}" \
+            --root "$products" \
+            --identity-kind bundle-signature-identity \
+            --identity-value dev.larchwave.flowbaton.driver.uitests.xctrunner \
+            --identity-path "$identity_path" \
+            --xcode-min "$xcode_version" --xcode-max "${xcode_major}.9999" \
+            --ios-runtime-min 17.0 --ios-runtime-max "$runtime_max" \
+            --output "$RUNNER_TEMP/ios-assets"
+      - name: Execute the packaged native runner
+        shell: bash
+        run: |
+          mv "$RUNNER_TEMP/flowbaton-ios-derived" "$RUNNER_TEMP/unavailable-source-build"
+          scripts/release/test-packaged-ios-runner.sh \
+            "$RUNNER_TEMP"/ios-assets/*_ios-simulator-runner_*_darwin_${{ matrix.arch }}.tar.gz \
+            "${{ matrix.arch }}"
       - name: Upload iOS release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: driver-ios-${{ github.sha }}
+          name: driver-ios-${{ matrix.arch }}-${{ github.sha }}
           path: ${{ runner.temp }}/ios-assets/
           if-no-files-found: error
           retention-days: 3
@@ -221,7 +236,7 @@ jobs:
         run: FLOWBATON_WEB_LIVE=1 FLOWBATON_CHROME="$(command -v google-chrome)" go test ./internal/web -run '^TestLiveChrome' -count=1
 
   build-candidate:
-    name: Build exact release candidate
+    name: Build unsigned exact release candidate
     needs: [go-contract-policy, android-connected, ios-simulator, real-chrome]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -254,7 +269,7 @@ jobs:
           distribution: goreleaser
           version: ${{ env.GORELEASER_VERSION }}
           args: release --clean --skip=publish,homebrew
-      - name: Assemble the complete candidate
+      - name: Assemble the unsigned candidate
         shell: bash
         run: |
           tag="$GITHUB_REF_NAME"
@@ -272,7 +287,127 @@ jobs:
           mv "$checksums" candidate/checksums.txt
           test -s candidate/driver-manifest.json
           test -s candidate/checksums.txt
-      - name: Upload immutable release candidate
+      - name: Upload unsigned release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-release-candidate-${{ github.sha }}
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 3
+
+  darwin-sign-notarize:
+    name: Sign and notarize Darwin CLI (${{ matrix.host }})
+    needs: build-candidate
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    environment: release-signing
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: darwin-amd64
+            os: macos-15-intel
+            arch: amd64
+          - host: darwin-arm64
+            os: macos-15
+            arch: arm64
+    steps:
+      - name: Check out exact signing harness
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download unsigned candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: unsigned-release-candidate-${{ github.sha }}
+          path: candidate
+      - name: Require dedicated Developer ID and notary credentials
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+        run: |
+          for name in \
+            APPLE_DEVELOPER_ID_APPLICATION \
+            APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 \
+            APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD \
+            APPLE_NOTARY_KEY_ID \
+            APPLE_NOTARY_ISSUER_ID \
+            APPLE_NOTARY_PRIVATE_KEY_BASE64
+          do
+            test -n "${!name}"
+          done
+      - name: Sign, notarize, and Gatekeeper-assess the native archive
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+        run: |
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
+          export SOURCE_DATE_EPOCH
+          scripts/release/sign-notarize-darwin.sh \
+            candidate "${GITHUB_REF_NAME#v}" "${{ matrix.arch }}" receipts
+      - name: Upload signed native archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-darwin-${{ matrix.arch }}-${{ github.sha }}
+          path: candidate/flowbaton_*_darwin_${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+      - name: Upload notarization receipts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: notarization-${{ matrix.arch }}-${{ github.sha }}
+          path: receipts/
+          if-no-files-found: error
+          retention-days: 30
+
+  finalize-candidate:
+    name: Finalize signed release candidate
+    needs: [build-candidate, darwin-sign-notarize]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download unsigned candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: unsigned-release-candidate-${{ github.sha }}
+          path: candidate
+      - name: Download signed Darwin archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: signed-darwin-*-${{ github.sha }}
+          path: signed-darwin
+          merge-multiple: true
+      - name: Install pinned Syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
+      - name: Replace Darwin archives and bind final checksums and SBOMs
+        shell: bash
+        run: |
+          cp signed-darwin/* candidate/
+          rm -f candidate/checksums.txt candidate/*.sbom.json candidate/*.spdx.json
+          for archive in candidate/*.tar.gz candidate/*.zip; do
+            test -f "$archive" || continue
+            syft "$archive" -o "spdx-json=${archive}.spdx.json"
+          done
+          checksums="$RUNNER_TEMP/checksums.txt"
+          (cd candidate && find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#  #' > "$checksums")
+          mv "$checksums" candidate/checksums.txt
+          test -s candidate/checksums.txt
+      - name: Upload immutable signed release candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-candidate-${{ github.sha }}
@@ -282,7 +417,7 @@ jobs:
 
   attest-candidate:
     name: Attest every shipped digest
-    needs: build-candidate
+    needs: finalize-candidate
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -365,9 +500,37 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts/release/smoke-windows.ps1 -Candidate candidate -Version ($env:GITHUB_REF_NAME -replace '^v','')
 
+  homebrew-cask-smoke:
+    name: Homebrew cask install (${{ matrix.host }})
+    needs: attest-candidate
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: darwin-amd64
+            os: macos-15-intel
+          - host: darwin-arm64
+            os: macos-15
+    steps:
+      - name: Check out exact cask smoke harness
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download exact signed release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: candidate
+      - name: Install exact candidate through Homebrew cask
+        shell: bash
+        run: scripts/release/smoke-homebrew-cask.sh candidate "${GITHUB_REF_NAME#v}"
+
   publish:
     name: Publish draft, tap, then release
-    needs: clean-host-smoke
+    needs: [clean-host-smoke, homebrew-cask-smoke]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: release
@@ -395,7 +558,7 @@ jobs:
         run: test -n "$HOMEBREW_TAP_TOKEN"
       - name: Recheck candidate digests before publication
         run: cd candidate && sha256sum --check checksums.txt
-      - name: Create draft, update tap, and publish only after both succeed
+      - name: Publish, probe anonymously, and retain only on complete public proof
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -403,32 +566,85 @@ jobs:
         run: |
           TAG="$GITHUB_REF_NAME"
           version="${TAG#v}"
-          test -z "$(gh release view "$TAG" --json tagName 2>/dev/null || true)"
-          release_created=0
-          tap_pushed=0
-          published=0
-          rollback_release() {
-            if [[ "$published" == 0 && "$tap_pushed" == 1 ]]; then
-              git -C "$tap" revert --no-edit HEAD || true
-              git -C "$tap" push origin HEAD:main || true
+          if gh release view "$TAG" --json tagName >"$RUNNER_TEMP/existing-release.json" 2>"$RUNNER_TEMP/existing-release.err"; then
+            echo "release already exists for $TAG" >&2
+            exit 1
+          elif ! grep -Eq 'HTTP 404|release not found' "$RUNNER_TEMP/existing-release.err"; then
+            cat "$RUNNER_TEMP/existing-release.err" >&2
+            exit 1
+          fi
+          release_create_started=0
+          tap_push_attempted=0
+          tap_parent=
+          tap_commit=
+          public_proof=0
+          rollback_release_and_tap() {
+            status=$?
+            trap - EXIT
+            if [[ "$public_proof" == 1 ]]; then
+              exit "$status"
             fi
-            if [[ "$published" == 0 && "$release_created" == 1 ]]; then
-              gh release delete "$TAG" --yes || true
+            set +e
+            rollback_failed=0
+            if [[ "$tap_push_attempted" == 1 ]]; then
+              remote_head="$(GH_TOKEN="$HOMEBREW_TAP_TOKEN" git -C "$tap" ls-remote origin refs/heads/main | awk '{print $1}')"
+              if [[ "$remote_head" == "$tap_commit" ]]; then
+                if ! git -C "$tap" revert --no-edit "$tap_commit" || \
+                  ! GH_TOKEN="$HOMEBREW_TAP_TOKEN" git -C "$tap" push origin HEAD:main; then
+                  rollback_failed=1
+                fi
+              elif [[ "$remote_head" != "$tap_parent" ]]; then
+                echo "tap moved to unexpected commit '$remote_head' during rollback" >&2
+                rollback_failed=1
+              fi
             fi
+            if [[ "$release_create_started" == 1 ]]; then
+              if gh release view "$TAG" --json tagName >/dev/null 2>"$RUNNER_TEMP/rollback-release.err"; then
+                if ! gh release delete "$TAG" --yes; then
+                  rollback_failed=1
+                fi
+              elif ! grep -Eq 'HTTP 404|release not found' "$RUNNER_TEMP/rollback-release.err"; then
+                cat "$RUNNER_TEMP/rollback-release.err" >&2
+                rollback_failed=1
+              fi
+            fi
+            if [[ "$rollback_failed" == 1 ]]; then
+              echo 'release or tap rollback failed; owner intervention is required' >&2
+              exit 70
+            fi
+            [[ "$status" != 0 ]] || status=1
+            exit "$status"
           }
-          trap rollback_release EXIT
+          trap rollback_release_and_tap EXIT
+          release_create_started=1
           gh release create "$TAG" --verify-tag --draft --title "FlowBaton $TAG" --generate-notes candidate/* provenance/*
-          release_created=1
 
           tap="$RUNNER_TEMP/homebrew-flowbaton"
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/larchwave/homebrew-flowbaton.git" "$tap"
+          GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh auth setup-git
+          GH_TOKEN="$HOMEBREW_TAP_TOKEN" git clone https://github.com/larchwave/homebrew-flowbaton.git "$tap"
           scripts/release/render-homebrew-cask.py --version "$version" --candidate candidate --output "$tap/Casks/flowbaton.rb"
           git -C "$tap" config user.name 'flowbaton-release[bot]'
           git -C "$tap" config user.email '314023723+larchwave@users.noreply.github.com'
           git -C "$tap" add Casks/flowbaton.rb
           git -C "$tap" diff --cached --quiet && { echo 'Homebrew cask did not advance' >&2; exit 1; }
           git -C "$tap" commit -m "flowbaton ${TAG}"
-          git -C "$tap" push origin HEAD:main
-          tap_pushed=1
+          tap_parent="$(git -C "$tap" rev-parse HEAD^)"
+          tap_commit="$(git -C "$tap" rev-parse HEAD)"
+          tap_push_attempted=1
+          GH_TOKEN="$HOMEBREW_TAP_TOKEN" git -C "$tap" push origin HEAD:main
           gh release edit "$TAG" --draft=false --latest
-          published=1
+
+          anonymous_home="$RUNNER_TEMP/anonymous-release-home"
+          mkdir -p "$anonymous_home"
+          gh_dir="$(dirname "$(command -v gh)")"
+          python_dir="$(dirname "$(command -v python3)")"
+          anonymous_path="${gh_dir}:${python_dir}:/usr/local/bin:/usr/bin:/bin"
+          provenance_bundle="$(find provenance -maxdepth 1 -name '*.intoto.jsonl' -type f -print -quit)"
+          test -n "$provenance_bundle"
+          env -i \
+            HOME="$anonymous_home" \
+            PATH="$anonymous_path" \
+            GIT_TERMINAL_PROMPT=0 \
+            scripts/release/anonymous-release-probe.sh \
+              "$TAG" "$GITHUB_SHA" candidate "$provenance_bundle" governance/public-delivery-surfaces.json
+          public_proof=1

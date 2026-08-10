@@ -2,18 +2,17 @@ param(
 	[Parameter(Mandatory = $true)][string]$Candidate,
 	[Parameter(Mandatory = $true)][string]$Version
 )
-$ErrorActionPreference = 'Stop'
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("flowbaton-smoke-" + [guid]::NewGuid())
 $http = Join-Path $tmp "http\v$Version"
 $home = Join-Path $tmp 'home'
 $bin = Join-Path $tmp 'bin'
-New-Item -ItemType Directory -Force -Path $http, $home, $bin | Out-Null
-Copy-Item -Path (Join-Path $Candidate '*') -Destination $http -Force
+New-Item -ItemType Directory -Force -Path $http, $home, $bin -ErrorAction Stop | Out-Null
+Copy-Item -Path (Join-Path $Candidate '*') -Destination $http -Force -ErrorAction Stop
 $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
 $listener.Start()
 $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
 $listener.Stop()
-$server = Start-Process python -ArgumentList '-m', 'http.server', $port, '--bind', '127.0.0.1', '--directory', (Join-Path $tmp 'http') -PassThru -WindowStyle Hidden
+$server = Start-Process python -ArgumentList '-m', 'http.server', $port, '--bind', '127.0.0.1', '--directory', (Join-Path $tmp 'http') -PassThru -WindowStyle Hidden -ErrorAction Stop
 try {
 	Start-Sleep -Seconds 1
 	$env:USERPROFILE = $home

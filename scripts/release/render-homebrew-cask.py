@@ -7,6 +7,10 @@ from pathlib import Path
 parser = argparse.ArgumentParser()
 parser.add_argument("--version", required=True)
 parser.add_argument("--candidate", type=Path, required=True)
+parser.add_argument(
+    "--base-url",
+    default="https://github.com/larchwave/flowbaton/releases/download/v{version}",
+)
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 
@@ -20,18 +24,19 @@ def digest(name: str) -> str:
 
 arm = f"flowbaton_{args.version}_darwin_arm64.tar.gz"
 intel = f"flowbaton_{args.version}_darwin_amd64.tar.gz"
+base_url = args.base_url.format(version="#{version}").rstrip("/")
 cask = f'''cask "flowbaton" do
   version "{args.version}"
 
   on_arm do
     sha256 "{digest(arm)}"
-    url "https://github.com/larchwave/flowbaton/releases/download/v#{{version}}/{arm}"
+    url "{base_url}/{arm}"
     binary "flowbaton_#{{version}}_darwin_arm64/flowbaton"
   end
 
   on_intel do
     sha256 "{digest(intel)}"
-    url "https://github.com/larchwave/flowbaton/releases/download/v#{{version}}/{intel}"
+    url "{base_url}/{intel}"
     binary "flowbaton_#{{version}}_darwin_amd64/flowbaton"
   end
 
