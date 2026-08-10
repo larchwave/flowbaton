@@ -1,0 +1,25 @@
+# FlowBaton
+
+> Mobile UI testing from YAML flows: one Go binary drives Android devices and
+> iOS Simulators. Deterministic engine, capability preflight, SLSA-attested
+> releases, optional AI with your own key. Apache-2.0.
+
+A flow is a YAML file: an `appId` header, `---`, then a list of commands such
+as `launchApp`, `tapOn`, `inputText`, `assertVisible`. Validate any flow with
+`flowbaton check-syntax <file|->` before running it. Run flows with
+`flowbaton test -p android|ios --device <id> <flow.yaml>`. The binary also
+serves MCP tools over stdio via `flowbaton mcp`.
+
+## Docs
+
+- [README](README.md): install, quick start, CLI tour
+- [AGENTS.md](AGENTS.md): the short tour written for coding agents
+- [CONTRIBUTING.md](CONTRIBUTING.md): build requirements and platform checks
+- [Support matrix](docs/support-matrix.md): what runs where
+- [Release policy](docs/release-policy.md): what a release must prove
+- [Security policy](SECURITY.md): reporting and scope
+
+## Machine-readable behavior
+
+- [contracts/](contracts/): frozen public and driver contracts
+- [specs/](specs/): normative product behavior
