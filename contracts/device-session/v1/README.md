@@ -44,3 +44,8 @@ context, time validity, lifecycle ordering, frame links, reconnect cursors, and
 lease fencing are normative semantic rules implemented by `ValidateJSON` in this
 directory. Consumers must run equivalent checks before acquisition or mutation; schema
 validation alone is insufficient.
+
+The Go package exports the document, binding, lease, request, and event types,
+plus constructors for validated transcripts and strictly encoded request/event
+payloads. The PostgreSQL runtime integration suite uses a disposable database
+from `FLOWBATON_TEST_POSTGRES_URL`; it skips only when that variable is absent.

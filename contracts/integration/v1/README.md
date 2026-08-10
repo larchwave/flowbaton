@@ -31,3 +31,8 @@ validation alone is insufficient.
 Compatibility policy is N/N-1 within a supported major contract line. Consumers
 must display the negotiated FlowBaton version and digest and keep bundled OSS
 notices. FlowBaton remains fully usable without any proprietary consumer.
+
+The Go package exports `Document`, its component types, normative authentication
+profiles, and `NewDocument`. Runtime producers must construct the handshake with
+`NewDocument`; it performs the same semantic validation as `ValidateJSON` before
+the document can be emitted.
