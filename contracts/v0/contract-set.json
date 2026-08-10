@@ -66,7 +66,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/support-registry.json",
       "coverage": "contract-complete",
-      "sha256": "2bc7ceba83209ae7b9f58eea9c294507b4b4291f05d65aae28cfff566509a6ed"
+      "sha256": "2d9847019c997aab119b47c333b68b3f879d83c3d6f03c4d3e1f3b38333792d6"
     },
     {
       "id": "asset-schema-snapshot",

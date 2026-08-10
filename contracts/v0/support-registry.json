@@ -11,6 +11,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -23,6 +24,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -34,7 +36,8 @@
       "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "ios-physical"
       ],
       "reason": "production drivers expose this command only on the listed platforms"
     },
@@ -45,7 +48,8 @@
       "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "ios-physical"
       ],
       "reason": "production drivers expose this command only on the listed platforms"
     },
@@ -67,7 +71,8 @@
       "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "ios-physical"
       ],
       "reason": "production drivers expose this command only on the listed platforms"
     },
@@ -79,6 +84,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -91,6 +97,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -103,6 +110,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -115,6 +123,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -127,6 +136,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -139,6 +149,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -151,6 +162,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "AI command executes against an injected provider; fails closed without one"
@@ -163,6 +175,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -175,6 +188,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "AI command executes against an injected provider; fails closed without one"
@@ -187,6 +201,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "AI command executes against an injected provider; fails closed without one"
@@ -210,6 +225,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -222,6 +238,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -234,6 +251,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -246,6 +264,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -258,6 +277,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -270,6 +290,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -282,6 +303,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -294,6 +316,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -306,6 +329,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -318,6 +342,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -330,6 +355,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -342,6 +368,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -354,6 +381,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -366,6 +394,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -389,6 +418,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -401,6 +431,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -413,6 +444,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -425,6 +457,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -437,6 +470,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -449,6 +483,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -461,6 +496,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -472,7 +508,8 @@
       "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "ios-physical"
       ],
       "reason": "production drivers expose this command only on the listed platforms"
     },
@@ -484,6 +521,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -496,6 +534,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -508,6 +547,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -520,6 +560,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -532,6 +573,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -544,6 +586,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -556,6 +599,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -568,6 +612,7 @@
       "platforms": [
         "android",
         "ios-simulator",
+        "ios-physical",
         "web"
       ],
       "reason": "command support comes from production driver capability documents"
@@ -579,7 +624,8 @@
       "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "ios-physical"
       ],
       "reason": "production drivers expose this command only on the listed platforms"
     },
@@ -590,7 +636,8 @@
       "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "ios-physical"
       ],
       "reason": "production drivers expose this command only on the listed platforms"
     },
@@ -2480,11 +2527,11 @@
       "kind": "device-platform",
       "name": "ios-physical",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "ios-physical"
       ],
-      "reason": "physical iOS automation is post-v1"
+      "reason": "v1 device surface"
     },
     {
       "kind": "device-platform",

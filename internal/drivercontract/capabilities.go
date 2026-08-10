@@ -7,6 +7,7 @@ import "github.com/larchwave/flowbaton/internal/model"
 const (
 	PlatformAndroid      = "android"
 	PlatformIOSSimulator = "ios-simulator"
+	PlatformIOSPhysical  = "ios-physical"
 	PlatformWeb          = "web"
 )
 
@@ -45,13 +46,14 @@ func (document Document) SupportsCommandValue(command model.CommandKeyword, valu
 }
 
 // Documents returns the exact capability documents consumed by the Android,
-// iOS Simulator, and Web production drivers.
+// iOS Simulator, iOS physical-device, and Web production drivers.
 func Documents() []Document {
-	return []Document{androidDocument(), iosSimulatorDocument(), webDocument()}
+	return []Document{androidDocument(), iosSimulatorDocument(), iosPhysicalDocument(), webDocument()}
 }
 
 func Android() Document      { return androidDocument() }
 func IOSSimulator() Document { return iosSimulatorDocument() }
+func IOSPhysical() Document  { return iosPhysicalDocument() }
 func Web() Document          { return webDocument() }
 
 func androidDocument() Document {
@@ -92,6 +94,37 @@ func iosSimulatorDocument() Document {
 	})
 	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB")
 	return Document{Platform: PlatformIOSSimulator, features: features}
+}
+
+// iosPhysicalDocument is the hardware surface as the driver implements it:
+// every false here has a matching device.ErrUnsupported at call time. Only
+// clearKeychain and addMedia are permanent Apple hardware limits (no tool
+// does either without a jailbreak); the rest of the simulator gaps (back,
+// browser choice, airplane mode, proxies) are shared iOS platform limits.
+func iosPhysicalDocument() Document {
+	features := map[string]bool{
+		"proxy":                 false,
+		"airplaneMode":          false,
+		"androidChromeDevTools": false,
+		"screenRecording":       true,
+		"onDeviceQuery":         false,
+		"deviceLogCapture":      true,
+		"crashArtifacts":        true,
+		"browserChoice":         false,
+		"backPress":             false,
+	}
+	addCommands(features, map[model.CommandKeyword]bool{
+		// Shared with the simulator surface.
+		model.CommandBack:               true,
+		model.CommandOpenBrowser:        true,
+		model.CommandSetAirplaneMode:    true,
+		model.CommandToggleAirplaneMode: true,
+		// Permanent Apple hardware limits.
+		model.CommandClearKeychain: true,
+		model.CommandAddMedia:      true,
+	})
+	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB")
+	return Document{Platform: PlatformIOSPhysical, features: features}
 }
 
 func webDocument() Document {

@@ -205,14 +205,74 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     try onMain { XCUIDevice.shared.orientation = value }
   }
 
+  /// setPermissions auto-answers springboard permission alerts.
+  ///
+  /// On a SIMULATOR the host owns permissions through `simctl privacy` and
+  /// never calls this route. On HARDWARE there is no host-side TCC write —
+  /// every tool answers the system dialog like a person would — so the rules
+  /// arrive here and a main-RunLoop timer keeps answering matching alerts as
+  /// they appear (`RunnerHostTests` pumps that RunLoop while serving).
+  ///
+  /// Rule keys are the flow's permission names ("camera", "location",
+  /// "notifications", …) matched against the alert text; "all" matches any
+  /// permission alert. Values: "allow" and "deny" ("unset" cannot exist on
+  /// hardware and is refused).
   func setPermissions(_ permissions: [String: String]) throws {
-    // Simulator permissions are granted through simctl by the HOST, which owns
-    // the udid and already shells out to install and launch. Accepting the
-    // request here and doing nothing would report a permission as granted when
-    // it is not, so this refuses and names where the work belongs.
-    _ = permissions
-    throw AutomationError.precondition(
-      "permissions are set by the host through simctl privacy, not by the runner")
+    for (permission, grant) in permissions where grant != "allow" && grant != "deny" {
+      throw AutomationError.precondition(
+        "hardware answers permission dialogs, so \(permission) supports allow or deny, not \(grant)"
+      )
+    }
+    try onMain {
+      Self.permissionRules.merge(permissions) { _, newest in newest }
+      Self.answerVisiblePermissionAlerts()
+      Self.startPermissionWatcherIfNeeded()
+    }
+  }
+
+  @MainActor private static var permissionRules: [String: String] = [:]
+  @MainActor private static var permissionWatcher: Timer?
+
+  /// Buttons that grant, in the order iOS tends to present them.
+  private static let allowButtons = [
+    "Allow While Using App", "Allow Once", "Allow", "OK", "Continue",
+  ]
+  private static let denyButtons = ["Don't Allow", "Don’t Allow", "Deny"]
+
+  @MainActor private static func startPermissionWatcherIfNeeded() {
+    guard permissionWatcher == nil else { return }
+    let timer = Timer(timeInterval: 0.5, repeats: true) { _ in
+      MainActor.assumeIsolated { answerVisiblePermissionAlerts() }
+    }
+    RunLoop.main.add(timer, forMode: .common)
+    permissionWatcher = timer
+  }
+
+  /// Answers every springboard alert a rule matches. Unmatched alerts stay
+  /// untouched: an unrelated system dialog is not this route's to dismiss.
+  @MainActor private static func answerVisiblePermissionAlerts() {
+    guard !permissionRules.isEmpty else { return }
+    let springboard = XCUIApplication(bundleIdentifier: springboardID)
+    let alerts = springboard.alerts
+    for index in 0..<alerts.count {
+      let alert = alerts.element(boundBy: index)
+      guard alert.exists, let grant = rule(for: alert.label) else { continue }
+      let titles = grant == "allow" ? allowButtons : denyButtons
+      for title in titles where alert.buttons[title].exists {
+        alert.buttons[title].tap()
+        break
+      }
+    }
+  }
+
+  @MainActor private static func rule(for alertText: String) -> String? {
+    let text = alertText.lowercased()
+    for (permission, grant) in permissionRules where permission != "all" {
+      if text.contains(permission.lowercased()) {
+        return grant
+      }
+    }
+    return permissionRules["all"]
   }
 
   // MARK: - Hierarchy

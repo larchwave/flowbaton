@@ -215,7 +215,7 @@ func defaultEntriesV0() []Entry {
 			Platforms:     platforms,
 			Reason:        "command support comes from production driver capability documents",
 		}
-		if len(platforms) != 3 {
+		if len(platforms) != len(driverCapabilityDocuments()) {
 			entry.RuntimeStatus = RuntimeStatusPlatformLimited
 			entry.Reason = "production drivers expose this command only on the listed platforms"
 		}
@@ -267,7 +267,7 @@ func defaultEntriesV0() []Entry {
 		Entry{FeatureDevicePlatform, "android-emulator", ParseStatusParseable, RuntimeStatusPlannedV1, []string{"android"}, "v1 device surface"},
 		Entry{FeatureDevicePlatform, "android-physical", ParseStatusParseable, RuntimeStatusPlannedV1, []string{"android"}, "v1 device surface"},
 		Entry{FeatureDevicePlatform, "ios-simulator", ParseStatusParseable, RuntimeStatusPlannedV1, []string{"ios-simulator"}, "v1 device surface"},
-		Entry{FeatureDevicePlatform, "ios-physical", ParseStatusParseable, RuntimeStatusDeferred, []string{"ios-physical"}, "physical iOS automation is post-v1"},
+		Entry{FeatureDevicePlatform, "ios-physical", ParseStatusParseable, RuntimeStatusPlannedV1, []string{"ios-physical"}, "v1 device surface"},
 		Entry{FeatureDevicePlatform, "web", ParseStatusParseable, RuntimeStatusPlannedV1, []string{"web"}, "Web/CDP execution surface"},
 	)
 	return entries

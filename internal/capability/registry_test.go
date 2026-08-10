@@ -11,6 +11,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/drivercontract"
 	"github.com/larchwave/flowbaton/internal/ios"
+	"github.com/larchwave/flowbaton/internal/iosdevice"
 	"github.com/larchwave/flowbaton/internal/model"
 	"github.com/larchwave/flowbaton/internal/web"
 )
@@ -63,6 +64,7 @@ func TestRegistryCommandPlatformsComeFromDriverCapabilities(t *testing.T) {
 	}{
 		{platform: drivercontract.PlatformAndroid, capabilities: android.DeclaredCapabilities()},
 		{platform: drivercontract.PlatformIOSSimulator, capabilities: ios.DeclaredCapabilities()},
+		{platform: drivercontract.PlatformIOSPhysical, capabilities: iosdevice.DeclaredCapabilities()},
 		{platform: drivercontract.PlatformWeb, capabilities: web.DeclaredCapabilities()},
 	}
 	registry := DefaultRegistry()
@@ -81,7 +83,7 @@ func TestRegistryCommandPlatformsComeFromDriverCapabilities(t *testing.T) {
 			t.Errorf("command %q platforms = %v, want driver capability platforms %v", keyword, entry.Platforms, want)
 		}
 		wantStatus := RuntimeStatusPlannedV1
-		if len(want) != 3 {
+		if len(want) != len(documents) {
 			wantStatus = RuntimeStatusPlatformLimited
 		}
 		if entry.RuntimeStatus != wantStatus {
@@ -116,20 +118,14 @@ func TestRegistryDeclaresImplementedAndDeferredFeatures(t *testing.T) {
 	t.Parallel()
 
 	registry := DefaultRegistry()
-	deferred := []struct {
-		kind FeatureKind
-		name string
-	}{
-		{FeatureDevicePlatform, "ios-physical"},
+	// ios-physical graduated from Deferred to a v1 device surface (owner
+	// decision, 2026-08-10) when the go-ios driver landed.
+	entry, found := registry.Lookup(FeatureDevicePlatform, "ios-physical")
+	if !found {
+		t.Fatal("missing device platform entry ios-physical")
 	}
-	for _, test := range deferred {
-		entry, found := registry.Lookup(test.kind, test.name)
-		if !found {
-			t.Fatalf("missing deferred entry %s/%s", test.kind, test.name)
-		}
-		if entry.ParseStatus != ParseStatusParseable || entry.RuntimeStatus != RuntimeStatusDeferred || entry.Reason == "" {
-			t.Fatalf("deferred entry %s/%s = %#v", test.kind, test.name, entry)
-		}
+	if entry.ParseStatus != ParseStatusParseable || entry.RuntimeStatus != RuntimeStatusPlannedV1 || entry.Reason == "" {
+		t.Fatalf("ios-physical entry = %#v, want a reasoned PlannedV1", entry)
 	}
 	for _, name := range []string{"test.--headless", "test.--screen-size"} {
 		entry, found := registry.Lookup(FeatureCLIFlag, name)
