@@ -34,11 +34,17 @@ brew trust larchwave/flowbaton
 brew install flowbaton
 ```
 
-Or with Go:
+Or with Go (a source build reports its version as `dev`):
 
 ```sh
 go install github.com/larchwave/flowbaton/cmd/flowbaton@latest
 ```
+
+On Windows, download `flowbaton_<version>_windows_amd64.zip` from the
+releases page, extract it, and put the extracted folder on `PATH`. Windows is
+a pre-alpha target: flow parsing and syntax checks work, Android execution
+has not yet passed the release gates, and iOS work needs macOS — see the
+[support matrix](docs/support-matrix.md).
 
 Archives for macOS, Linux, and Windows are on the
 [releases page](https://github.com/larchwave/flowbaton/releases). Every archive
