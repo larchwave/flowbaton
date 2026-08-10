@@ -67,9 +67,13 @@ type Driver struct {
 	// simulator; nil means spawn for real.
 	spawnRecorder func(ctx context.Context, args []string) (screenRecorder, error)
 	// logMu guards deviceLogs, the long-lived unified-log captures in flight.
-	logMu          sync.Mutex
-	deviceLogs     map[device.CaptureID]iosDeviceLog
-	spawnDeviceLog func(context.Context, []string, io.Writer) (deviceLogProcess, error)
+	logMu              sync.Mutex
+	deviceLogs         map[device.CaptureID]*iosDeviceLog
+	spawnDeviceLog     func(context.Context, []string, io.Writer) (deviceLogProcess, error)
+	logReservations    int
+	deviceLogByteLimit int64
+	diagnoseInFlight   bool
+	diagnosticQuota    iosArtifactQuota
 	// ClearAppState preserves the installed bundle across the uninstall. These
 	// seams keep the filesystem work deterministic in tests.
 	makeTemporaryDirectory func() (string, error)
@@ -90,7 +94,7 @@ type Driver struct {
 // screenRecorder is a running simctl recorder the driver can stop. stop sends
 // SIGINT so simctl finalizes the .mov, then returns once the child has exited.
 type screenRecorder interface {
-	stop() error
+	stop(context.Context) error
 }
 
 // iosRecording pairs a running recorder with the sink simctl writes to.
@@ -137,7 +141,7 @@ func (driver *Driver) Open(ctx context.Context) error {
 // same reason.
 func (driver *Driver) Close(ctx context.Context) error {
 	return errors.Join(
-		driver.stopAllRecordings(), driver.stopAllDeviceLogs(ctx), driver.stopRunnerProcess())
+		driver.stopAllRecordings(ctx), driver.stopAllDeviceLogs(ctx), driver.stopRunnerProcess())
 }
 
 func (driver *Driver) DeviceInfo(ctx context.Context) (device.DeviceInfo, error) {
@@ -560,7 +564,7 @@ func (driver *Driver) StartScreenRecording(
 // surface — v0 declares only the start half — so the recording controller
 // completes the lifecycle by calling this concrete method directly.
 func (driver *Driver) StopScreenRecording(
-	_ context.Context,
+	ctx context.Context,
 	id device.CaptureID,
 ) ([]device.Artifact, error) {
 	driver.recMu.Lock()
@@ -570,13 +574,13 @@ func (driver *Driver) StopScreenRecording(
 	if !ok {
 		return nil, fmt.Errorf("no iOS screen recording is running for %q", id)
 	}
-	if err := stopIOSRecording(recording); err != nil {
+	if err := stopIOSRecording(ctx, recording); err != nil {
 		return nil, err
 	}
 	return []device.Artifact{{Kind: "recording", Path: recording.outputPath}}, nil
 }
 
-func (driver *Driver) stopAllRecordings() error {
+func (driver *Driver) stopAllRecordings(ctx context.Context) error {
 	driver.recMu.Lock()
 	recordings := driver.recordings
 	driver.recordings = nil
@@ -589,15 +593,21 @@ func (driver *Driver) stopAllRecordings() error {
 	slices.Sort(ids)
 	errs := make([]error, 0, len(ids))
 	for _, rawID := range ids {
-		if err := stopIOSRecording(recordings[device.CaptureID(rawID)]); err != nil {
+		cleanupContext, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), iosRecordingFinalizeTimeout)
+		err := stopIOSRecording(cleanupContext, recordings[device.CaptureID(rawID)])
+		cancel()
+		if err != nil {
 			errs = append(errs, fmt.Errorf("screen recording %q: %w", rawID, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func stopIOSRecording(recording iosRecording) error {
-	stopErr := recording.recorder.stop()
+func stopIOSRecording(ctx context.Context, recording iosRecording) error {
+	stopContext, cancel := context.WithTimeout(ctx, iosRecordingFinalizeTimeout)
+	defer cancel()
+	stopErr := recording.recorder.stop(stopContext)
 	info, statErr := os.Stat(recording.outputPath)
 	if statErr == nil && (!info.Mode().IsRegular() || info.Size() == 0) {
 		statErr = fmt.Errorf("artifact %q is not a non-empty regular file", recording.outputPath)
@@ -628,17 +638,24 @@ func realIOSRecorder(ctx context.Context, args []string) (screenRecorder, error)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	child := newIOSLocalChild(cmd)
 	// Start waits for the capture marker so a later interrupt finalizes a valid
 	// video file.
 	startupErr := awaitRecordingStartedWithin(ctx, stdout, iosRecordingStartupTimeout)
 	if startupErr != nil {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-		return nil, startupErr
+		killErr := child.kill()
+		var reapErr error
+		select {
+		case waitErr := <-child.done:
+			reapErr = allowKilledExit(waitErr)
+		case <-time.After(iosLocalChildReapTimeout):
+			reapErr = errors.New("timed out reaping killed iOS recorder child during startup")
+		}
+		return nil, errors.Join(startupErr, killErr, reapErr)
 	}
 	// simctl keeps talking after that line, and a full pipe would wedge it.
 	go func() { _, _ = io.Copy(io.Discard, stdout) }()
-	return &execRecorder{cmd: cmd}, nil
+	return &execRecorder{child: child}, nil
 }
 
 // recordingStartedMarker is what simctl prints once it is capturing:
@@ -650,7 +667,11 @@ func realIOSRecorder(ctx context.Context, args []string) (screenRecorder, error)
 //	Wrote video to: capture.mp4
 const recordingStartedMarker = "Recording started"
 
-const iosRecordingStartupTimeout = 15 * time.Second
+const (
+	iosRecordingStartupTimeout  = 15 * time.Second
+	iosRecordingFinalizeTimeout = 15 * time.Second
+	iosLocalChildReapTimeout    = time.Second
+)
 
 func awaitRecordingStartedWithin(ctx context.Context, output io.Reader, timeout time.Duration) error {
 	started := make(chan error, 1)
@@ -689,24 +710,55 @@ func awaitRecordingStarted(output io.Reader) error {
 	return fmt.Errorf("the recorder never started recording: %s", strings.Join(said, "; "))
 }
 
-// execRecorder is a real simctl recorder child.
-type execRecorder struct{ cmd *exec.Cmd }
+type iosLocalChild struct {
+	done   <-chan error
+	signal func(os.Signal) error
+	kill   func() error
+}
 
-func (r *execRecorder) stop() error {
-	if err := r.cmd.Process.Signal(os.Interrupt); err != nil {
+func newIOSLocalChild(cmd *exec.Cmd) *iosLocalChild {
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	return &iosLocalChild{done: done, signal: cmd.Process.Signal, kill: cmd.Process.Kill}
+}
+
+func stopIOSLocalChild(ctx context.Context, child *iosLocalChild) error {
+	if err := child.signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return err
 	}
-	err := r.cmd.Wait()
+	select {
+	case err := <-child.done:
+		return allowInterruptExit(err)
+	case <-ctx.Done():
+		killErr := child.kill()
+		select {
+		case waitErr := <-child.done:
+			return errors.Join(ctx.Err(), killErr, allowKilledExit(waitErr))
+		case <-time.After(iosLocalChildReapTimeout):
+			return errors.Join(ctx.Err(), killErr, errors.New("timed out reaping killed iOS recorder child"))
+		}
+	}
+}
+
+func allowKilledExit(err error) error {
 	if err == nil {
 		return nil
 	}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
-		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() && status.Signal() == syscall.SIGINT {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok &&
+			status.Signaled() && status.Signal() == syscall.SIGKILL {
 			return nil
 		}
 	}
 	return err
+}
+
+// execRecorder is a real simctl recorder child.
+type execRecorder struct{ child *iosLocalChild }
+
+func (r *execRecorder) stop(ctx context.Context) error {
+	return stopIOSLocalChild(ctx, r.child)
 }
 
 func (driver *Driver) SetLocation(ctx context.Context, location device.Location) error {
@@ -883,6 +935,21 @@ func (driver *Driver) StartDeviceLogCapture(
 	if err != nil {
 		return "", err
 	}
+	driver.logMu.Lock()
+	if len(driver.deviceLogs)+driver.logReservations >= maxActiveIOSDeviceLogs {
+		driver.logMu.Unlock()
+		return "", fmt.Errorf("iOS device-log capture limit of %d is already active", maxActiveIOSDeviceLogs)
+	}
+	driver.logReservations++
+	driver.logMu.Unlock()
+	reserved := true
+	defer func() {
+		if reserved {
+			driver.logMu.Lock()
+			driver.logReservations--
+			driver.logMu.Unlock()
+		}
+	}()
 	output, err := os.CreateTemp(directory, "ios-device-log-*.ndjson")
 	if err != nil {
 		return "", fmt.Errorf("creating iOS device-log artifact: %w", err)
@@ -892,10 +959,11 @@ func (driver *Driver) StartDeviceLogCapture(
 	if spawn == nil {
 		spawn = realIOSDeviceLog
 	}
+	limiter := newIOSLogWriter(output, driver.iosDeviceLogLimit())
 	process, err := spawn(
 		ctx,
 		[]string{"simctl", "spawn", driver.udid, "log", "stream", "--style", "ndjson"},
-		output,
+		limiter,
 	)
 	if err != nil {
 		_ = output.Close()
@@ -903,12 +971,32 @@ func (driver *Driver) StartDeviceLogCapture(
 		return "", fmt.Errorf("starting iOS device-log capture: %w", err)
 	}
 	id := device.CaptureID(outputPath)
+	capture := &iosDeviceLog{
+		process: process, output: output, outputPath: outputPath, limiter: limiter, done: make(chan struct{}),
+	}
+	if limiter.limitError() != nil {
+		cleanupContext, cancel := context.WithTimeout(context.Background(), iosDiagnosticStopTimeout)
+		err := finalizeIOSDeviceLog(cleanupContext, capture)
+		cancel()
+		return "", fmt.Errorf("starting iOS device-log capture: %w", err)
+	}
 	driver.logMu.Lock()
 	if driver.deviceLogs == nil {
-		driver.deviceLogs = map[device.CaptureID]iosDeviceLog{}
+		driver.deviceLogs = map[device.CaptureID]*iosDeviceLog{}
 	}
-	driver.deviceLogs[id] = iosDeviceLog{process: process, output: output, outputPath: outputPath}
+	driver.deviceLogs[id] = capture
+	driver.logReservations--
+	reserved = false
 	driver.logMu.Unlock()
+	go func() {
+		select {
+		case <-limiter.exceeded:
+			cleanupContext, cancel := context.WithTimeout(context.Background(), iosDiagnosticStopTimeout)
+			defer cancel()
+			_ = finalizeIOSDeviceLog(cleanupContext, capture)
+		case <-capture.done:
+		}
+	}()
 	return id, nil
 }
 
@@ -925,7 +1013,7 @@ func (driver *Driver) StopDeviceLogCapture(
 	}
 	stopContext, cancel := context.WithTimeout(ctx, iosDiagnosticStopTimeout)
 	defer cancel()
-	if err := stopIOSDeviceLog(stopContext, capture); err != nil {
+	if err := finalizeIOSDeviceLog(stopContext, capture); err != nil {
 		return nil, err
 	}
 	return []device.Artifact{{Kind: "log", Path: capture.outputPath}}, nil
@@ -944,6 +1032,18 @@ func (driver *Driver) CollectCrashArtifacts(
 	if err != nil {
 		return nil, err
 	}
+	driver.logMu.Lock()
+	if driver.diagnoseInFlight {
+		driver.logMu.Unlock()
+		return nil, fmt.Errorf("an iOS diagnose capture is already running")
+	}
+	driver.diagnoseInFlight = true
+	driver.logMu.Unlock()
+	defer func() {
+		driver.logMu.Lock()
+		driver.diagnoseInFlight = false
+		driver.logMu.Unlock()
+	}()
 	diagnoseDirectory, err := os.MkdirTemp(directory, "ios-crash-")
 	if err != nil {
 		return nil, fmt.Errorf("creating iOS diagnose directory: %w", err)
@@ -956,11 +1056,24 @@ func (driver *Driver) CollectCrashArtifacts(
 	}()
 	diagnoseContext, cancel := context.WithTimeout(ctx, iosDiagnoseOuterTimeout)
 	defer cancel()
-	if err := driver.simctl.Diagnose(
-		diagnoseContext, diagnoseDirectory, iosDiagnoseCommandTimeout); err != nil {
+	quota := driver.iosDiagnosticQuota()
+	quotaErrors := make(chan error, 1)
+	monitorContext, stopMonitor := context.WithCancel(diagnoseContext)
+	defer stopMonitor()
+	go monitorIOSCrashArtifacts(monitorContext, diagnoseDirectory, quota, quotaErrors, cancel)
+	diagnoseErr := driver.simctl.Diagnose(
+		diagnoseContext, diagnoseDirectory, iosDiagnoseCommandTimeout)
+	stopMonitor()
+	var quotaErr error
+	select {
+	case quotaErr = <-quotaErrors:
+	default:
+		quotaErr = inspectIOSCrashArtifacts(diagnoseDirectory, quota)
+	}
+	if err := errors.Join(quotaErr, diagnoseErr); err != nil {
 		return nil, err
 	}
-	artifacts, err := collectIOSCrashArtifacts(diagnoseDirectory)
+	artifacts, err := collectIOSCrashArtifacts(diagnoseDirectory, quota)
 	if err != nil {
 		return nil, err
 	}
@@ -969,6 +1082,11 @@ func (driver *Driver) CollectCrashArtifacts(
 }
 
 const (
+	maxActiveIOSDeviceLogs    = 4
+	maxIOSDeviceLogBytes      = int64(16 << 20)
+	maxIOSCrashFiles          = 128
+	maxIOSCrashFileBytes      = int64(256 << 20)
+	maxIOSCrashAggregateBytes = int64(1 << 30)
 	iosDiagnosticStopTimeout  = 10 * time.Second
 	iosDiagnoseCommandTimeout = 30 * time.Second
 	iosDiagnoseOuterTimeout   = 45 * time.Second
@@ -982,6 +1100,35 @@ type iosDeviceLog struct {
 	process    deviceLogProcess
 	output     *os.File
 	outputPath string
+	limiter    *iosLogWriter
+	once       sync.Once
+	done       chan struct{}
+	result     error
+}
+
+type iosArtifactQuota struct {
+	maximumFiles     int
+	maximumFileBytes int64
+	maximumAllBytes  int64
+}
+
+var errIOSDeviceLogLimit = errors.New("iOS device log reached its byte limit")
+
+func (driver *Driver) iosDeviceLogLimit() int64 {
+	if driver.deviceLogByteLimit > 0 {
+		return driver.deviceLogByteLimit
+	}
+	return maxIOSDeviceLogBytes
+}
+
+func (driver *Driver) iosDiagnosticQuota() iosArtifactQuota {
+	if driver.diagnosticQuota.maximumFiles > 0 {
+		return driver.diagnosticQuota
+	}
+	return iosArtifactQuota{
+		maximumFiles: maxIOSCrashFiles, maximumFileBytes: maxIOSCrashFileBytes,
+		maximumAllBytes: maxIOSCrashAggregateBytes,
+	}
 }
 
 func prepareIOSArtifactDirectory(requested string) (string, error) {
@@ -1029,6 +1176,52 @@ func realIOSDeviceLog(
 	return &execDeviceLogProcess{cmd: cmd, done: done}, nil
 }
 
+type iosLogWriter struct {
+	mu       sync.Mutex
+	output   io.Writer
+	maximum  int64
+	written  int64
+	err      error
+	exceeded chan struct{}
+	once     sync.Once
+}
+
+func newIOSLogWriter(output io.Writer, maximum int64) *iosLogWriter {
+	return &iosLogWriter{output: output, maximum: maximum, exceeded: make(chan struct{})}
+}
+
+func (writer *iosLogWriter) Write(data []byte) (int, error) {
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	if writer.err != nil {
+		return 0, writer.err
+	}
+	remaining := writer.maximum - writer.written
+	if int64(len(data)) <= remaining {
+		written, err := writer.output.Write(data)
+		writer.written += int64(written)
+		return written, err
+	}
+	written := 0
+	if remaining > 0 {
+		var err error
+		written, err = writer.output.Write(data[:remaining])
+		writer.written += int64(written)
+		if err != nil {
+			return written, err
+		}
+	}
+	writer.err = errIOSDeviceLogLimit
+	writer.once.Do(func() { close(writer.exceeded) })
+	return written, writer.err
+}
+
+func (writer *iosLogWriter) limitError() error {
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
+	return writer.err
+}
+
 type execDeviceLogProcess struct {
 	cmd  *exec.Cmd
 	done <-chan error
@@ -1071,11 +1264,27 @@ func allowInterruptExit(err error) error {
 	return err
 }
 
-func stopIOSDeviceLog(ctx context.Context, capture iosDeviceLog) error {
-	stopErr := capture.process.stop(ctx)
-	closeErr := capture.output.Close()
-	artifactErr := validateIOSDiagnosticArtifact(capture.outputPath)
-	return errors.Join(stopErr, closeErr, artifactErr)
+func finalizeIOSDeviceLog(ctx context.Context, capture *iosDeviceLog) error {
+	capture.once.Do(func() {
+		stopErr := capture.process.stop(ctx)
+		closeErr := capture.output.Close()
+		limitErr := capture.limiter.limitError()
+		var artifactErr error
+		if limitErr == nil {
+			artifactErr = validateIOSDiagnosticArtifact(capture.outputPath, capture.limiter.maximum)
+		}
+		capture.result = errors.Join(limitErr, stopErr, closeErr, artifactErr)
+		if capture.result != nil {
+			removeErr := os.Remove(capture.outputPath)
+			if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				capture.result = errors.Join(capture.result,
+					fmt.Errorf("removing partial iOS device log %q: %w", capture.outputPath, removeErr))
+			}
+		}
+		close(capture.done)
+	})
+	<-capture.done
+	return capture.result
 }
 
 func (driver *Driver) stopAllDeviceLogs(ctx context.Context) error {
@@ -1093,14 +1302,14 @@ func (driver *Driver) stopAllDeviceLogs(ctx context.Context) error {
 	defer cancel()
 	errs := make([]error, 0, len(ids))
 	for _, rawID := range ids {
-		if err := stopIOSDeviceLog(stopContext, captures[device.CaptureID(rawID)]); err != nil {
+		if err := finalizeIOSDeviceLog(stopContext, captures[device.CaptureID(rawID)]); err != nil {
 			errs = append(errs, fmt.Errorf("device-log capture %q: %w", rawID, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func validateIOSDiagnosticArtifact(path string) error {
+func validateIOSDiagnosticArtifact(path string, maximumBytes int64) error {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return fmt.Errorf("validating iOS diagnostic artifact %q: %w", path, err)
@@ -1108,11 +1317,17 @@ func validateIOSDiagnosticArtifact(path string) error {
 	if !info.Mode().IsRegular() || info.Size() == 0 {
 		return fmt.Errorf("iOS diagnostic artifact %q is not a non-empty regular file", path)
 	}
+	if info.Size() > maximumBytes {
+		return fmt.Errorf("iOS diagnostic artifact %q exceeds the %d-byte limit", path, maximumBytes)
+	}
 	return nil
 }
 
-func collectIOSCrashArtifacts(directory string) ([]device.Artifact, error) {
+func collectIOSCrashArtifacts(
+	directory string, quota iosArtifactQuota,
+) ([]device.Artifact, error) {
 	var artifacts []device.Artifact
+	var allBytes int64
 	err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -1120,9 +1335,20 @@ func collectIOSCrashArtifacts(directory string) ([]device.Artifact, error) {
 		if entry.IsDir() {
 			return nil
 		}
-		if err := validateIOSDiagnosticArtifact(path); err != nil {
+		if len(artifacts) >= quota.maximumFiles {
+			return fmt.Errorf("iOS diagnose exceeded the %d-file limit", quota.maximumFiles)
+		}
+		if err := validateIOSDiagnosticArtifact(path, quota.maximumFileBytes); err != nil {
 			return err
 		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Size() > quota.maximumAllBytes-allBytes {
+			return fmt.Errorf("iOS diagnose exceeded the %d-byte total limit", quota.maximumAllBytes)
+		}
+		allBytes += info.Size()
 		artifacts = append(artifacts, device.Artifact{Kind: "crash", Path: path})
 		return nil
 	})
@@ -1133,4 +1359,38 @@ func collectIOSCrashArtifacts(directory string) ([]device.Artifact, error) {
 		return nil, fmt.Errorf("simctl diagnose produced no crash artifacts in %q", directory)
 	}
 	return artifacts, nil
+}
+
+func inspectIOSCrashArtifacts(directory string, quota iosArtifactQuota) error {
+	_, err := collectIOSCrashArtifacts(directory, quota)
+	if err != nil && strings.Contains(err.Error(), "produced no crash artifacts") {
+		return nil
+	}
+	return err
+}
+
+func monitorIOSCrashArtifacts(
+	ctx context.Context,
+	directory string,
+	quota iosArtifactQuota,
+	violations chan<- error,
+	cancel context.CancelFunc,
+) {
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := inspectIOSCrashArtifacts(directory, quota); err != nil {
+				select {
+				case violations <- err:
+				default:
+				}
+				cancel()
+				return
+			}
+		}
+	}
 }

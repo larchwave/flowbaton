@@ -816,7 +816,9 @@ func (driver *Driver) realSpawnRecorder(_ context.Context, devicePath string) (s
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	return &adbRecorder{cmd: cmd, serial: driver.serial, devicePath: devicePath}, nil
+	return &adbRecorder{
+		cmd: cmd, child: newAndroidLocalChild(cmd), serial: driver.serial, devicePath: devicePath,
+	}, nil
 }
 
 // recordingFinalizeTimeout bounds the wait for the local `adb shell` child to
@@ -828,11 +830,48 @@ const recordingFinalizeTimeout = 15 * time.Second
 // retrieve and clean up its on-device output.
 type adbRecorder struct {
 	cmd        *exec.Cmd
+	child      *androidLocalChild
 	serial     string
 	devicePath string
 	// run executes one adb subcommand. It is a field so the stop sequence is
 	// testable without a device; nil runs adb for real.
 	run func(ctx context.Context, args ...string) ([]byte, error)
+}
+
+type androidLocalChild struct {
+	done   <-chan error
+	signal func(os.Signal) error
+	kill   func() error
+}
+
+func newAndroidLocalChild(cmd *exec.Cmd) *androidLocalChild {
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	return &androidLocalChild{
+		done:   done,
+		signal: cmd.Process.Signal,
+		kill:   cmd.Process.Kill,
+	}
+}
+
+const androidLocalChildReapTimeout = time.Second
+
+func waitForAndroidLocalChild(ctx context.Context, child *androidLocalChild) error {
+	if child == nil {
+		return nil
+	}
+	select {
+	case <-child.done:
+		return nil
+	case <-ctx.Done():
+		killErr := child.kill()
+		select {
+		case <-child.done:
+			return errors.Join(ctx.Err(), killErr)
+		case <-time.After(androidLocalChildReapTimeout):
+			return errors.Join(ctx.Err(), killErr, errors.New("timed out reaping killed adb recorder child"))
+		}
+	}
 }
 
 func (r *adbRecorder) adb(ctx context.Context, args ...string) ([]byte, error) {
@@ -857,46 +896,38 @@ func (r *adbRecorder) adb(ctx context.Context, args ...string) ([]byte, error) {
 // pid screenrecord was started with instead.
 func (r *adbRecorder) stop(ctx context.Context, sinkPath string) error {
 	var stopErrs []error
+	stopContext, cancelStop := context.WithTimeout(ctx, recordingFinalizeTimeout)
+	defer cancelStop()
 	interrupted := true
-	if _, err := r.adb(ctx, "shell", "pkill", "-INT", "screenrecord"); err != nil {
+	if _, err := r.adb(stopContext, "shell", "pkill", "-INT", "screenrecord"); err != nil {
 		// A device without pkill still has the local child: worse output than a
 		// device-side interrupt, but better than no recording at all.
 		interrupted = false
-		if r.cmd != nil && r.cmd.Process != nil {
+		if r.child != nil && r.child.signal != nil {
+			_ = r.child.signal(os.Interrupt)
+		} else if r.cmd != nil && r.cmd.Process != nil {
 			_ = r.cmd.Process.Signal(os.Interrupt)
 		}
 	}
 	// The local child exits when screenrecord does, which is the signal that the
 	// on-device file is closed. screenrecord exits non-zero when interrupted but
 	// has already flushed, so the Wait error is expected and not a failure.
-	if r.cmd != nil {
-		exited := make(chan struct{})
-		go func() {
-			_ = r.cmd.Wait()
-			close(exited)
-		}()
-		timer := time.NewTimer(recordingFinalizeTimeout)
-		defer timer.Stop()
-		select {
-		case <-exited:
-		case <-timer.C:
-			stopErrs = append(stopErrs, fmt.Errorf(
-				"screenrecord did not exit within %v", recordingFinalizeTimeout))
-			if interrupted && r.cmd.Process != nil {
-				_ = r.cmd.Process.Signal(os.Interrupt)
-			}
-		}
+	if interrupted && r.child == nil && r.cmd != nil && r.cmd.Process != nil {
+		// A successful device-side interrupt is the graceful path. The local
+		// child is only signalled directly when the device command was unavailable.
+		r.child = newAndroidLocalChild(r.cmd)
 	}
-	artifactCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordingFinalizeTimeout)
-	defer cancel()
-	if out, err := r.adb(artifactCtx, "pull", r.devicePath, sinkPath); err != nil {
+	if err := waitForAndroidLocalChild(stopContext, r.child); err != nil {
+		stopErrs = append(stopErrs, fmt.Errorf("waiting for screenrecord child: %w", err))
+	}
+	if out, err := r.adb(stopContext, "pull", r.devicePath, sinkPath); err != nil {
 		stopErrs = append(stopErrs, fmt.Errorf(
 			"adb pull: %w: %s", err, strings.TrimSpace(string(out))))
 		if removeErr := os.Remove(sinkPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 			stopErrs = append(stopErrs, fmt.Errorf("removing partial recording %q: %w", sinkPath, removeErr))
 		}
 	}
-	if out, err := r.adb(artifactCtx, "shell", "rm", "-f", r.devicePath); err != nil {
+	if out, err := r.adb(stopContext, "shell", "rm", "-f", r.devicePath); err != nil {
 		stopErrs = append(stopErrs, fmt.Errorf(
 			"removing device recording: %w: %s", err, strings.TrimSpace(string(out))))
 	}

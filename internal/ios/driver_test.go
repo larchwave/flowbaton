@@ -677,12 +677,22 @@ type fakeIOSLogProcess struct {
 	stopErr error
 }
 
+type notifyingIOSLogProcess struct {
+	once    sync.Once
+	stopped chan struct{}
+}
+
+func (process *notifyingIOSLogProcess) stop(context.Context) error {
+	process.once.Do(func() { close(process.stopped) })
+	return nil
+}
+
 func (process *fakeIOSLogProcess) stop(context.Context) error {
 	process.stopped = true
 	return process.stopErr
 }
 
-func (r *fakeIOSRecorder) stop() error {
+func (r *fakeIOSRecorder) stop(context.Context) error {
 	r.stopped = true
 	return r.stopErr
 }
@@ -836,6 +846,37 @@ func TestCloseDrainsOutstandingRecordingsIdempotently(t *testing.T) {
 	}
 }
 
+func TestRecorderCleanupKillsAndBoundedlyReapsAStuckChild(t *testing.T) {
+	t.Parallel()
+
+	done := make(chan error, 1)
+	killed := make(chan struct{}, 1)
+	child := &iosLocalChild{
+		done:   done,
+		signal: func(os.Signal) error { return nil },
+		kill: func() error {
+			killed <- struct{}{}
+			done <- nil
+			return nil
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err := stopIOSLocalChild(ctx, child)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stopIOSLocalChild() error = %v, want deadline exceeded", err)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatalf("child cleanup exceeded its deadline by too much: %v", time.Since(started))
+	}
+	select {
+	case <-killed:
+	default:
+		t.Fatal("stuck iOS recorder child was not killed")
+	}
+}
+
 func TestDeviceLogCaptureStartsStopsAndReturnsANonEmptyArtifact(t *testing.T) {
 	t.Parallel()
 
@@ -974,6 +1015,91 @@ func TestDeviceLogCaptureHonorsCancellationAndCloseDrains(t *testing.T) {
 	}
 }
 
+func TestDeviceLogCaptureEnforcesActiveAndByteLimits(t *testing.T) {
+	t.Parallel()
+
+	t.Run("active capture limit", func(t *testing.T) {
+		driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+		driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
+			_, _ = io.WriteString(output, "log\n")
+			return &fakeIOSLogProcess{}, nil
+		}
+		for range maxActiveIOSDeviceLogs {
+			if _, err := driver.StartDeviceLogCapture(
+				context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := driver.StartDeviceLogCapture(
+			context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()}); err == nil {
+			t.Fatal("StartDeviceLogCapture exceeded the active-capture limit")
+		}
+		if err := driver.Close(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("byte overflow stops and removes partial output", func(t *testing.T) {
+		directory := t.TempDir()
+		driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+		driver.deviceLogByteLimit = 8
+		process := &fakeIOSLogProcess{}
+		driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
+			_, _ = io.WriteString(output, "0123456789")
+			return process, nil
+		}
+		if _, err := driver.StartDeviceLogCapture(
+			context.Background(), device.DeviceLogRequest{OutputDirectory: directory}); !errors.Is(err, errIOSDeviceLogLimit) {
+			t.Fatalf("StartDeviceLogCapture error = %v, want byte-limit error", err)
+		}
+		if !process.stopped {
+			t.Fatal("overflow did not terminate the iOS log child")
+		}
+		entries, err := os.ReadDir(directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("overflow left partial log files: %v", entries)
+		}
+	})
+
+	t.Run("asynchronous overflow terminates the active child", func(t *testing.T) {
+		directory := t.TempDir()
+		driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+		driver.deviceLogByteLimit = 8
+		process := &notifyingIOSLogProcess{stopped: make(chan struct{})}
+		var logOutput io.Writer
+		driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
+			logOutput = output
+			return process, nil
+		}
+		id, err := driver.StartDeviceLogCapture(
+			context.Background(), device.DeviceLogRequest{OutputDirectory: directory})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.WriteString(logOutput, "0123456789"); !errors.Is(err, errIOSDeviceLogLimit) {
+			t.Fatalf("log write error = %v, want byte-limit error", err)
+		}
+		select {
+		case <-process.stopped:
+		case <-time.After(time.Second):
+			t.Fatal("overflow did not stop the active iOS log child")
+		}
+		if _, err := driver.StopDeviceLogCapture(context.Background(), id); !errors.Is(err, errIOSDeviceLogLimit) {
+			t.Fatalf("StopDeviceLogCapture error = %v, want persisted byte-limit error", err)
+		}
+		entries, err := os.ReadDir(directory)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("asynchronous overflow left partial log files: %v", entries)
+		}
+	})
+}
+
 func TestCrashArtifactsRunBoundedDiagnoseAndValidateResults(t *testing.T) {
 	t.Parallel()
 
@@ -1049,6 +1175,106 @@ func TestCrashArtifactsRejectEmptyResultsAndAppSpecificPretence(t *testing.T) {
 		OutputDirectory: t.TempDir(), AppID: "com.example.a",
 	}); !errors.Is(err, device.ErrUnsupported) {
 		t.Fatalf("app-filtered CollectCrashArtifacts error = %v, want ErrUnsupported", err)
+	}
+}
+
+func TestCrashArtifactQuotasRejectFilesCountsAndCombinedBytes(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name  string
+		files map[string]string
+		quota iosArtifactQuota
+	}{
+		{"per file", map[string]string{"large.log": "12345"}, iosArtifactQuota{2, 4, 10}},
+		{"file count", map[string]string{"a.log": "1", "b.log": "2"}, iosArtifactQuota{1, 4, 10}},
+		{"combined bytes", map[string]string{"a.log": "123", "b.log": "456"}, iosArtifactQuota{2, 4, 5}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			for name, contents := range test.files {
+				if err := os.WriteFile(filepath.Join(directory, name), []byte(contents), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := collectIOSCrashArtifacts(directory, test.quota); err == nil {
+				t.Fatalf("collectIOSCrashArtifacts accepted quota violation %#v", test)
+			}
+		})
+	}
+}
+
+func TestCrashArtifactOverflowCancelsDiagnoseAndRemovesPartialOutput(t *testing.T) {
+	t.Parallel()
+
+	outputDirectory := t.TempDir()
+	cancelled := make(chan struct{})
+	runner := &recordingRunner{run: func(ctx context.Context, _ string, args ...string) ([]byte, error) {
+		for _, argument := range args {
+			if strings.HasPrefix(argument, "--output=") {
+				path := strings.TrimPrefix(argument, "--output=")
+				if err := os.WriteFile(filepath.Join(path, "too-large.log"), []byte("12345"), 0o600); err != nil {
+					return nil, err
+				}
+			}
+		}
+		<-ctx.Done()
+		close(cancelled)
+		return nil, ctx.Err()
+	}}
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	driver.diagnosticQuota = iosArtifactQuota{maximumFiles: 2, maximumFileBytes: 4, maximumAllBytes: 10}
+	if _, err := driver.CollectCrashArtifacts(
+		context.Background(), device.ArtifactRequest{OutputDirectory: outputDirectory}); err == nil {
+		t.Fatal("CollectCrashArtifacts accepted an over-quota diagnose")
+	}
+	select {
+	case <-cancelled:
+	default:
+		t.Fatal("quota overflow did not cancel the running diagnose command")
+	}
+	entries, err := os.ReadDir(outputDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("quota overflow left partial diagnose output: %v", entries)
+	}
+}
+
+func TestCrashArtifactCaptureEnforcesTheConcurrentLimit(t *testing.T) {
+	t.Parallel()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	runner := &recordingRunner{run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		for _, argument := range args {
+			if strings.HasPrefix(argument, "--output=") {
+				path := strings.TrimPrefix(argument, "--output=")
+				if err := os.WriteFile(filepath.Join(path, "diagnose.log"), []byte("ok"), 0o600); err != nil {
+					return nil, err
+				}
+			}
+		}
+		close(started)
+		<-release
+		return nil, nil
+	}}
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	firstResult := make(chan error, 1)
+	go func() {
+		_, err := driver.CollectCrashArtifacts(
+			context.Background(), device.ArtifactRequest{OutputDirectory: t.TempDir()})
+		firstResult <- err
+	}()
+	<-started
+	if _, err := driver.CollectCrashArtifacts(
+		context.Background(), device.ArtifactRequest{OutputDirectory: t.TempDir()}); err == nil {
+		t.Fatal("a second concurrent diagnose capture was accepted")
+	}
+	close(release)
+	if err := <-firstResult; err != nil {
+		t.Fatalf("first diagnose capture error = %v", err)
 	}
 }
 
@@ -1146,8 +1372,8 @@ func TestStoppingARecorderDoesNotReportTheInterruptAsAnError(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting the stand-in recorder: %v", err)
 	}
-	recorder := &execRecorder{cmd: cmd}
-	if err := recorder.stop(); err != nil {
+	recorder := &execRecorder{child: newIOSLocalChild(cmd)}
+	if err := recorder.stop(context.Background()); err != nil {
 		t.Fatalf("stop() error = %v, want the interrupt to be the ordinary ending", err)
 	}
 }

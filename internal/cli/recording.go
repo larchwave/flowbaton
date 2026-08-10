@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -35,7 +36,8 @@ type DriverRecordingController struct {
 	mu     sync.Mutex
 	driver screenRecordingDriver
 	// directory is where the finished file lands.
-	directory string
+	directory    string
+	directoryErr error
 	// capture is the id of the recording in flight, blank when none is; it is
 	// also how a second startRecording is caught.
 	capture  device.CaptureID
@@ -49,7 +51,8 @@ func NewDriverRecordingController(
 	if directory == "" {
 		directory = "."
 	}
-	return &DriverRecordingController{driver: driver, directory: directory}
+	directory, err := canonicalRecordingDirectory(directory)
+	return &DriverRecordingController{driver: driver, directory: directory, directoryErr: err}
 }
 
 func (controller *DriverRecordingController) Start(
@@ -64,12 +67,20 @@ func (controller *DriverRecordingController) Start(
 	if controller.capture != "" {
 		return fmt.Errorf("a recording is already running (%s)", controller.capture)
 	}
+	if controller.directoryErr != nil {
+		return controller.directoryErr
+	}
 	name, err := recordingFileName(request.Name)
 	if err != nil {
 		return err
 	}
+	outputPath := filepath.Join(controller.directory, name)
+	relative, err := filepath.Rel(controller.directory, outputPath)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("recording path %q escapes run directory %q", outputPath, controller.directory)
+	}
 	capture, err := controller.driver.StartScreenRecording(
-		ctx, device.ScreenRecordingRequest{OutputPath: filepath.Join(controller.directory, name)})
+		ctx, device.ScreenRecordingRequest{OutputPath: outputPath})
 	if err != nil {
 		return err
 	}
@@ -136,10 +147,33 @@ func recordingFileName(authored string) (string, error) {
 	if trimmed == "" {
 		return "", errors.New("a recording needs a name")
 	}
+	if trimmed == "." || trimmed == ".." || filepath.IsAbs(trimmed) ||
+		strings.ContainsAny(trimmed, `/\\`) || filepath.Base(trimmed) != trimmed {
+		return "", fmt.Errorf("recording name %q must be a basename without path traversal", authored)
+	}
 	if !strings.EqualFold(filepath.Ext(trimmed), recordingExtension) {
 		trimmed += recordingExtension
 	}
 	return trimmed, nil
+}
+
+func canonicalRecordingDirectory(directory string) (string, error) {
+	absolute, err := filepath.Abs(directory)
+	if err != nil {
+		return "", fmt.Errorf("resolving recording run directory: %w", err)
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", fmt.Errorf("resolving recording run directory %q: %w", directory, err)
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("inspecting recording run directory %q: %w", resolved, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("recording run root %q is not a directory", resolved)
+	}
+	return resolved, nil
 }
 
 // UnsupportedRecordingController refuses both halves of the recording

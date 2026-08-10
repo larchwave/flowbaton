@@ -1573,3 +1573,44 @@ func TestRecorderStopCleansDeviceAndPartialHostFileWhenPullFails(t *testing.T) {
 		t.Fatalf("device artifact was not removed after pull failure: %v", calls)
 	}
 }
+
+func TestRecorderStopKillsAndBoundedlyReapsAStuckLocalChild(t *testing.T) {
+	t.Parallel()
+
+	done := make(chan error, 1)
+	killed := make(chan struct{}, 1)
+	recorder := &adbRecorder{
+		serial:     testSerial,
+		devicePath: "/sdcard/out.mp4",
+		child: &androidLocalChild{
+			done:   done,
+			signal: func(os.Signal) error { return nil },
+			kill: func() error {
+				killed <- struct{}{}
+				done <- nil
+				return nil
+			},
+		},
+		run: func(ctx context.Context, args ...string) ([]byte, error) {
+			if slices.Contains(args, "pkill") {
+				return nil, nil
+			}
+			return nil, ctx.Err()
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	err := recorder.stop(ctx, filepath.Join(t.TempDir(), "out.mp4"))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stop() error = %v, want deadline exceeded", err)
+	}
+	if time.Since(started) > time.Second {
+		t.Fatalf("stop() exceeded its cleanup deadline by too much: %v", time.Since(started))
+	}
+	select {
+	case <-killed:
+	default:
+		t.Fatal("stuck local adb child was not killed")
+	}
+}

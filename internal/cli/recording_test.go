@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -56,7 +57,11 @@ func TestARecordingLandsInTheWorkingDirectoryUnderTheAuthoredName(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Stop() error = %v", err)
 	}
-	want := filepath.Join(".", "clip.mp4")
+	workingDirectory, err := filepath.EvalSymlinks(mustWorkingDirectory(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(workingDirectory, "clip.mp4")
 	if len(spy.started) != 1 || spy.started[0] != want {
 		t.Fatalf("started = %v, want [%s]", spy.started, want)
 	}
@@ -75,7 +80,11 @@ func TestARecordingNameKeepsAnExtensionItAlreadyHas(t *testing.T) {
 		t.Fatalf("Start() error = %v", err)
 	}
 	// clip.mp4.mp4 would be worse than the bug it fixes.
-	if want := filepath.Join(".", "clip.mp4"); spy.started[0] != want {
+	workingDirectory, err := filepath.EvalSymlinks(mustWorkingDirectory(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(workingDirectory, "clip.mp4"); spy.started[0] != want {
 		t.Fatalf("started = %q, want %q", spy.started[0], want)
 	}
 }
@@ -147,7 +156,11 @@ func TestStopAllFinalizesAnAuthoredRecordingExactlyOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first StopAll() error = %v", err)
 	}
-	if len(artifacts) != 1 || artifacts[0].Path != filepath.Join(".", "authored.mp4") {
+	workingDirectory, err := filepath.EvalSymlinks(mustWorkingDirectory(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Path != filepath.Join(workingDirectory, "authored.mp4") {
 		t.Fatalf("first StopAll() artifacts = %#v, want the authored recording", artifacts)
 	}
 	artifacts, err = controller.StopAll(context.Background())
@@ -160,6 +173,48 @@ func TestStopAllFinalizesAnAuthoredRecordingExactlyOnce(t *testing.T) {
 	if len(spy.stopped) != 1 {
 		t.Fatalf("driver stops = %v, want exactly one", spy.stopped)
 	}
+}
+
+func TestRecordingNamesCannotEscapeTheCanonicalRunRoot(t *testing.T) {
+	t.Parallel()
+
+	realRoot := t.TempDir()
+	canonicalRoot, err := filepath.EvalSymlinks(realRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkedRoot := filepath.Join(t.TempDir(), "run")
+	if err := os.Symlink(realRoot, linkedRoot); err != nil {
+		t.Fatal(err)
+	}
+	spy := &recordingSpy{}
+	controller := NewDriverRecordingController(spy, linkedRoot)
+	for _, name := range []string{"../secret", `..\\secret`, "nested/clip", `nested\\clip`, ".", "..", "/tmp/clip"} {
+		if err := controller.Start(
+			context.Background(), engine.RecordingStartRequest{Name: name}); err == nil {
+			t.Errorf("Start() accepted unsafe authored name %q", name)
+		}
+	}
+	if len(spy.started) != 0 {
+		t.Fatalf("unsafe names started recordings at %v", spy.started)
+	}
+	if err := controller.Start(
+		context.Background(), engine.RecordingStartRequest{Name: "safe"}); err != nil {
+		t.Fatalf("safe Start() error = %v", err)
+	}
+	want := filepath.Join(canonicalRoot, "safe.mp4")
+	if len(spy.started) != 1 || spy.started[0] != want {
+		t.Fatalf("recording path = %v, want canonical path %q", spy.started, want)
+	}
+}
+
+func mustWorkingDirectory(t *testing.T) string {
+	t.Helper()
+	directory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return directory
 }
 
 func TestRecordingControllerCloseIsIdempotent(t *testing.T) {
