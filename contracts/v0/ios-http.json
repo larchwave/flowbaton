@@ -81,12 +81,13 @@
     "EraseTextRequest": {"kind":"object","required":["charactersToErase","appIds"],"fields":{"charactersToErase":{"type":"integer","minimum":0},"appIds":{"type":"array","items":"string"}}},
     "DeviceInfoResponse": {
       "kind":"object",
-      "required":["widthPoints","heightPoints","widthPixels","heightPixels"],
+      "required":["widthPoints","heightPoints","widthPixels","heightPixels","orientation"],
       "fields":{
         "widthPoints":{"type":"number"},
         "heightPoints":{"type":"number"},
         "widthPixels":{"type":"number"},
-        "heightPixels":{"type":"number"}
+        "heightPixels":{"type":"number"},
+        "orientation":{"type":"string","enum":["portrait","portrait-upside-down","landscape-left","landscape-right"]}
       }
     },
     "SetOrientationRequest": {"kind":"object","required":["orientation"],"fields":{"orientation":{"type":"string","enum":["portrait","landscapeLeft","landscapeRight","upsideDown"]}}},

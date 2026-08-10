@@ -7,16 +7,14 @@ package aiengine
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
 	"time"
 
 	"github.com/tmc/langchaingo/llms"
 
 	"github.com/larchwave/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 // Engine is a screenshot-driven AIPredictionEngine backed by one llms.Model.
@@ -134,91 +132,8 @@ func (e *Engine) generateJSON(ctx context.Context, prompt string, screenshotPNG 
 		return errors.New("aiengine: model returned no choices")
 	}
 	reply := response.Choices[0].Content
-	if err := validateUniqueJSONKeys(reply); err != nil {
-		return fmt.Errorf("aiengine: validating model reply: %w", err)
-	}
-	decoder := json.NewDecoder(strings.NewReader(reply))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(dst); err != nil {
+	if err := strictjson.Decode([]byte(reply), dst); err != nil {
 		return fmt.Errorf("aiengine: decoding model reply: %w", err)
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("aiengine: model reply contains trailing JSON content")
-		}
-		return fmt.Errorf("aiengine: model reply contains trailing content: %w", err)
-	}
-	return nil
-}
-
-func validateUniqueJSONKeys(input string) error {
-	decoder := json.NewDecoder(strings.NewReader(input))
-	decoder.UseNumber()
-	if err := validateUniqueJSONValue(decoder); err != nil {
-		return err
-	}
-	if token, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		if err != nil {
-			return fmt.Errorf("read trailing JSON content: %w", err)
-		}
-		return fmt.Errorf("model reply contains trailing JSON token %v", token)
-	}
-	return nil
-}
-
-func validateUniqueJSONValue(decoder *json.Decoder) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return err
-	}
-	delimiter, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-
-	switch delimiter {
-	case '{':
-		keys := make(map[string]struct{})
-		for decoder.More() {
-			keyToken, err := decoder.Token()
-			if err != nil {
-				return err
-			}
-			key, ok := keyToken.(string)
-			if !ok {
-				return fmt.Errorf("object key has type %T", keyToken)
-			}
-			if _, exists := keys[key]; exists {
-				return fmt.Errorf("duplicate object key %q", key)
-			}
-			keys[key] = struct{}{}
-			if err := validateUniqueJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil {
-			return err
-		}
-		if closing != json.Delim('}') {
-			return fmt.Errorf("object closed with %v", closing)
-		}
-	case '[':
-		for decoder.More() {
-			if err := validateUniqueJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-		closing, err := decoder.Token()
-		if err != nil {
-			return err
-		}
-		if closing != json.Delim(']') {
-			return fmt.Errorf("array closed with %v", closing)
-		}
-	default:
-		return fmt.Errorf("unexpected JSON delimiter %q", delimiter)
 	}
 	return nil
 }

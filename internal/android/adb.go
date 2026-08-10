@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The adb half of the Android host side. The gRPC agent owns what happens ON
@@ -233,6 +235,35 @@ func (adb *Adb) APILevel(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("adb: ro.build.version.sdk reported %q, want a positive integer", raw)
 	}
 	return level, nil
+}
+
+// CurrentOrientation reads the display service's current Surface rotation.
+func (adb *Adb) CurrentOrientation(ctx context.Context) (device.Orientation, error) {
+	output, err := adb.shellOutput(ctx, "dumpsys", "display")
+	if err != nil {
+		return "", err
+	}
+	const marker = "mCurrentOrientation="
+	for _, field := range strings.Fields(string(output)) {
+		index := strings.Index(field, marker)
+		if index < 0 {
+			continue
+		}
+		raw := strings.TrimRight(field[index+len(marker):], ",;}")
+		switch raw {
+		case "0":
+			return "PORTRAIT", nil
+		case "1":
+			return "LANDSCAPE_LEFT", nil
+		case "2":
+			return "UPSIDE_DOWN", nil
+		case "3":
+			return "LANDSCAPE_RIGHT", nil
+		default:
+			return "", fmt.Errorf("adb: display reported current orientation %q, want 0 through 3", raw)
+		}
+	}
+	return "", fmt.Errorf("adb: display did not report current orientation")
 }
 
 // Install replaces an existing install (-r): the agent APKs are reinstalled

@@ -23,5 +23,12 @@ xcodebuild -quiet \
   -destination "platform=iOS Simulator,id=${udid}" \
   -derivedDataPath "$derived" \
   COMPILER_INDEX_STORE_ENABLE=NO \
-  test \
+  build-for-testing
+
+xctestrun="$(find "$derived/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f -print -quit)"
+test -n "$xctestrun"
+xcodebuild -quiet \
+  -xctestrun "$xctestrun" \
+  -destination "platform=iOS Simulator,id=${udid}" \
+  test-without-building \
   -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testTheAutomationCanSeeTheDevice

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The command runner is injected, so every expectation here is about the
@@ -209,6 +211,47 @@ func TestAPILevelRejectsAnInvalidProperty(t *testing.T) {
 	runner := &recordingRunner{output: []byte("unknown\n")}
 	if _, err := NewAdb("emulator-5554", runner).APILevel(context.Background()); err == nil {
 		t.Fatal("APILevel accepted a non-numeric SDK property")
+	}
+}
+
+func TestCurrentOrientationMapsEverySurfaceRotation(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		rotation string
+		want     device.Orientation
+	}{
+		{"0", "PORTRAIT"},
+		{"1", "LANDSCAPE_LEFT"},
+		{"2", "UPSIDE_DOWN"},
+		{"3", "LANDSCAPE_RIGHT"},
+	} {
+		t.Run(test.rotation, func(t *testing.T) {
+			t.Parallel()
+			runner := &recordingRunner{output: []byte("DisplayDeviceInfo{mCurrentOrientation=" + test.rotation + "}\n")}
+			got, err := NewAdb("emulator-5554", runner).CurrentOrientation(context.Background())
+			if err != nil {
+				t.Fatalf("CurrentOrientation() error = %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("CurrentOrientation() = %q, want %q", got, test.want)
+			}
+			want := []string{"-s", "emulator-5554", "shell", "dumpsys", "display"}
+			if call := runner.recorded()[0][1:]; !reflect.DeepEqual(call, want) {
+				t.Fatalf("argv = %v, want %v", call, want)
+			}
+		})
+	}
+}
+
+func TestCurrentOrientationRejectsMissingOrInvalidRotation(t *testing.T) {
+	t.Parallel()
+
+	for _, output := range []string{"DisplayDeviceInfo{}\n", "mCurrentOrientation=4\n"} {
+		runner := &recordingRunner{output: []byte(output)}
+		if _, err := NewAdb("emulator-5554", runner).CurrentOrientation(context.Background()); err == nil {
+			t.Fatalf("CurrentOrientation() accepted %q", output)
+		}
 	}
 }
 

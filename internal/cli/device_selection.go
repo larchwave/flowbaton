@@ -35,8 +35,8 @@ var (
 // exactly one connected device is used, anything else is refused with the
 // candidates named — a guessed device runs the suite somewhere the report
 // will not admit to.
-func resolveAndroidSerial() (string, error) {
-	devices, err := androidInventory(context.Background())
+func resolveAndroidSerial(ctx context.Context) (string, error) {
+	devices, err := androidInventory(ctx)
 	if err != nil {
 		return "", fmt.Errorf("listing android devices: %w", err)
 	}
@@ -56,8 +56,8 @@ func resolveAndroidSerial() (string, error) {
 }
 
 // NewDeviceSession builds a session for one shard, or explains why it cannot.
-func NewDeviceSession(options TestOptions, shard Shard) (DeviceSession, error) {
-	driver, err := newDriver(options, shard.Device, shard.DriverPort, shard.Count())
+func NewDeviceSession(ctx context.Context, options TestOptions, shard Shard) (DeviceSession, error) {
+	driver, err := newDriver(ctx, options, shard.Device, shard.DriverPort, shard.Count())
 	if err != nil {
 		return DeviceSession{}, err
 	}
@@ -71,7 +71,7 @@ func NewDeviceSession(options TestOptions, shard Shard) (DeviceSession, error) {
 	}, nil
 }
 
-func newDriver(options TestOptions, udid string, port int, shardNumber int) (device.Driver, error) {
+func newDriver(ctx context.Context, options TestOptions, udid string, port int, shardNumber int) (device.Driver, error) {
 	switch strings.ToLower(options.Platform) {
 	case "ios":
 		if udid == "" {
@@ -86,7 +86,7 @@ func newDriver(options TestOptions, udid string, port int, shardNumber int) (dev
 		var bundle *ios.RunnerBundle
 		if options.ReinstallDriver {
 			var err error
-			bundle, err = resolveIOSRunnerBundle()
+			bundle, err = resolveIOSRunnerBundle(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -101,7 +101,7 @@ func newDriver(options TestOptions, udid string, port int, shardNumber int) (dev
 	case "android":
 		serial := udid
 		if serial == "" {
-			resolved, err := resolveAndroidSerial()
+			resolved, err := resolveAndroidSerial(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -115,7 +115,7 @@ func newDriver(options TestOptions, udid string, port int, shardNumber int) (dev
 		var apks *android.AgentAPKs
 		if options.ReinstallDriver {
 			var err error
-			apks, err = resolveAndroidAgentAPKs()
+			apks, err = resolveAndroidAgentAPKs(ctx)
 			if err != nil {
 				return nil, err
 			}

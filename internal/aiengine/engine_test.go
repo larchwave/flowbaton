@@ -173,6 +173,20 @@ func TestGenerateJSONErrors(t *testing.T) {
 		}
 	})
 
+	t.Run("case-folded assertion fields cannot turn a failure into a pass", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"pass":false,"Pass":true,"reasoning":"ok"}`}, "")
+		if result, err := e.PerformAssertion(context.Background(), pngFixture, "x"); err == nil || result.Pass || !strings.Contains(err.Error(), `duplicate object key "Pass"`) {
+			t.Fatalf("PerformAssertion() = %#v, %v; want case-folded duplicate-key error", result, err)
+		}
+	})
+
+	t.Run("escaped case-folded assertion fields cannot turn a failure into a pass", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"pass":false,"\u0050ass":true,"reasoning":"ok"}`}, "")
+		if result, err := e.PerformAssertion(context.Background(), pngFixture, "x"); err == nil || result.Pass || !strings.Contains(err.Error(), `duplicate object key "Pass"`) {
+			t.Fatalf("PerformAssertion() = %#v, %v; want escaped case-folded duplicate-key error", result, err)
+		}
+	})
+
 	t.Run("duplicate defect fields are rejected", func(t *testing.T) {
 		e := NewFromModel(&fakeModel{reply: `{"defects":["hidden"],"defects":[],"reasoning":"ok"}`}, "")
 		if result, err := e.FindDefects(context.Background(), pngFixture); err == nil || result.Pass || !strings.Contains(err.Error(), `duplicate object key "defects"`) {
@@ -181,8 +195,8 @@ func TestGenerateJSONErrors(t *testing.T) {
 	})
 
 	t.Run("duplicate keys in nested objects are rejected before typed decode", func(t *testing.T) {
-		e := NewFromModel(&fakeModel{reply: `{"pass":true,"reasoning":"ok","details":{"value":1,"value":2}}`}, "")
-		if _, err := e.PerformAssertion(context.Background(), pngFixture, "x"); err == nil || !strings.Contains(err.Error(), `duplicate object key "value"`) {
+		e := NewFromModel(&fakeModel{reply: `{"pass":true,"reasoning":"ok","details":{"value":1,"\u0056ALUE":2}}`}, "")
+		if _, err := e.PerformAssertion(context.Background(), pngFixture, "x"); err == nil || !strings.Contains(err.Error(), `duplicate object key "VALUE"`) {
 			t.Fatalf("PerformAssertion() error = %v, want nested duplicate-key error", err)
 		}
 	})

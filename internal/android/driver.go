@@ -100,6 +100,7 @@ type Driver struct {
 	// timeout the operator set is the timeout the error message reports.
 	startupPoll    time.Duration
 	startupTimeout time.Duration
+	cleanupTimeout time.Duration
 
 	// stopInstrumentation kills the `am instrument -w` child Open started;
 	// nil when the operator owns the agent. Open sets it, Close calls it.
@@ -149,6 +150,7 @@ func NewDriver(serial string, hostPort int, runner CommandRunner, apks *AgentAPK
 		apks:           apks,
 		startupPoll:    agentStartupPoll,
 		startupTimeout: agentStartupTimeout,
+		cleanupTimeout: recordingFinalizeTimeout,
 	}
 }
 
@@ -228,25 +230,37 @@ func (driver *Driver) openManagedAgent(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	state := managedOpenState{}
+	fail := func(openErr error) error {
+		cleanupCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), driver.cleanupTimeout)
+		defer cancel()
+		rollbackErr := driver.rollbackManagedOpen(cleanupCtx, state)
+		if rollbackErr != nil {
+			rollbackErr = fmt.Errorf("rolling back managed agent open: %w", rollbackErr)
+		}
+		return errors.Join(openErr, rollbackErr)
+	}
 	// The uninstalls are expected to fail on a clean device; the installs
 	// are not allowed to.
 	_ = driver.adb.Uninstall(ctx, AgentAppPackage)
 	_ = driver.adb.Uninstall(ctx, AgentTestPackage)
 	if err := driver.adb.Install(ctx, driver.apks.App); err != nil {
-		return err
+		return fail(err)
 	}
 	if err := driver.adb.Install(ctx, driver.apks.Test); err != nil {
-		return err
+		return fail(err)
 	}
 	// setLocation goes through the agent, and the platform refuses a mock
 	// location from an app that has not been allowed the app-op. Granted here
 	// rather than lazily in setLocation: it belongs to installing this agent,
 	// and doing it once beats doing it on every call.
 	if err := driver.adb.AllowMockLocation(ctx, AgentAppPackage); err != nil {
-		return err
+		return fail(err)
 	}
+	state.forwardAttempted = true
 	if err := driver.adb.ForwardAdd(ctx, driver.hostPort, agentPort); err != nil {
-		return err
+		return fail(err)
 	}
 
 	// The instrumentation outlives Open, so its context detaches from the
@@ -254,18 +268,59 @@ func (driver *Driver) openManagedAgent(ctx context.Context) error {
 	instrumentCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	driver.stopInstrumentation = cancel
 	exited := make(chan instrumentExit, 1)
+	done := make(chan struct{})
+	state.instrumentCancel = cancel
+	state.instrumentDone = done
 	go func() {
+		defer close(done)
 		output, err := driver.adb.Instrument(instrumentCtx, agentPort)
 		exited <- instrumentExit{output: output, err: err}
 	}()
 
 	if err := driver.awaitAgent(ctx, timeout, exited); err != nil {
-		cancel()
-		driver.stopInstrumentation = nil
-		_ = driver.adb.ForwardRemove(context.WithoutCancel(ctx), driver.hostPort)
-		return err
+		return fail(err)
 	}
 	return nil
+}
+
+type managedOpenState struct {
+	forwardAttempted bool
+	instrumentCancel context.CancelFunc
+	instrumentDone   <-chan struct{}
+}
+
+func (driver *Driver) rollbackManagedOpen(ctx context.Context, state managedOpenState) error {
+	var cleanupErrs []error
+	if state.instrumentCancel != nil {
+		state.instrumentCancel()
+		driver.stopInstrumentation = nil
+	}
+	if conn := driver.takeConn(); conn != nil {
+		cleanupErrs = append(cleanupErrs, conn.Close())
+	}
+	if state.forwardAttempted {
+		if err := driver.adb.ForwardRemove(ctx, driver.hostPort); err != nil {
+			cleanupErrs = append(cleanupErrs,
+				fmt.Errorf("removing managed agent forward: %w", err))
+		}
+	}
+	if err := driver.adb.Uninstall(ctx, AgentAppPackage); err != nil {
+		cleanupErrs = append(cleanupErrs,
+			fmt.Errorf("uninstalling managed agent app: %w", err))
+	}
+	if err := driver.adb.Uninstall(ctx, AgentTestPackage); err != nil {
+		cleanupErrs = append(cleanupErrs,
+			fmt.Errorf("uninstalling managed agent test package: %w", err))
+	}
+	if state.instrumentDone != nil {
+		select {
+		case <-state.instrumentDone:
+		case <-ctx.Done():
+			cleanupErrs = append(cleanupErrs,
+				fmt.Errorf("stopping managed agent instrumentation: %w", ctx.Err()))
+		}
+	}
+	return errors.Join(cleanupErrs...)
 }
 
 // agentStartupBudget is the reachability wait: 15000ms unless the
@@ -312,6 +367,11 @@ func (driver *Driver) awaitAgent(
 		select {
 		case exit := <-exited:
 			if exit.refused() {
+				if exit.err != nil {
+					return fmt.Errorf(
+						"the agent instrumentation on %s did not start cleanly: %w",
+						driver.serial, exit.err)
+				}
 				return fmt.Errorf(
 					"the agent instrumentation on %s did not start cleanly: %s",
 					driver.serial, exit.describe())
@@ -966,6 +1026,10 @@ func (driver *Driver) SetOrientation(ctx context.Context, orientation device.Ori
 	return driver.adb.PutSetting(ctx, "system", "user_rotation", rotation)
 }
 
+func (driver *Driver) CurrentOrientation(ctx context.Context) (device.Orientation, error) {
+	return driver.adb.CurrentOrientation(ctx)
+}
+
 func (driver *Driver) EraseText(ctx context.Context, request device.EraseTextRequest) error {
 	return driver.invokeEmpty(ctx, pbwire.MethodEraseAllText, pbwire.EraseAllTextRequest{
 		CharactersToErase: request.CharactersToErase,
@@ -1053,6 +1117,19 @@ func (driver *Driver) Capabilities() device.Capabilities {
 	return DeclaredCapabilities()
 }
 
+// PreflightRuntime resolves Android-version-dependent support without opening
+// or installing the agent. adb getprop is read-only, so an API 26--28 device
+// that cannot implement scoped MediaStore insertion is refused before Open can
+// uninstall or install either driver APK.
+func (driver *Driver) PreflightRuntime(ctx context.Context, requirements device.RuntimeRequirements) error {
+	for _, command := range requirements.Commands {
+		if command == "addMedia" {
+			return driver.requireAddMediaAPI(ctx)
+		}
+	}
+	return nil
+}
+
 // AddMedia streams each file to the agent over the service's one
 // client-streaming rpc. Every frame carries the name and extension alongside
 // its payload chunk — the metadata is idempotent, which keeps the agent free
@@ -1061,6 +1138,18 @@ func (driver *Driver) AddMedia(ctx context.Context, request device.AddMediaReque
 	if len(request.Files) == 0 {
 		return nil
 	}
+	if err := driver.requireAddMediaAPI(ctx); err != nil {
+		return err
+	}
+	for _, file := range request.Files {
+		if err := driver.addMediaFile(ctx, file.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (driver *Driver) requireAddMediaAPI(ctx context.Context) error {
 	apiLevel, err := driver.adb.APILevel(ctx)
 	if err != nil {
 		return fmt.Errorf("addMedia: determining Android API level: %w", err)
@@ -1069,11 +1158,6 @@ func (driver *Driver) AddMedia(ctx context.Context, request device.AddMediaReque
 		return fmt.Errorf(
 			"%w: addMedia requires Android API 29+, device reports API %d",
 			device.ErrUnsupported, apiLevel)
-	}
-	for _, file := range request.Files {
-		if err := driver.addMediaFile(ctx, file.Path); err != nil {
-			return err
-		}
 	}
 	return nil
 }

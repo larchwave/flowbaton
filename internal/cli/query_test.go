@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/enginetest"
 )
 
 // query is spec 03's element finder: "which elements match this expression".
@@ -92,6 +93,56 @@ func TestQueryReportsAFetchFailure(t *testing.T) {
 	if !strings.Contains(stderr, "agent query timed out") {
 		t.Fatalf("the failure did not carry the driver error: %q", stderr)
 	}
+}
+
+func TestQueryFetchJoinsFailureWithBoundedCleanupAfterCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	fetchErr := errors.New("device info failed")
+	closeErr := errors.New("driver close failed")
+	driver := &queryCleanupDriver{
+		FakeDriver: enginetest.NewFakeDriver(),
+		cancel:     cancel,
+		fetchErr:   fetchErr,
+		closeErr:   closeErr,
+	}
+	_, err := queryDriverFetch(ctx, driver, "", "text=Login")
+	if !errors.Is(err, fetchErr) {
+		t.Fatalf("queryDriverFetch() error = %v, want fetch failure", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("queryDriverFetch() error = %v, want close failure", err)
+	}
+	if ctx.Err() != context.Canceled {
+		t.Fatalf("execution context error = %v, want cancellation", ctx.Err())
+	}
+	if driver.closeContextErr != nil {
+		t.Fatalf("Close() context error = %v, want fresh cleanup context", driver.closeContextErr)
+	}
+	if !driver.closeHadDeadline {
+		t.Fatal("Close() context had no cleanup deadline")
+	}
+}
+
+type queryCleanupDriver struct {
+	*enginetest.FakeDriver
+	cancel           context.CancelFunc
+	fetchErr         error
+	closeErr         error
+	closeContextErr  error
+	closeHadDeadline bool
+}
+
+func (driver *queryCleanupDriver) DeviceInfo(context.Context) (device.DeviceInfo, error) {
+	driver.cancel()
+	return device.DeviceInfo{}, driver.fetchErr
+}
+
+func (driver *queryCleanupDriver) Close(ctx context.Context) error {
+	driver.closeContextErr = ctx.Err()
+	_, driver.closeHadDeadline = ctx.Deadline()
+	return driver.closeErr
 }
 
 func TestQueryReportsZeroMatchesHonestly(t *testing.T) {

@@ -82,13 +82,15 @@
       "idempotency_key": "reconnect-01JZEXAMPLE-0001",
       "tenant_id": "tenant-example",
       "principal_id": "studio-core-host-01",
-      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "channel_binding_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "data": {
         "session_id": "session-01JZEXAMPLE",
         "lease_id": "lease-01JZEXAMPLE",
         "generation": 7,
         "fencing_token_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "last_acknowledged_sequence": 4
+        "last_acknowledged_sequence": 4,
+        "request_nonce": "nonce-01JZEXAMPLE-0002",
+        "binding_expires_at": "2026-07-15T12:11:00Z"
       }
     },
     {
@@ -99,7 +101,7 @@
       "idempotency_key": "cancel-01JZEXAMPLE-0001",
       "tenant_id": "tenant-example",
       "principal_id": "studio-core-host-01",
-      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "channel_binding_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "data": {
         "lease_id": "lease-01JZEXAMPLE",
         "generation": 7,
@@ -115,7 +117,7 @@
       "idempotency_key": "release-01JZEXAMPLE-0001",
       "tenant_id": "tenant-example",
       "principal_id": "studio-core-host-01",
-      "channel_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "channel_binding_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "data": {
         "lease_id": "lease-01JZEXAMPLE",
         "generation": 7,

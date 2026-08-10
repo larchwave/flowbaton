@@ -12,7 +12,7 @@ import (
 // --device narrows the pool. The run fails when the pool cannot satisfy the
 // requested shard count.
 
-func (options TestOptions) devicePool(count int) ([]string, error) {
+func (options TestOptions) devicePool(ctx context.Context, count int) ([]string, error) {
 	if len(options.Devices) > 0 || count < 2 {
 		// Named devices win, and an unsharded run must not list at all: the
 		// single-device path resolves its own serial later, and listing here
@@ -23,7 +23,7 @@ func (options TestOptions) devicePool(count int) ([]string, error) {
 	if list == nil {
 		list = attachedDevices
 	}
-	pool, err := list(context.Background(), options.Platform)
+	pool, err := list(ctx, options.Platform)
 	if err != nil {
 		return nil, fmt.Errorf("listing devices to shard across: %w", err)
 	}

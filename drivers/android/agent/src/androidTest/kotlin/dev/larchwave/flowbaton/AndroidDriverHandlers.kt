@@ -103,39 +103,64 @@ class AndroidDriverHandlers(
 
     override fun inputText(text: String) {
         val keyMap = KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD)
+        if (containsUnmappedCharacter(text, keyMap)) {
+            // Mixing key injection with an accessibility read-modify-write can
+            // overwrite a key whose text event has not reached the node cache.
+            // One action keeps the requested mixed text atomic.
+            appendToFocusedNode(text)
+            return
+        }
         var offset = 0
         while (offset < text.length) {
             val chars = Character.toChars(text.codePointAt(offset))
             if (offset > 0) {
                 SystemClock.sleep(75) // spec 04 §1: 75ms between characters
             }
-            val events = if (chars.size == 1) keyMap.getEvents(chars) else null
-            if (events != null) {
-                events.forEach { injectKey(it) }
-            } else {
-                // No virtual-keyboard mapping exists for é, cyrillic, or emoji.
-                // Commit those characters in-process through the focused node,
-                // which needs no IME switch on the device.
-                appendToFocusedNode(String(chars))
-            }
+            val events =
+                keyMap.getEvents(chars)
+                    ?: throw IllegalStateException("inputText: key mapping changed during input")
+            events.forEach { injectKey(it) }
             offset += chars.size
         }
     }
 
+    private fun containsUnmappedCharacter(
+        text: String,
+        keyMap: KeyCharacterMap,
+    ): Boolean {
+        var offset = 0
+        while (offset < text.length) {
+            val chars = Character.toChars(text.codePointAt(offset))
+            if (chars.size != 1 || keyMap.getEvents(chars) == null) return true
+            offset += chars.size
+        }
+        return false
+    }
+
     private fun appendToFocusedNode(text: String) {
-        val node =
-            uiAutomation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        val deadline = SystemClock.uptimeMillis() + 1_000
+        var node: AccessibilityNodeInfo? = null
+        while (SystemClock.uptimeMillis() < deadline) {
+            node = uiAutomation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+            if (node != null) break
+            SystemClock.sleep(50)
+        }
+        val target =
+            node
                 ?: throw IllegalStateException(
                     "inputText: no focused field to receive \"$text\"",
                 )
-        node.refresh() // key events typed just before may not be in the cached node yet
-        val existing = if (node.isShowingHintText) "" else node.text?.toString().orEmpty()
+        if (!target.isEditable) {
+            throw IllegalStateException("inputText: the focused node is not editable")
+        }
+        target.refresh()
+        val existing = if (target.isShowingHintText) "" else target.text?.toString().orEmpty()
         val arguments = Bundle()
         arguments.putCharSequence(
             AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
             existing + text,
         )
-        if (!node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) {
+        if (!target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)) {
             throw IllegalStateException("inputText: the focused field rejected ACTION_SET_TEXT")
         }
     }

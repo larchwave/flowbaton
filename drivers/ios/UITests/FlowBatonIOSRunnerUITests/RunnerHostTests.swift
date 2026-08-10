@@ -29,8 +29,12 @@ final class RunnerHostTests: XCTestCase {
   /// silent no-op that reported success and served nothing.
   static let serveVariable = "FLOWBATON_RUNNER_SERVE"
 
-  override func setUp() {
-    super.setUp()
+  override func setUpWithError() throws {
+    try super.setUpWithError()
+    // A newly created Simulator reports XCUIDevice orientation as unknown until
+    // the test runner establishes one. The serving test is the production
+    // process, so initialize the real device before either route can run.
+    try XCUITestAutomation().setOrientation("PORTRAIT")
     // WITHOUT this the runner dies on the first device-level failure. XCUITest
     // records a gesture it could not synthesize as an XCTIssue, and by default a
     // issue tears the test down — which here means the server goes
@@ -82,6 +86,10 @@ final class RunnerHostTests: XCTestCase {
     // guessed factor, so this inequality checks values read from both paths
     // agreeing about the same screen.
     XCTAssertGreaterThanOrEqual(info.widthPixels, info.widthPoints)
+    XCTAssertTrue(
+      ["portrait", "portrait-upside-down", "landscape-left", "landscape-right"]
+        .contains(info.orientation),
+      "the device orientation must use the wire vocabulary")
 
     XCTAssertEqual(
       try automation.runningApp(appIDs: []), XCUITestAutomation.springboardID,

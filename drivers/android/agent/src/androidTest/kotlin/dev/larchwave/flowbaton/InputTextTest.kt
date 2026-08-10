@@ -22,6 +22,15 @@ import org.junit.runner.RunWith
 class InputTextTest {
     @Test
     fun typesUnicodeTextIntoTheFocusedField() {
+        typeAndRequireExactTail("héllo Ж👍")
+    }
+
+    @Test
+    fun typesMappedASCIITextIntoTheFocusedField() {
+        typeAndRequireExactTail("ascii text")
+    }
+
+    private fun typeAndRequireExactTail(prefix: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val handlers = AndroidDriverHandlers(instrumentation)
 
@@ -45,7 +54,7 @@ class InputTextTest {
         // Unique per run: inputText appends to whatever the field holds, so a
         // rerun against a still-open activity must not pass on stale text. The
         // closing quote anchors the match to the END of the field's contents.
-        val text = "héllo Ж👍 ${SystemClock.uptimeMillis() % 100_000}"
+        val text = "$prefix ${SystemClock.uptimeMillis() % 100_000}"
         handlers.inputText(text)
 
         val hierarchy = handlers.viewHierarchy()

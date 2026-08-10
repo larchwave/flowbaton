@@ -27,6 +27,8 @@ done
 
 grep -Fq 'connectedDebugAndroidTest' scripts/ci/android-connected.sh || { echo 'Android release gate does not execute instrumentation' >&2; exit 1; }
 grep -Fq 'testTheAutomationCanSeeTheDevice' scripts/ci/ios-simulator-test.sh || { echo 'iOS release gate does not execute the Simulator integration test' >&2; exit 1; }
+grep -Fq 'build-for-testing' scripts/ci/ios-simulator-test.sh || { echo 'iOS release gate does not retain the tested products' >&2; exit 1; }
+grep -Fq 'test-without-building' scripts/ci/ios-simulator-test.sh || { echo 'iOS release gate does not execute the retained products' >&2; exit 1; }
 grep -Fq 'test-without-building' scripts/release/test-packaged-ios-runner.sh || { echo 'packaged iOS runner is not executed' >&2; exit 1; }
 grep -Fq 'actual_arches' scripts/release/test-packaged-ios-runner.sh || { echo 'packaged iOS runner architecture is not checked' >&2; exit 1; }
 

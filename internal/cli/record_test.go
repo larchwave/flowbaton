@@ -127,7 +127,7 @@ func (driver *recordingDriver) StopScreenRecording(
 func recordRunnerOn(fake *enginetest.FakeDriver, baseDirectory string) RecordRunner {
 	driver := &recordingDriver{FakeDriver: fake}
 	moment := time.Unix(1_700_000_000, 0).UTC()
-	return RecordRunner{NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+	return RecordRunner{NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 		return DeviceSession{
 			Driver:          driver,
 			OutputDirectory: shard.OutputDirectory,

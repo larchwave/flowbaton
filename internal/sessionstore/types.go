@@ -19,6 +19,7 @@ var (
 	ErrInvalidState    = errors.New("invalid session state transition")
 	ErrIdentityRevoked = errors.New("identity mapping is revoked")
 	ErrInvalidArgument = errors.New("invalid request argument")
+	ErrBackpressure    = errors.New("runtime backpressure limit reached")
 )
 
 type Identity struct {
@@ -26,6 +27,14 @@ type Identity struct {
 	TenantID               string     `json:"tenant_id"`
 	PrincipalID            string     `json:"principal_id"`
 	RevokedAt              *time.Time `json:"revoked_at,omitempty"`
+}
+
+// NodeLease identifies one live worker process. WorkerEpoch changes whenever
+// an expired node identity is taken over, fencing every operation issued by an
+// older process that used the same NodeID.
+type NodeLease struct {
+	NodeID      string
+	WorkerEpoch int64
 }
 
 type Session struct {
@@ -38,6 +47,7 @@ type Session struct {
 	BindingExpiresAt      time.Time     `json:"binding_expires_at"`
 	ResourceID            string        `json:"resource_id"`
 	OwnerNodeID           string        `json:"owner_node_id,omitempty"`
+	OwnerWorkerEpoch      int64         `json:"owner_worker_epoch,omitempty"`
 	LeaseID               string        `json:"lease_id"`
 	Generation            int64         `json:"generation"`
 	FencingTokenSHA256    string        `json:"fencing_token_sha256"`
@@ -63,7 +73,6 @@ type AcquireInput struct {
 	ReleaseIdempotencyKey string
 	LeaseDuration         time.Duration
 	HeartbeatInterval     time.Duration
-	Now                   time.Time
 }
 
 type MutationInput struct {
@@ -71,6 +80,8 @@ type MutationInput struct {
 	TenantID              string
 	PrincipalID           string
 	ChannelBindingSHA256  string
+	RequestNonce          string
+	BindingExpiresAt      time.Time
 	RequestID             string
 	Type                  string
 	IdempotencyKey        string
@@ -80,7 +91,34 @@ type MutationInput struct {
 	CommandPayload        json.RawMessage
 	RequestedExtension    time.Duration
 	LastAcknowledgedEvent int64
-	Now                   time.Time
+}
+
+type FrameData struct {
+	Content     []byte
+	ContentType string
+	Orientation string
+	Width       int
+	Height      int
+}
+
+type FrameContentRequest struct {
+	SessionID            string
+	TenantID             string
+	PrincipalID          string
+	ChannelBindingSHA256 string
+	RequestNonce         string
+	BindingExpiresAt     time.Time
+	Generation           int64
+	FencingTokenSHA256   string
+	StreamEpoch          int64
+	FrameSequence        int64
+	ContentSHA256        string
+}
+
+type FrameContent struct {
+	Content     []byte
+	ContentType string
+	SHA256      string
 }
 
 type Result struct {
@@ -88,6 +126,11 @@ type Result struct {
 	Event   devicesessionv1.Event `json:"event"`
 	Replay  bool                  `json:"replay"`
 	Queued  bool                  `json:"queued,omitempty"`
+}
+
+type TokenWindow struct {
+	IssuedAt  time.Time
+	ExpiresAt time.Time
 }
 
 type InputWork struct {
@@ -104,6 +147,8 @@ type InputWork struct {
 	Command            string
 	CommandPayload     json.RawMessage
 	ClaimedBy          string
+	WorkerEpoch        int64
+	ClaimGeneration    int64
 	StartedAt          time.Time
 }
 
@@ -115,15 +160,19 @@ type FrameWork struct {
 	FencingTokenSHA256 string
 	StreamEpoch        int64
 	ClaimedBy          string
+	WorkerEpoch        int64
+	ClaimGeneration    int64
 }
 
 type Store interface {
 	Ping(context.Context) error
-	ConsumeTokenNonce(context.Context, string, string, time.Time) error
+	CurrentTime(context.Context) (time.Time, error)
+	ReserveTokenNonce(context.Context, string, string, time.Duration) (TokenWindow, error)
 	Acquire(context.Context, AcquireInput) (Result, error)
 	Apply(context.Context, MutationInput) (Result, error)
 	Events(context.Context, string, string, string, int64) ([]devicesessionv1.Event, error)
 	ResolveIdentity(context.Context, string) (Identity, error)
+	ValidateSessionAccess(context.Context, string, string, string, string, string, time.Time, int64, string) error
 }
 
 type IdentityAdmin interface {

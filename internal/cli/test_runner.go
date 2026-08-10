@@ -52,7 +52,7 @@ type TestRunner struct {
 }
 
 // SessionFactory builds the session for one shard.
-type SessionFactory func(Shard, TestOptions) (TestSession, error)
+type SessionFactory func(context.Context, Shard, TestOptions) (TestSession, error)
 
 // TestSession is the boundary between the host pipeline and a device.
 type TestSession interface {
@@ -153,7 +153,7 @@ func (runner TestRunner) runOnce(
 	options.SequencedRoots = len(plan.Sequence)
 	options.ContinueOnFailure = plan.ContinueOnFailure
 
-	shards, err := PlanShards(options, plan)
+	shards, err := PlanShards(ctx, options, plan)
 	if err != nil {
 		return runAttempt{reportTestError(stderr, err, false), watched, snapshot}
 	}
@@ -255,7 +255,7 @@ func (runner TestRunner) executeShard(
 	if err != nil {
 		return shardOutcome{err: err}
 	}
-	session, err := runner.session(shard, options)
+	session, err := runner.session(ctx, shard, options)
 	if err != nil {
 		return shardOutcome{err: err}
 	}
@@ -292,14 +292,14 @@ func prepareForSelectedPlatform(
 	}
 }
 
-func (runner TestRunner) session(shard Shard, options TestOptions) (TestSession, error) {
+func (runner TestRunner) session(ctx context.Context, shard Shard, options TestOptions) (TestSession, error) {
 	if runner.NewSession != nil {
-		return runner.NewSession(shard, options)
+		return runner.NewSession(ctx, shard, options)
 	}
 	// Resolving the device is the LAST step, after everything knowable without
 	// one has already passed. An operator who mistyped a flag learns that
 	// before being told to connect a simulator.
-	return NewDeviceSession(options, shard)
+	return NewDeviceSession(ctx, options, shard)
 }
 
 func (runner TestRunner) allocatePort() func() (int, error) {

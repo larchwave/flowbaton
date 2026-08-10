@@ -129,7 +129,7 @@ func realScreenshotFetch(ctx context.Context, platform, udid string) (data []byt
 	if err != nil {
 		return nil, err
 	}
-	driver, err := newDriver(TestOptions{Platform: platform}, udid, port, 1)
+	driver, err := newDriver(ctx, TestOptions{Platform: platform}, udid, port, 1)
 	if err != nil {
 		return nil, err
 	}

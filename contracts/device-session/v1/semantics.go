@@ -6,10 +6,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 type AuthenticatedContext struct {
@@ -18,6 +19,7 @@ type AuthenticatedContext struct {
 	AuthProfileID        string
 	ChannelBindingSHA256 string
 	RequestNonce         string
+	BindingExpiresAt     time.Time
 }
 
 type AuthProfile struct {
@@ -119,11 +121,22 @@ type requestFact struct {
 	Frame          frameRef
 	ExtensionMS    int
 	LastAck        int
+	Binding        bindingEpoch
+	ServerReason   string
 }
 
 type requestFacts struct {
 	ByIdempotency map[string]requestFact
 	Ordered       []requestFact
+	FinalBinding  bindingEpoch
+	Released      bool
+}
+
+type bindingEpoch struct {
+	ChannelBindingSHA256 string
+	RequestNonce         string
+	EffectiveAt          time.Time
+	ExpiresAt            time.Time
 }
 
 type renewal struct {
@@ -135,6 +148,8 @@ type eventFacts struct {
 	Frames           map[frameRef]time.Time
 	Renewals         []renewal
 	FinalLeaseExpiry time.Time
+	Released         bool
+	ReleasedAt       time.Time
 }
 
 func ValidateJSON(data []byte, context AuthenticatedContext, profile AuthProfile, at time.Time) error {
@@ -158,11 +173,8 @@ func ValidateJSON(data []byte, context AuthenticatedContext, profile AuthProfile
 	if document.Binding.PrincipalID != context.PrincipalID || document.Lease.OwnerPrincipalID != context.PrincipalID {
 		errors = append(errors, "principal differs from authenticated context")
 	}
-	if document.Binding.ChannelBindingSHA256 != context.ChannelBindingSHA256 {
-		errors = append(errors, "channel binding differs from authenticated transport")
-	}
-	if document.Binding.RequestNonce != context.RequestNonce {
-		errors = append(errors, "request nonce differs from authenticated token")
+	if len(document.Binding.RequestNonce) > 128 {
+		errors = append(errors, "binding request nonce exceeds maximum length")
 	}
 
 	bindingIssued := parseTime(&errors, "binding issued_at", document.Binding.IssuedAt)
@@ -177,10 +189,22 @@ func ValidateJSON(data []byte, context AuthenticatedContext, profile AuthProfile
 	}
 	requestFacts, requestErrors := validateRequests(document, context, bindingIssued, bindingExpires)
 	errors = append(errors, requestErrors...)
+	if requestFacts.FinalBinding.ChannelBindingSHA256 != context.ChannelBindingSHA256 {
+		errors = append(errors, "channel binding differs from authenticated transport")
+	}
+	if requestFacts.FinalBinding.RequestNonce != context.RequestNonce {
+		errors = append(errors, "request nonce differs from authenticated token")
+	}
+	if !requestFacts.FinalBinding.ExpiresAt.Equal(context.BindingExpiresAt) {
+		errors = append(errors, "binding expiry differs from authenticated token")
+	}
 	eventFacts, eventErrors := validateEvents(document, requestFacts, bindingIssued, bindingExpires, leaseAcquired, leaseExpires)
 	errors = append(errors, eventErrors...)
+	if requestFacts.Released != eventFacts.Released {
+		errors = append(errors, "request and event lifecycles disagree on release")
+	}
 	errors = append(errors, validateRequestLeaseAndFrameTimes(requestFacts, eventFacts, leaseAcquired, leaseExpires)...)
-	if !at.IsZero() && (!within(at, bindingIssued, bindingExpires) || !within(at, leaseAcquired, eventFacts.FinalLeaseExpiry)) {
+	if !at.IsZero() && !eventFacts.Released && (!within(at, requestFacts.FinalBinding.EffectiveAt, requestFacts.FinalBinding.ExpiresAt) || !within(at, leaseAcquired, eventFacts.FinalLeaseExpiry)) {
 		errors = append(errors, "authenticated binding or lease is not live at verification time")
 	}
 	if len(errors) != 0 {
@@ -193,6 +217,12 @@ func ValidateJSON(data []byte, context AuthenticatedContext, profile AuthProfile
 func validateRequests(document sessionDocument, context AuthenticatedContext, bindingIssued, bindingExpires time.Time) (requestFacts, []string) {
 	errors := []string{}
 	facts := requestFacts{ByIdempotency: map[string]requestFact{}}
+	currentBinding := bindingEpoch{
+		ChannelBindingSHA256: document.Binding.ChannelBindingSHA256,
+		RequestNonce:         document.Binding.RequestNonce,
+		EffectiveAt:          bindingIssued,
+		ExpiresAt:            bindingExpires,
+	}
 	seenIDs := map[string]bool{}
 	seenIdempotency := map[string]string{}
 	state := "new"
@@ -204,7 +234,7 @@ func validateRequests(document sessionDocument, context AuthenticatedContext, bi
 			errors = append(errors, "request sequence gap or replayed request_id")
 		}
 		seenIDs[item.RequestID] = true
-		if item.TenantID != context.TenantID || item.PrincipalID != context.PrincipalID || item.ChannelBindingSHA256 != context.ChannelBindingSHA256 {
+		if item.TenantID != context.TenantID || item.PrincipalID != context.PrincipalID {
 			errors = append(errors, "request authentication binding mismatch")
 		}
 		canonicalData := compactJSON(item.Data)
@@ -221,9 +251,6 @@ func validateRequests(document sessionDocument, context AuthenticatedContext, bi
 		}
 		if !when.IsZero() {
 			lastTimestamp = when
-		}
-		if !when.IsZero() && !within(when, bindingIssued, bindingExpires) {
-			errors = append(errors, "request lies outside authenticated binding")
 		}
 		fact := requestFact{RequestID: item.RequestID, Type: item.Type, IdempotencyKey: item.IdempotencyKey, Timestamp: when}
 
@@ -272,12 +299,25 @@ func validateRequests(document sessionDocument, context AuthenticatedContext, bi
 				LeaseFence
 				SessionID                string `json:"session_id"`
 				LastAcknowledgedSequence int    `json:"last_acknowledged_sequence"`
+				RequestNonce             string `json:"request_nonce"`
+				BindingExpiresAt         string `json:"binding_expires_at"`
 			}
 			decodePayload(&errors, item.Data, &payload)
 			checkFence(&errors, payload.LeaseFence, document.Lease)
-			if state != "active" || payload.SessionID != document.SessionID || payload.LastAcknowledgedSequence >= len(document.Events) {
+			newExpiry := parseTime(&errors, "reconnect binding_expires_at", payload.BindingExpiresAt)
+			if state != "active" || payload.SessionID != document.SessionID || payload.LastAcknowledgedSequence >= len(document.Events) || item.ChannelBindingSHA256 == currentBinding.ChannelBindingSHA256 || payload.RequestNonce == currentBinding.RequestNonce || newExpiry.Equal(currentBinding.ExpiresAt) || len(payload.RequestNonce) < 16 || len(payload.RequestNonce) > 128 || when.IsZero() || !when.Before(newExpiry) {
 				errors = append(errors, "invalid reconnect cursor or session")
 			}
+			if !when.IsZero() && !within(when, currentBinding.EffectiveAt, currentBinding.ExpiresAt) {
+				errors = append(errors, "reconnect lies outside prior authenticated binding")
+			}
+			currentBinding = bindingEpoch{
+				ChannelBindingSHA256: item.ChannelBindingSHA256,
+				RequestNonce:         payload.RequestNonce,
+				EffectiveAt:          when,
+				ExpiresAt:            newExpiry,
+			}
+			fact.Binding = currentBinding
 			fact.LastAck = payload.LastAcknowledgedSequence
 		case "cancel":
 			var payload struct {
@@ -293,14 +333,21 @@ func validateRequests(document sessionDocument, context AuthenticatedContext, bi
 				state = "cancelled"
 			}
 		case "release":
-			var payload LeaseFence
+			var payload struct {
+				LeaseFence
+				ServerReason string `json:"server_reason"`
+			}
 			decodePayload(&errors, item.Data, &payload)
-			checkFence(&errors, payload, document.Lease)
+			checkFence(&errors, payload.LeaseFence, document.Lease)
 			firstRelease := state == "active" || state == "cancelled"
 			releaseRetry := state == "released" && exactRetry
 			if (!firstRelease && !releaseRetry) || item.IdempotencyKey != document.Lease.ReleaseIdempotencyKey {
 				errors = append(errors, "release idempotency key mismatch")
 			}
+			if payload.ServerReason != "" && payload.ServerReason != "lease_expired" {
+				errors = append(errors, "invalid server release reason")
+			}
+			fact.ServerReason = payload.ServerReason
 			if firstRelease {
 				state = "released"
 			}
@@ -308,20 +355,39 @@ func validateRequests(document sessionDocument, context AuthenticatedContext, bi
 		default:
 			errors = append(errors, "unknown request type")
 		}
+		if item.Type != "reconnect" {
+			fact.Binding = currentBinding
+			if item.ChannelBindingSHA256 != currentBinding.ChannelBindingSHA256 {
+				errors = append(errors, "request authentication binding mismatch")
+			}
+			if !when.IsZero() && fact.ServerReason == "" && !within(when, currentBinding.EffectiveAt, currentBinding.ExpiresAt) {
+				errors = append(errors, "request lies outside authenticated binding")
+			}
+		}
 		facts.Ordered = append(facts.Ordered, fact)
 		if _, exists := facts.ByIdempotency[item.IdempotencyKey]; !exists {
 			facts.ByIdempotency[item.IdempotencyKey] = fact
 		}
 	}
-	if !seenAcquire || !seenRelease || state != "released" {
-		errors = append(errors, "session requires one acquire and terminal release request")
+	if !seenAcquire || (seenRelease && state != "released") {
+		errors = append(errors, "session requires one acquire and a valid release lifecycle")
 	}
+	facts.FinalBinding = currentBinding
+	facts.Released = seenRelease
 	return facts, errors
 }
 
 func validateEvents(document sessionDocument, requests requestFacts, bindingIssued, bindingExpires, leaseAcquired, leaseExpires time.Time) (eventFacts, []string) {
 	errors := []string{}
 	facts := eventFacts{Frames: map[frameRef]time.Time{}, FinalLeaseExpiry: leaseExpires}
+	activeBinding := bindingEpoch{
+		ChannelBindingSHA256: document.Binding.ChannelBindingSHA256,
+		RequestNonce:         document.Binding.RequestNonce,
+		EffectiveAt:          bindingIssued,
+		ExpiresAt:            bindingExpires,
+	}
+	releaseRequest := requests.ByIdempotency[document.Lease.ReleaseIdempotencyKey]
+	autonomousExpiry := releaseRequest.Type == "release" && releaseRequest.ServerReason == "lease_expired"
 	seenIDs := map[string]bool{}
 	consumedRequestKeys := map[string]bool{}
 	state := "new"
@@ -329,7 +395,7 @@ func validateEvents(document sessionDocument, requests requestFacts, bindingIssu
 	streamEpoch := 0
 	lastDisconnectedSequence := 0
 	lastTimestamp := time.Time{}
-	effectiveExpiry := leaseExpires
+	effectiveExpiry := minTime(leaseExpires, bindingExpires)
 	for index, item := range document.Events {
 		if item.Sequence != index+1 || seenIDs[item.EventID] {
 			errors = append(errors, "event sequence gap or replayed event_id")
@@ -341,10 +407,25 @@ func validateEvents(document sessionDocument, requests requestFacts, bindingIssu
 		}
 		if !when.IsZero() {
 			lastTimestamp = when
-			if !within(when, bindingIssued, bindingExpires) {
+			eventBinding := activeBinding
+			if item.Type == "reconnected" {
+				var payload struct {
+					RequestID          string `json:"request_id"`
+					IdempotencyKey     string `json:"idempotency_key"`
+					ResumeFromSequence int    `json:"resume_from_sequence"`
+					StreamEpoch        int    `json:"stream_epoch"`
+					Generation         int    `json:"generation"`
+				}
+				decodePayload(&errors, item.Data, &payload)
+				if request, ok := requests.ByIdempotency[payload.IdempotencyKey]; ok && request.Type == "reconnect" {
+					eventBinding = request.Binding
+				}
+			}
+			lateTerminal := autonomousExpiry && (item.Type == "error" || item.Type == "released") && when.Equal(releaseRequest.Timestamp)
+			if !lateTerminal && !within(when, eventBinding.EffectiveAt, eventBinding.ExpiresAt) {
 				errors = append(errors, "event lies outside authenticated binding")
 			}
-			if !within(when, leaseAcquired, effectiveExpiry) {
+			if !lateTerminal && !within(when, leaseAcquired, effectiveExpiry) {
 				errors = append(errors, "event lies outside effective lease lifetime")
 			}
 		}
@@ -421,10 +502,10 @@ func validateEvents(document sessionDocument, requests requestFacts, bindingIssu
 			request, ok := requests.ByIdempotency[payload.IdempotencyKey]
 			newExpiry := parseTime(&errors, "heartbeat lease_expires_at", payload.LeaseExpiresAt)
 			expectedExpiry := effectiveExpiry.Add(time.Duration(request.ExtensionMS) * time.Millisecond)
-			if state != "active" || payload.Generation != document.Lease.Generation || !ok || request.Type != "heartbeat" || request.RequestID != payload.RequestID || consumedRequestKeys[payload.IdempotencyKey] || (!when.IsZero() && when.Before(request.Timestamp)) || request.Timestamp.After(effectiveExpiry) || newExpiry != expectedExpiry || newExpiry.After(bindingExpires) {
+			if state != "active" || payload.Generation != document.Lease.Generation || !ok || request.Type != "heartbeat" || request.RequestID != payload.RequestID || consumedRequestKeys[payload.IdempotencyKey] || (!when.IsZero() && when.Before(request.Timestamp)) || request.Timestamp.After(effectiveExpiry) || newExpiry != expectedExpiry || newExpiry.After(activeBinding.ExpiresAt) {
 				errors = append(errors, "heartbeat outside active lease or generation mismatch")
 			}
-			if !newExpiry.IsZero() && newExpiry == expectedExpiry && !newExpiry.After(bindingExpires) {
+			if !newExpiry.IsZero() && newExpiry == expectedExpiry && !newExpiry.After(activeBinding.ExpiresAt) {
 				effectiveExpiry = newExpiry
 				facts.Renewals = append(facts.Renewals, renewal{EffectiveAt: when, ExpiresAt: newExpiry})
 			}
@@ -450,10 +531,14 @@ func validateEvents(document sessionDocument, requests requestFacts, bindingIssu
 			}
 			decodePayload(&errors, item.Data, &payload)
 			request, ok := requests.ByIdempotency[payload.IdempotencyKey]
-			if state != "disconnected" || !ok || request.Type != "reconnect" || request.RequestID != payload.RequestID || request.LastAck != payload.ResumeFromSequence || payload.ResumeFromSequence > lastDisconnectedSequence || payload.StreamEpoch <= streamEpoch || payload.Generation != document.Lease.Generation || consumedRequestKeys[payload.IdempotencyKey] || (!when.IsZero() && when.Before(request.Timestamp)) {
+			if state != "disconnected" || !ok || request.Type != "reconnect" || request.RequestID != payload.RequestID || request.LastAck != payload.ResumeFromSequence || payload.ResumeFromSequence > lastDisconnectedSequence || payload.StreamEpoch <= streamEpoch || payload.Generation != document.Lease.Generation || consumedRequestKeys[payload.IdempotencyKey] || (!when.IsZero() && when.Before(request.Timestamp)) || request.Binding.ExpiresAt.IsZero() || !within(when, request.Binding.EffectiveAt, request.Binding.ExpiresAt) {
 				errors = append(errors, "invalid reconnect state/cursor/epoch")
 			}
 			consumedRequestKeys[payload.IdempotencyKey] = true
+			activeBinding = request.Binding
+			if effectiveExpiry.After(activeBinding.ExpiresAt) {
+				effectiveExpiry = activeBinding.ExpiresAt
+			}
 			streamEpoch = payload.StreamEpoch
 			lastFrame = 0
 			state = "active"
@@ -486,11 +571,17 @@ func validateEvents(document sessionDocument, requests requestFacts, bindingIssu
 			if (releaseState != "active" && releaseState != "disconnected" && releaseState != "cancelled") || !ok || request.Type != "release" || payload.ReleaseIdempotencyKey != document.Lease.ReleaseIdempotencyKey || payload.Generation != document.Lease.Generation || consumedRequestKeys[payload.ReleaseIdempotencyKey] || (!when.IsZero() && when.Before(request.Timestamp)) {
 				errors = append(errors, "invalid terminal release")
 			}
-			if (releaseState == "cancelled") != (payload.Outcome == "cancelled") {
+			if autonomousExpiry {
+				if payload.Outcome != "error" || !when.Equal(request.Timestamp) {
+					errors = append(errors, "expired lease requires canonical error release")
+				}
+			} else if (releaseState == "cancelled") != (payload.Outcome == "cancelled") {
 				errors = append(errors, "released outcome contradicts lifecycle state")
 			}
 			consumedRequestKeys[payload.ReleaseIdempotencyKey] = true
 			state = "released"
+			facts.Released = true
+			facts.ReleasedAt = when
 		case "error":
 			var payload struct {
 				Code        string `json:"code"`
@@ -501,12 +592,25 @@ func validateEvents(document sessionDocument, requests requestFacts, bindingIssu
 			if state == "new" {
 				errors = append(errors, "error before acquisition")
 			}
+			if !when.IsZero() {
+				expiresAt := minTime(effectiveExpiry, activeBinding.ExpiresAt)
+				if (autonomousExpiry && when.Equal(releaseRequest.Timestamp) && payload.Retryable) || (when.After(expiresAt) && (!autonomousExpiry || !when.Equal(releaseRequest.Timestamp))) {
+					errors = append(errors, "late error is not part of canonical lease expiry")
+				}
+			}
 		default:
 			errors = append(errors, "unknown event type")
 		}
 	}
-	if state != "released" {
-		errors = append(errors, "session lacks terminal release")
+	if state == "new" {
+		errors = append(errors, "session lacks acquisition event")
+	}
+	if autonomousExpiry {
+		expiresAt := minTime(effectiveExpiry, activeBinding.ExpiresAt)
+		latest := expiresAt.Add(time.Duration(document.Lease.HeartbeatIntervalMS) * time.Millisecond)
+		if releaseRequest.Timestamp.Before(expiresAt) || releaseRequest.Timestamp.After(latest) || !facts.ReleasedAt.Equal(releaseRequest.Timestamp) {
+			errors = append(errors, "autonomous lease expiry is outside the terminalization window")
+		}
 	}
 	facts.FinalLeaseExpiry = effectiveExpiry
 	return facts, errors
@@ -516,6 +620,9 @@ func validateRequestLeaseAndFrameTimes(requests requestFacts, events eventFacts,
 	errors := []string{}
 	for _, request := range requests.Ordered {
 		if request.Type == "acquire" || request.Timestamp.IsZero() {
+			continue
+		}
+		if request.Type == "release" && request.ServerReason == "lease_expired" {
 			continue
 		}
 		expiry := initialExpiry
@@ -551,15 +658,7 @@ func decodePayload(errors *[]string, data []byte, target any) {
 }
 
 func decodeStrict(data []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("trailing JSON value")
-	}
-	return nil
+	return strictjson.Decode(data, target)
 }
 
 func parseTime(errors *[]string, label, value string) time.Time {
@@ -572,6 +671,13 @@ func parseTime(errors *[]string, label, value string) time.Time {
 
 func within(value, start, end time.Time) bool {
 	return !value.Before(start) && !value.After(end)
+}
+
+func minTime(left, right time.Time) time.Time {
+	if left.Before(right) {
+		return left
+	}
+	return right
 }
 
 func subset(values, allowed []string) bool {

@@ -11,41 +11,40 @@ import (
 )
 
 type WorkerStore interface {
-	HeartbeatNode(context.Context, string, time.Time) error
-	ClaimFrame(context.Context, string, time.Duration) (sessionstore.FrameWork, error)
-	CompleteFrame(context.Context, sessionstore.FrameWork, map[string]any, time.Time) error
-	FailFrame(context.Context, sessionstore.FrameWork, string, bool, string, time.Time) error
-	ClaimInput(context.Context, string, time.Duration) (sessionstore.InputWork, error)
-	StartInput(context.Context, sessionstore.InputWork, time.Time) error
-	CompleteInput(context.Context, sessionstore.InputWork, string, time.Duration, *sessionstore.ExecutionFailure, time.Time) error
-	RecoverAmbiguousInputs(context.Context, string, time.Time) (int64, error)
+	ClaimFrame(context.Context, sessionstore.NodeLease, time.Duration) (sessionstore.FrameWork, error)
+	CompleteFrame(context.Context, sessionstore.FrameWork, sessionstore.FrameData) error
+	FailFrame(context.Context, sessionstore.FrameWork, string, bool, string) error
+	ClaimInput(context.Context, sessionstore.NodeLease, time.Duration) (sessionstore.InputWork, error)
+	StartInput(context.Context, sessionstore.InputWork) error
+	CompleteInput(context.Context, sessionstore.InputWork, string, time.Duration, *sessionstore.ExecutionFailure) error
+	WaitInputActive(context.Context, sessionstore.InputWork, time.Duration) (bool, error)
 	WaitForWork(context.Context, string, time.Duration) error
 }
 
 type Worker struct {
-	NodeID            string
-	Store             WorkerStore
-	Executors         map[string]DeviceExecutor
-	PollInterval      time.Duration
-	ClaimDuration     time.Duration
-	ExecutionTimeout  time.Duration
-	HeartbeatInterval time.Duration
-	Now               func() time.Time
+	NodeLease        sessionstore.NodeLease
+	Store            WorkerStore
+	Executors        map[string]DeviceExecutor
+	PollInterval     time.Duration
+	ClaimDuration    time.Duration
+	ExecutionTimeout time.Duration
+	Now              func() time.Time
 }
 
 func (worker *Worker) Run(ctx context.Context) error {
-	if worker.NodeID == "" || worker.Store == nil {
+	if worker.NodeLease.NodeID == "" || worker.NodeLease.WorkerEpoch <= 0 || worker.Store == nil {
 		return errors.New("worker requires node identity and store")
 	}
 	worker.defaults()
-	if _, err := worker.Store.RecoverAmbiguousInputs(ctx, worker.NodeID, worker.now().Add(-worker.ExecutionTimeout)); err != nil {
-		return fmt.Errorf("recover ambiguous device input: %w", err)
-	}
-	heartbeat := time.NewTicker(worker.HeartbeatInterval)
-	defer heartbeat.Stop()
 	for {
+		if ctx.Err() != nil {
+			return nil
+		}
 		worked, err := worker.runOne(ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			return err
 		}
 		if worked {
@@ -54,15 +53,8 @@ func (worker *Worker) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-heartbeat.C:
-			if err := worker.Store.HeartbeatNode(ctx, worker.NodeID, worker.now()); err != nil {
-				return fmt.Errorf("heartbeat worker node: %w", err)
-			}
-			if _, err := worker.Store.RecoverAmbiguousInputs(ctx, worker.NodeID, worker.now().Add(-worker.ExecutionTimeout)); err != nil {
-				return fmt.Errorf("recover ambiguous device input: %w", err)
-			}
 		default:
-			if err := worker.Store.WaitForWork(ctx, worker.NodeID, worker.PollInterval); err != nil && !errors.Is(err, context.Canceled) {
+			if err := worker.Store.WaitForWork(ctx, worker.NodeLease.NodeID, worker.PollInterval); err != nil && !errors.Is(err, context.Canceled) {
 				return fmt.Errorf("wait for device work: %w", err)
 			}
 		}
@@ -70,14 +62,14 @@ func (worker *Worker) Run(ctx context.Context) error {
 }
 
 func (worker *Worker) runOne(ctx context.Context) (bool, error) {
-	frame, err := worker.Store.ClaimFrame(ctx, worker.NodeID, worker.ClaimDuration)
+	frame, err := worker.Store.ClaimFrame(ctx, worker.NodeLease, worker.ClaimDuration)
 	if err == nil {
 		return true, worker.produceFrame(ctx, frame)
 	}
 	if !errors.Is(err, sessionstore.ErrNotFound) {
 		return false, fmt.Errorf("claim frame: %w", err)
 	}
-	input, err := worker.Store.ClaimInput(ctx, worker.NodeID, worker.ClaimDuration)
+	input, err := worker.Store.ClaimInput(ctx, worker.NodeLease, worker.ClaimDuration)
 	if errors.Is(err, sessionstore.ErrNotFound) {
 		return false, nil
 	}
@@ -90,29 +82,26 @@ func (worker *Worker) runOne(ctx context.Context) (bool, error) {
 func (worker *Worker) produceFrame(ctx context.Context, work sessionstore.FrameWork) error {
 	executor := worker.Executors[work.ResourceID]
 	if executor == nil {
-		return worker.Store.FailFrame(ctx, work, "DEVICE_UNAVAILABLE", false, "no executor is registered for the leased device", worker.now())
+		return ignoreAbandonedWork(worker.Store.FailFrame(ctx, work, "DEVICE_UNAVAILABLE", false, "no executor is registered for the leased device"))
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, worker.ExecutionTimeout)
 	frame, err := executor.CaptureFrame(operationCtx)
 	cancel()
 	if err != nil {
 		code, retryable := classifyExecutionError(err)
-		return worker.Store.FailFrame(ctx, work, code, retryable, "device frame capture failed", worker.now())
+		return ignoreAbandonedWork(worker.Store.FailFrame(ctx, work, code, retryable, "device frame capture failed"))
 	}
 	if len(frame.Content) == 0 || frame.Width < 1 || frame.Height < 1 || !validOrientation(frame.Orientation) {
-		return worker.Store.FailFrame(ctx, work, "DEVICE_UNAVAILABLE", false, "device returned an invalid frame", worker.now())
+		return ignoreAbandonedWork(worker.Store.FailFrame(ctx, work, "DEVICE_UNAVAILABLE", false, "device returned an invalid frame"))
 	}
-	payload := map[string]any{"orientation": frame.Orientation, "width": frame.Width, "height": frame.Height, "content_sha256": frameContentDigest(frame.Content), "queue_depth": 0, "dropped_since_previous": 0}
-	return worker.Store.CompleteFrame(ctx, work, payload, worker.now())
+	return ignoreAbandonedWork(worker.Store.CompleteFrame(ctx, work, sessionstore.FrameData{Content: frame.Content,
+		ContentType: frame.ContentType, Orientation: frame.Orientation, Width: frame.Width, Height: frame.Height}))
 }
 
 func (worker *Worker) executeInput(ctx context.Context, work sessionstore.InputWork) error {
-	if err := worker.Store.StartInput(ctx, work, worker.now()); err != nil {
-		if errors.Is(err, sessionstore.ErrFenced) || errors.Is(err, sessionstore.ErrInvalidState) {
-			failure := &sessionstore.ExecutionFailure{Code: "FENCED", Retryable: false, SafeMessage: "input frame or lease is stale"}
-			if completeErr := worker.Store.CompleteInput(ctx, work, "rejected", 0, failure, worker.now()); completeErr == nil {
-				return nil
-			}
+	if err := worker.Store.StartInput(ctx, work); err != nil {
+		if errors.Is(err, sessionstore.ErrFenced) || errors.Is(err, sessionstore.ErrInvalidState) || errors.Is(err, sessionstore.ErrExpired) {
+			return nil
 		}
 		return fmt.Errorf("start input: %w", err)
 	}
@@ -120,17 +109,64 @@ func (worker *Worker) executeInput(ctx context.Context, work sessionstore.InputW
 	executor := worker.Executors[work.ResourceID]
 	if executor == nil {
 		failure := &sessionstore.ExecutionFailure{Code: "DEVICE_UNAVAILABLE", Retryable: false, SafeMessage: "no executor is registered for the leased device"}
-		return worker.Store.CompleteInput(ctx, work, "rejected", worker.now().Sub(started), failure, worker.now())
+		return worker.finishInput(ctx, work, "rejected", worker.now().Sub(started), failure)
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, worker.ExecutionTimeout)
+	watchCtx, stopWatch := context.WithCancel(ctx)
+	type inputWatchResult struct {
+		active bool
+		err    error
+	}
+	watchResult := make(chan inputWatchResult, 1)
+	go func() {
+		active, err := worker.Store.WaitInputActive(watchCtx, work, 100*time.Millisecond)
+		if err == nil && !active {
+			cancel()
+		}
+		if err != nil && !errors.Is(err, context.Canceled) {
+			cancel()
+		}
+		watchResult <- inputWatchResult{active: active, err: err}
+	}()
 	err := executor.Execute(operationCtx, work.Command, work.CommandPayload)
 	cancel()
+	stopWatch()
+	watch := <-watchResult
+	if watch.err == nil && !watch.active {
+		failure := &sessionstore.ExecutionFailure{Code: "DEVICE_UNAVAILABLE", Retryable: false, SafeMessage: "device input outcome is unknown after cancellation"}
+		return worker.finishInput(ctx, work, "rejected", worker.now().Sub(started), failure)
+	}
+	if watch.err != nil && !errors.Is(watch.err, context.Canceled) {
+		err = errors.Join(err, fmt.Errorf("watch input cancellation: %w", watch.err))
+	}
 	if err != nil {
 		code, retryable := classifyExecutionError(err)
-		failure := &sessionstore.ExecutionFailure{Code: code, Retryable: retryable, SafeMessage: "device input was rejected"}
-		return worker.Store.CompleteInput(ctx, work, "rejected", worker.now().Sub(started), failure, worker.now())
+		message := "device input was rejected"
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			retryable = false
+			message = "device input outcome is unknown after interruption"
+		}
+		failure := &sessionstore.ExecutionFailure{Code: code, Retryable: retryable, SafeMessage: message}
+		return worker.finishInput(ctx, work, "rejected", worker.now().Sub(started), failure)
 	}
-	return worker.Store.CompleteInput(ctx, work, "applied", worker.now().Sub(started), nil, worker.now())
+	return worker.finishInput(ctx, work, "applied", worker.now().Sub(started), nil)
+}
+
+func (worker *Worker) finishInput(ctx context.Context, work sessionstore.InputWork, result string, latency time.Duration, failure *sessionstore.ExecutionFailure) error {
+	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	err := worker.Store.CompleteInput(finishCtx, work, result, latency, failure)
+	if errors.Is(err, sessionstore.ErrFenced) || errors.Is(err, sessionstore.ErrInvalidState) || errors.Is(err, sessionstore.ErrExpired) {
+		return nil
+	}
+	return err
+}
+
+func ignoreAbandonedWork(err error) error {
+	if errors.Is(err, sessionstore.ErrFenced) || errors.Is(err, sessionstore.ErrInvalidState) || errors.Is(err, sessionstore.ErrExpired) {
+		return nil
+	}
+	return err
 }
 
 func (worker *Worker) defaults() {
@@ -142,9 +178,6 @@ func (worker *Worker) defaults() {
 	}
 	if worker.ExecutionTimeout <= 0 {
 		worker.ExecutionTimeout = 20 * time.Second
-	}
-	if worker.HeartbeatInterval <= 0 {
-		worker.HeartbeatInterval = 5 * time.Second
 	}
 }
 

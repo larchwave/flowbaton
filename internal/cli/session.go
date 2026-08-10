@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/engine"
 	"github.com/larchwave/flowbaton/internal/js"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // DeviceSession runs a prepared program against one device.
@@ -47,6 +49,12 @@ func (session DeviceSession) Execute(
 ) ([]engine.FlowResult, error) {
 	if session.Driver == nil {
 		return nil, fmt.Errorf("device session: a driver is required")
+	}
+	if preflighter, ok := session.Driver.(device.RuntimePreflighter); ok && program != nil {
+		requirements := runtimeRequirements(program)
+		if err := preflighter.PreflightRuntime(ctx, requirements); err != nil {
+			return nil, fmt.Errorf("device session: preflighting %s: %w", session.Driver.Name(), err)
+		}
 	}
 	if err := session.Driver.Open(ctx); err != nil {
 		return nil, fmt.Errorf("device session: opening %s: %w", session.Driver.Name(), err)
@@ -101,6 +109,36 @@ func (session DeviceSession) Execute(
 	}
 
 	return results, errors.Join(executeErr, recordingErr, closeErr)
+}
+
+func runtimeRequirements(program *engine.Program) device.RuntimeRequirements {
+	commands := make(map[string]struct{})
+	for _, path := range program.FlowPaths() {
+		flow, found := program.Flow(path)
+		if !found {
+			continue
+		}
+		collectRuntimeCommands(commands, flow.Config.OnFlowStart)
+		collectRuntimeCommands(commands, flow.Commands)
+		collectRuntimeCommands(commands, flow.Config.OnFlowComplete)
+	}
+	result := make([]string, 0, len(commands))
+	for command := range commands {
+		result = append(result, command)
+	}
+	sort.Strings(result)
+	return device.RuntimeRequirements{Commands: result}
+}
+
+func collectRuntimeCommands(result map[string]struct{}, commands []model.Command) {
+	stack := append([]model.Command(nil), commands...)
+	for len(stack) > 0 {
+		index := len(stack) - 1
+		command := stack[index]
+		stack = stack[:index]
+		result[string(command.Kind)] = struct{}{}
+		stack = append(stack, command.Children...)
+	}
 }
 
 const deviceSessionCleanupTimeout = 15 * time.Second

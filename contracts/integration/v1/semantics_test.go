@@ -3,6 +3,7 @@ package integrationv1
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -10,6 +11,15 @@ func TestValidateJSONAcceptsCoveredAuthenticatedTransports(t *testing.T) {
 	data := readHandshake(t)
 	if err := ValidateJSON(data); err != nil {
 		t.Fatalf("valid handshake rejected: %v", err)
+	}
+}
+
+func TestValidateJSONRejectsDuplicateObjectKeys(t *testing.T) {
+	data := string(readHandshake(t))
+	field := `"schema_version": 1,`
+	duplicate := strings.Replace(data, field, field+"\n  "+field, 1)
+	if err := ValidateJSON([]byte(duplicate)); err == nil {
+		t.Fatal("handshake with a duplicate schema_version was accepted")
 	}
 }
 

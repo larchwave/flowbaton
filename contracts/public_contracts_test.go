@@ -255,13 +255,22 @@ func validateDeviceRequests(example deviceSessionExample) []string {
 	errors := []string{}
 	seenIDs := map[string]bool{}
 	seenTypes := map[string]bool{}
+	currentChannelBinding := example.Binding.ChannelBindingSHA256
 	for index, request := range example.Requests {
 		if request.Sequence != index+1 || seenIDs[request.RequestID] {
 			errors = append(errors, "request replay or sequence gap")
 		}
 		seenIDs[request.RequestID] = true
 		seenTypes[request.Type] = true
-		if request.TenantID != example.Binding.TenantID || request.PrincipalID != example.Binding.PrincipalID || request.ChannelBindingSHA256 != example.Binding.ChannelBindingSHA256 {
+		if request.TenantID != example.Binding.TenantID || request.PrincipalID != example.Binding.PrincipalID {
+			errors = append(errors, "request authentication binding mismatch")
+		}
+		if request.Type == "reconnect" {
+			if request.ChannelBindingSHA256 == currentChannelBinding {
+				errors = append(errors, "reconnect did not rotate the channel binding")
+			}
+			currentChannelBinding = request.ChannelBindingSHA256
+		} else if request.ChannelBindingSHA256 != currentChannelBinding {
 			errors = append(errors, "request authentication binding mismatch")
 		}
 		if request.Type == "acquire" {

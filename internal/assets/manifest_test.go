@@ -263,6 +263,11 @@ func TestParseManifestRejectsUnknownAndTrailingJSON(t *testing.T) {
 	if _, err := ParseManifest(append(valid, []byte(` {}`)...)); !errors.Is(err, ErrInvalidAssetManifest) {
 		t.Fatalf("ParseManifest() trailing-value error = %v, want ErrInvalidAssetManifest", err)
 	}
+	withDuplicate := strings.Replace(
+		string(valid), `"manifest_version":`, `"manifest_version":"shadow","manifest_version":`, 1)
+	if _, err := ParseManifest([]byte(withDuplicate)); !errors.Is(err, ErrInvalidAssetManifest) {
+		t.Fatalf("ParseManifest() duplicate-field error = %v, want ErrInvalidAssetManifest", err)
+	}
 }
 
 func validReleaseManifest() Manifest {

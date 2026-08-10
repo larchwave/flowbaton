@@ -11,13 +11,14 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"io"
 
 	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 type Frame struct {
 	Content     []byte
+	ContentType string
 	Orientation string
 	Width       int
 	Height      int
@@ -38,23 +39,53 @@ func (executor DriverExecutor) CaptureFrame(ctx context.Context) (Frame, error) 
 	if executor.Driver == nil {
 		return Frame{}, errors.New("device executor has no driver")
 	}
+	orientationReader, ok := executor.Driver.(device.OrientationReader)
+	if !ok {
+		return Frame{}, errors.New("device executor driver cannot read orientation")
+	}
+	orientation, err := orientationReader.CurrentOrientation(ctx)
+	if err != nil {
+		return Frame{}, fmt.Errorf("read device orientation: %w", err)
+	}
+	frameOrientation, ok := frameOrientations[orientation]
+	if !ok {
+		return Frame{}, fmt.Errorf("device reported unsupported orientation %q", orientation)
+	}
 	content, err := executor.Driver.TakeScreenshot(ctx, device.ScreenshotRequest{Compressed: true})
 	if err != nil {
 		return Frame{}, err
 	}
-	width, height := 0, 0
-	if config, _, decodeErr := image.DecodeConfig(bytes.NewReader(content)); decodeErr == nil {
-		width, height = config.Width, config.Height
-	} else if info, infoErr := executor.Driver.DeviceInfo(ctx); infoErr == nil {
-		width, height = info.WidthPixels, info.HeightPixels
-	} else {
+	config, format, decodeErr := image.DecodeConfig(bytes.NewReader(content))
+	if decodeErr != nil {
 		return Frame{}, fmt.Errorf("decode screenshot dimensions: %w", decodeErr)
 	}
-	orientation := "portrait"
-	if width > height {
-		orientation = "landscape-left"
+	contentType, ok := frameContentTypes[format]
+	if !ok {
+		return Frame{}, fmt.Errorf("unsupported screenshot format %q", format)
 	}
-	return Frame{Content: content, Orientation: orientation, Width: width, Height: height}, nil
+	return Frame{
+		Content: content, ContentType: contentType,
+		Orientation: frameOrientation, Width: config.Width, Height: config.Height,
+	}, nil
+}
+
+var frameContentTypes = map[string]string{
+	"jpeg": "image/jpeg",
+	"png":  "image/png",
+}
+
+var frameOrientations = map[device.Orientation]string{
+	"PORTRAIT":        "portrait",
+	"UPSIDE_DOWN":     "portrait-upside-down",
+	"LANDSCAPE_LEFT":  "landscape-left",
+	"LANDSCAPE_RIGHT": "landscape-right",
+}
+
+var commandOrientations = map[device.Orientation]device.Orientation{
+	"portrait":             "PORTRAIT",
+	"portrait-upside-down": "UPSIDE_DOWN",
+	"landscape-left":       "LANDSCAPE_LEFT",
+	"landscape-right":      "LANDSCAPE_RIGHT",
 }
 
 func (executor DriverExecutor) Execute(ctx context.Context, command string, payload json.RawMessage) error {
@@ -99,20 +130,19 @@ func (executor DriverExecutor) Execute(ctx context.Context, command string, payl
 		if err := decodeExecutorPayload(payload, &input); err != nil || input.Orientation == "" {
 			return invalidPayload(err)
 		}
-		return executor.Driver.SetOrientation(ctx, input.Orientation)
+		orientation, ok := commandOrientations[input.Orientation]
+		if !ok {
+			return errors.New("invalid command payload: unsupported orientation")
+		}
+		return executor.Driver.SetOrientation(ctx, orientation)
 	default:
 		return fmt.Errorf("%w: command %q", device.ErrUnsupported, command)
 	}
 }
 
 func decodeExecutorPayload(payload []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
+	if err := strictjson.Decode(payload, target); err != nil {
 		return fmt.Errorf("invalid command payload: %w", err)
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return errors.New("invalid command payload: trailing JSON")
 	}
 	return nil
 }

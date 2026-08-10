@@ -74,6 +74,28 @@ type Driver interface {
 	CollectCrashArtifacts(context.Context, ArtifactRequest) ([]Artifact, error)
 }
 
+// RuntimeRequirements are the command-level facts a prepared run needs from
+// its selected device. They are passed only to optional RuntimePreflighters,
+// before Driver.Open, so device-version constraints can fail before installing
+// helpers, granting permissions, or otherwise mutating the target.
+type RuntimeRequirements struct {
+	Commands []string
+}
+
+// RuntimePreflighter is an optional, read-only extension to Driver. A driver
+// implements it when static platform capabilities are not enough to decide
+// support, such as an operation that requires a minimum device OS version.
+// Implementations must not mutate the device.
+type RuntimePreflighter interface {
+	PreflightRuntime(context.Context, RuntimeRequirements) error
+}
+
+// OrientationReader is an optional read-only extension used when a caller
+// needs the device's actual rotation alongside captured screen content.
+type OrientationReader interface {
+	CurrentOrientation(context.Context) (Orientation, error)
+}
+
 type Point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`

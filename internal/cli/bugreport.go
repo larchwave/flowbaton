@@ -20,7 +20,7 @@ const defaultBugreportOutput = "bugreport.zip"
 type BugreportRunner struct {
 	Collect       func(ctx context.Context, serial, outputPath string) error
 	CollectIOS    func(ctx context.Context, udid, outputPath string) error
-	ResolveSerial func() (string, error)
+	ResolveSerial func(context.Context) (string, error)
 }
 
 func (runner BugreportRunner) collect() func(context.Context, string, string) error {
@@ -39,7 +39,7 @@ func (runner BugreportRunner) collectIOS() func(context.Context, string, string)
 	return realIOSDiagnose
 }
 
-func (runner BugreportRunner) resolveSerial() func() (string, error) {
+func (runner BugreportRunner) resolveSerial() func(context.Context) (string, error) {
 	if runner.ResolveSerial != nil {
 		return runner.ResolveSerial
 	}
@@ -58,7 +58,7 @@ func (runner BugreportRunner) Run(ctx context.Context, args []string, stdout, st
 
 	serial := udid
 	if serial == "" {
-		resolved, err := runner.resolveSerial()()
+		resolved, err := runner.resolveSerial()(ctx)
 		if err != nil {
 			fmt.Fprintf(stderr, "bugreport: %v\n", err)
 			return ExitFailure

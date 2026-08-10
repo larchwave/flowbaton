@@ -3,13 +3,12 @@
 package integrationv1
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 type handshakeDocument struct {
@@ -139,13 +138,5 @@ func ValidateJSON(data []byte) error {
 }
 
 func decodeStrict(data []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("trailing JSON value")
-	}
-	return nil
+	return strictjson.Decode(data, target)
 }

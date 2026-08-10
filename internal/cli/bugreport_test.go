@@ -23,7 +23,7 @@ func bugreportRunnerRecording(serial string, resolveErr error) (*[]bugreportCall
 			calls = append(calls, bugreportCall{serial: s, output: output})
 			return nil
 		},
-		ResolveSerial: func() (string, error) { return serial, resolveErr },
+		ResolveSerial: func(context.Context) (string, error) { return serial, resolveErr },
 	}
 	return &calls, runner
 }
@@ -167,7 +167,7 @@ func TestBugreportReportsACollectFailure(t *testing.T) {
 		Collect: func(_ context.Context, _, _ string) error {
 			return errors.New("adb: device offline")
 		},
-		ResolveSerial: func() (string, error) { return "emulator-5554", nil },
+		ResolveSerial: func(context.Context) (string, error) { return "emulator-5554", nil },
 	}
 	_, stderr, code := runBugreport(t, runner, "-p", "android", "--device", "emulator-5554", "--output", "out.zip")
 	if code != ExitFailure {

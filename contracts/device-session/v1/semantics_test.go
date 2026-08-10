@@ -14,30 +14,58 @@ func TestValidateAcceptsAuthenticatedFencedTranscript(t *testing.T) {
 		TenantID:             "tenant-example",
 		PrincipalID:          "studio-core-host-01",
 		AuthProfileID:        "remote-cloud-mac-v1",
-		ChannelBindingSHA256: strings.Repeat("b", 64),
-		RequestNonce:         "nonce-01JZEXAMPLE-0001",
+		ChannelBindingSHA256: strings.Repeat("f", 64),
+		RequestNonce:         "nonce-01JZEXAMPLE-0002",
+		BindingExpiresAt:     mustTime(t, "2026-07-15T12:11:00Z"),
 	}, RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z"))
 	if err != nil {
 		t.Fatalf("valid transcript rejected: %v", err)
+	}
+	if err := ValidateJSON(data, validContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T13:00:00Z")); err != nil {
+		t.Fatalf("released transcript rejected during later inspection: %v", err)
+	}
+}
+
+func TestValidateLiveTranscriptRequiresLiveBindingAndLease(t *testing.T) {
+	var document sessionDocument
+	if err := decodeStrict(readExample(t), &document); err != nil {
+		t.Fatal(err)
+	}
+	document.Requests = filterRequests(document.Requests, "acquire", "input", "heartbeat", "reconnect")
+	document.Events = filterEvents(document.Events, "acquired", "frame", "input_ack", "heartbeat", "disconnected", "reconnected")
+	data := mustDocumentJSON(t, document)
+	if err := ValidateJSON(data, validContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err != nil {
+		t.Fatalf("live transcript rejected during live lease: %v", err)
+	}
+	if err := ValidateJSON(data, validContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:11:00Z")); err == nil {
+		t.Fatal("expired live transcript accepted")
+	}
+}
+
+func TestValidateRejectsDuplicateObjectKeys(t *testing.T) {
+	data := string(readExample(t))
+	field := `"schema_version": 1,`
+	duplicate := strings.Replace(data, field, field+"\n  "+field, 1)
+	if err := ValidateJSON(
+		[]byte(duplicate), validContext(), RemoteCloudMacV1,
+		mustTime(t, "2026-07-15T12:00:08Z"),
+	); err == nil {
+		t.Fatal("transcript with a duplicate schema_version was accepted")
 	}
 }
 
 func TestValidateRejectsContextExpiryAndMixedProfile(t *testing.T) {
 	data := readExample(t)
-	base := AuthenticatedContext{
-		TenantID:             "tenant-example",
-		PrincipalID:          "studio-core-host-01",
-		AuthProfileID:        "remote-cloud-mac-v1",
-		ChannelBindingSHA256: strings.Repeat("b", 64),
-		RequestNonce:         "nonce-01JZEXAMPLE-0001",
-	}
+	base := validContext()
 
 	crossTenant := base
 	crossTenant.TenantID = "other-tenant"
 	if err := ValidateJSON(data, crossTenant, RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err == nil {
 		t.Fatal("cross-tenant context accepted")
 	}
-	if err := ValidateJSON(data, base, RemoteCloudMacV1, mustTime(t, "2026-07-15T12:06:00Z")); err == nil {
+	expired := base
+	expired.BindingExpiresAt = mustTime(t, "2026-07-15T12:00:06Z")
+	if err := ValidateJSON(data, expired, RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err == nil {
 		t.Fatal("expired binding/lease accepted")
 	}
 	mixed := RemoteCloudMacV1
@@ -71,9 +99,10 @@ func TestValidateAcceptsOrdinaryPathWithoutOptionalOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 	document.Requests = filterRequests(document.Requests, "acquire", "input", "release")
+	document.Requests[len(document.Requests)-1].ChannelBindingSHA256 = document.Binding.ChannelBindingSHA256
 	document.Events = filterEvents(document.Events, "acquired", "frame", "input_ack", "released")
 	document.Events[len(document.Events)-1].Data = json.RawMessage(`{"release_idempotency_key":"release-01JZEXAMPLE-0001","outcome":"completed","generation":7}`)
-	if err := ValidateJSON(mustDocumentJSON(t, document), validContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err != nil {
+	if err := ValidateJSON(mustDocumentJSON(t, document), initialContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err != nil {
 		t.Fatalf("ordinary acquire/input/release path rejected: %v", err)
 	}
 }
@@ -182,14 +211,161 @@ func TestValidateAcceptsExactTerminalRequestRetriesAndRejectsOutcomeDrift(t *tes
 	}
 }
 
+func TestValidateAcceptsRotatedReconnectBindingAndRejectsOldBinding(t *testing.T) {
+	var document sessionDocument
+	if err := decodeStrict(readExample(t), &document); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateJSON(mustDocumentJSON(t, document), rotatedContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err != nil {
+		t.Fatalf("rotated reconnect binding rejected: %v", err)
+	}
+
+	document.Requests[3].ChannelBindingSHA256 = document.Binding.ChannelBindingSHA256
+	if err := ValidateJSON(mustDocumentJSON(t, document), rotatedContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err == nil {
+		t.Fatal("reconnect on unchanged TLS channel accepted")
+	}
+
+	if err := decodeStrict(readExample(t), &document); err != nil {
+		t.Fatal(err)
+	}
+	document.Requests[4].ChannelBindingSHA256 = document.Binding.ChannelBindingSHA256
+	if err := ValidateJSON(mustDocumentJSON(t, document), rotatedContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err == nil {
+		t.Fatal("old binding accepted after reconnect")
+	}
+}
+
+func TestValidateRejectsAuthenticatedExpiryExtension(t *testing.T) {
+	context := validContext()
+	context.BindingExpiresAt = context.BindingExpiresAt.Add(time.Minute)
+	if err := ValidateJSON(readExample(t), context, RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err == nil {
+		t.Fatal("authenticated token expiry extension accepted")
+	}
+}
+
+func TestValidateRejectsMalformedOrExpiredReconnectToken(t *testing.T) {
+	for name, mutate := range map[string]func(*testing.T, *sessionDocument){
+		"unchanged nonce": func(t *testing.T, document *sessionDocument) {
+			var payload map[string]any
+			if err := json.Unmarshal(document.Requests[3].Data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			payload["request_nonce"] = document.Binding.RequestNonce
+			document.Requests[3].Data = mustJSON(t, payload)
+		},
+		"oversized nonce": func(t *testing.T, document *sessionDocument) {
+			var payload map[string]any
+			if err := json.Unmarshal(document.Requests[3].Data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			payload["request_nonce"] = strings.Repeat("n", 129)
+			document.Requests[3].Data = mustJSON(t, payload)
+		},
+		"expired token": func(t *testing.T, document *sessionDocument) {
+			var payload map[string]any
+			if err := json.Unmarshal(document.Requests[3].Data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			payload["binding_expires_at"] = "2026-07-15T12:00:06Z"
+			document.Requests[3].Data = mustJSON(t, payload)
+		},
+		"unchanged expiry": func(t *testing.T, document *sessionDocument) {
+			var payload map[string]any
+			if err := json.Unmarshal(document.Requests[3].Data, &payload); err != nil {
+				t.Fatal(err)
+			}
+			payload["binding_expires_at"] = document.Binding.ExpiresAt
+			document.Requests[3].Data = mustJSON(t, payload)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var document sessionDocument
+			if err := decodeStrict(readExample(t), &document); err != nil {
+				t.Fatal(err)
+			}
+			mutate(t, &document)
+			if err := ValidateJSON(mustDocumentJSON(t, document), validContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T12:00:08Z")); err == nil {
+				t.Fatal("invalid reconnect token accepted")
+			}
+		})
+	}
+}
+
+func TestValidateAcceptsCanonicalAutonomousExpiryAfterTerminalInspection(t *testing.T) {
+	document := autonomousExpiryDocument(t)
+	if err := ValidateJSON(mustDocumentJSON(t, document), initialContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T13:00:00Z")); err != nil {
+		t.Fatalf("canonical autonomous expiry rejected: %v", err)
+	}
+}
+
+func TestValidateRejectsArbitraryLateExpiryReleaseAndError(t *testing.T) {
+	t.Run("release", func(t *testing.T) {
+		document := autonomousExpiryDocument(t)
+		document.Requests[len(document.Requests)-1].Timestamp = "2026-07-15T12:06:00Z"
+		document.Events[len(document.Events)-1].Timestamp = "2026-07-15T12:06:00Z"
+		if err := ValidateJSON(mustDocumentJSON(t, document), initialContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T13:00:00Z")); err == nil {
+			t.Fatal("arbitrarily late autonomous release accepted")
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		document := autonomousExpiryDocument(t)
+		document.Events[len(document.Events)-2].Timestamp = "2026-07-15T12:05:02Z"
+		if err := ValidateJSON(mustDocumentJSON(t, document), initialContext(), RemoteCloudMacV1, mustTime(t, "2026-07-15T13:00:00Z")); err == nil {
+			t.Fatal("unbound late error accepted")
+		}
+	})
+}
+
+func autonomousExpiryDocument(t *testing.T) sessionDocument {
+	t.Helper()
+	var document sessionDocument
+	if err := decodeStrict(readExample(t), &document); err != nil {
+		t.Fatal(err)
+	}
+	document.Requests = filterRequests(document.Requests, "acquire", "input", "release")
+	release := &document.Requests[len(document.Requests)-1]
+	release.ChannelBindingSHA256 = document.Binding.ChannelBindingSHA256
+	release.Timestamp = "2026-07-15T12:05:01Z"
+	release.Data = json.RawMessage(`{"lease_id":"lease-01JZEXAMPLE","generation":7,"fencing_token_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","server_reason":"lease_expired"}`)
+	document.Events = filterEvents(document.Events, "acquired", "frame", "input_ack")
+	document.Events = append(document.Events,
+		event{
+			Sequence: 4, EventID: "event-expiry-error-0004", Type: "error", Timestamp: "2026-07-15T12:05:01Z",
+			LeaseGeneration: 7, FencingTokenSHA256: strings.Repeat("c", 64),
+			Data: json.RawMessage(`{"code":"DEVICE_UNAVAILABLE","retryable":false,"safe_message":"device input outcome is unknown"}`),
+		},
+		event{
+			Sequence: 5, EventID: "event-expiry-release-0005", Type: "released", Timestamp: "2026-07-15T12:05:01Z",
+			LeaseGeneration: 7, FencingTokenSHA256: strings.Repeat("c", 64),
+			Data: json.RawMessage(`{"release_idempotency_key":"release-01JZEXAMPLE-0001","outcome":"error","generation":7}`),
+		},
+	)
+	return document
+}
+
 func validContext() AuthenticatedContext {
 	return AuthenticatedContext{
 		TenantID:             "tenant-example",
 		PrincipalID:          "studio-core-host-01",
 		AuthProfileID:        "remote-cloud-mac-v1",
-		ChannelBindingSHA256: strings.Repeat("b", 64),
-		RequestNonce:         "nonce-01JZEXAMPLE-0001",
+		ChannelBindingSHA256: strings.Repeat("f", 64),
+		RequestNonce:         "nonce-01JZEXAMPLE-0002",
+		BindingExpiresAt:     time.Date(2026, time.July, 15, 12, 11, 0, 0, time.UTC),
 	}
+}
+
+func rotatedContext() AuthenticatedContext {
+	context := validContext()
+	context.ChannelBindingSHA256 = strings.Repeat("f", 64)
+	return context
+}
+
+func initialContext() AuthenticatedContext {
+	context := validContext()
+	context.ChannelBindingSHA256 = strings.Repeat("b", 64)
+	context.RequestNonce = "nonce-01JZEXAMPLE-0001"
+	context.BindingExpiresAt = time.Date(2026, time.July, 15, 12, 10, 0, 0, time.UTC)
+	return context
 }
 
 func readExample(t *testing.T) []byte {

@@ -39,13 +39,17 @@ public struct DeviceInfoPayload: Codable, Equatable, Sendable {
   public let heightPoints: Double
   public let widthPixels: Double
   public let heightPixels: Double
+  public let orientation: String
 
-  public init(widthPoints: Double, heightPoints: Double, widthPixels: Double, heightPixels: Double)
-  {
+  public init(
+    widthPoints: Double, heightPoints: Double, widthPixels: Double, heightPixels: Double,
+    orientation: String
+  ) {
     self.widthPoints = widthPoints
     self.heightPoints = heightPoints
     self.widthPixels = widthPixels
     self.heightPixels = heightPixels
+    self.orientation = orientation
   }
 }
 

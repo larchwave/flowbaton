@@ -33,7 +33,7 @@ func TestShardSplitPartitionsFlowsAcrossDevices(t *testing.T) {
 	plan := plannedFlows("a.yaml", "b.yaml", "c.yaml", "d.yaml", "e.yaml")
 	options := TestOptions{ShardSplit: 2, Devices: []string{"udid-1", "udid-2"}}
 
-	shards, err := PlanShards(options, plan)
+	shards, err := PlanShards(context.Background(), options, plan)
 	if err != nil {
 		t.Fatalf("PlanShards() error = %v", err)
 	}
@@ -61,7 +61,7 @@ func TestShardAllReplicatesEveryFlowToEveryDevice(t *testing.T) {
 	plan := plannedFlows("a.yaml", "b.yaml", "c.yaml")
 	options := TestOptions{ShardAll: 3, Devices: []string{"udid-1", "udid-2", "udid-3"}}
 
-	shards, err := PlanShards(options, plan)
+	shards, err := PlanShards(context.Background(), options, plan)
 	if err != nil {
 		t.Fatalf("PlanShards() error = %v", err)
 	}
@@ -80,7 +80,7 @@ func TestWithoutShardingThereIsOneShardHoldingEveryFlow(t *testing.T) {
 	t.Parallel()
 
 	plan := plannedFlows("a.yaml", "b.yaml")
-	shards, err := PlanShards(TestOptions{Devices: []string{"udid-1"}}, plan)
+	shards, err := PlanShards(context.Background(), TestOptions{Devices: []string{"udid-1"}}, plan)
 	if err != nil {
 		t.Fatalf("PlanShards() error = %v", err)
 	}
@@ -97,7 +97,7 @@ func TestSeveralDevicesWithoutAShardFlagAreRefused(t *testing.T) {
 
 	// Taking the first would run one device's worth of a suite the operator
 	// handed several devices to, and report it as the whole thing.
-	_, err := PlanShards(
+	_, err := PlanShards(context.Background(),
 		TestOptions{Devices: []string{"udid-1", "udid-2"}}, plannedFlows("a.yaml"))
 	if err == nil {
 		t.Fatal("two devices were accepted with no sharding asked for")
@@ -117,7 +117,7 @@ func TestShardingRefusesFewerDevicesThanShards(t *testing.T) {
 	plan := plannedFlows("a.yaml", "b.yaml", "c.yaml", "d.yaml")
 	options := TestOptions{ShardSplit: 4, Devices: []string{"udid-1", "udid-2"}}
 
-	_, err := PlanShards(options, plan)
+	_, err := PlanShards(context.Background(), options, plan)
 	if err == nil {
 		t.Fatal("PlanShards() accepted four shards on two devices")
 	}
@@ -137,7 +137,7 @@ func TestShardingRefusesAConfiguredFlowOrder(t *testing.T) {
 	plan.Sequence = plan.Flows
 	options := TestOptions{ShardSplit: 2, Devices: []string{"udid-1", "udid-2"}}
 
-	_, err := PlanShards(options, plan)
+	_, err := PlanShards(context.Background(), options, plan)
 	if err == nil {
 		t.Fatal("PlanShards() sharded a suite with a configured order")
 	}
@@ -153,7 +153,7 @@ func TestAConfiguredFlowOrderIsFineWithoutSharding(t *testing.T) {
 	// it and break the ordinary case.
 	plan := plannedFlows("first.yaml", "second.yaml")
 	plan.Sequence = plan.Flows
-	if _, err := PlanShards(TestOptions{Devices: []string{"udid-1"}}, plan); err != nil {
+	if _, err := PlanShards(context.Background(), TestOptions{Devices: []string{"udid-1"}}, plan); err != nil {
 		t.Fatalf("PlanShards() refused an ordered suite that was not sharded: %v", err)
 	}
 }
@@ -166,7 +166,7 @@ func TestShardSplitRefusesMoreShardsThanFlows(t *testing.T) {
 	plan := plannedFlows("only.yaml")
 	options := TestOptions{ShardSplit: 3, Devices: []string{"a", "b", "c"}}
 
-	_, err := PlanShards(options, plan)
+	_, err := PlanShards(context.Background(), options, plan)
 	if err == nil {
 		t.Fatal("PlanShards() produced empty shards")
 	}
@@ -186,7 +186,7 @@ func TestEachShardRunsItsOwnFlowsOnItsOwnDevice(t *testing.T) {
 	// Guarded because shards run concurrently.
 	var mutex sync.Mutex
 	drivers := map[string]*enginetest.FakeDriver{}
-	runner := TestRunner{NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+	runner := TestRunner{NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 		driver := permissiveDriver()
 		mutex.Lock()
 		drivers[shard.Device] = driver
@@ -247,7 +247,7 @@ func TestPreflightRefusesBeforeAnyDeviceIsAcquired(t *testing.T) {
 		"appId: com.example.a\n---\n- runFlow: missing.yaml\n")
 
 	var built atomic.Bool
-	runner := TestRunner{NewSession: func(Shard, TestOptions) (TestSession, error) {
+	runner := TestRunner{NewSession: func(_ context.Context, _ Shard, _ TestOptions) (TestSession, error) {
 		built.Store(true)
 		return DeviceSession{Driver: permissiveDriver(), BaseDirectory: dir}, nil
 	}}
@@ -272,7 +272,7 @@ func TestAFailureInOneShardFailsTheWholeRun(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "b.yaml"),
 		"appId: com.example.a\n---\n- assertVisible: NothingIsEverHere\n")
 
-	runner := TestRunner{NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+	runner := TestRunner{NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 		// Only the shard holding the failing flow gets a driver that fails it,
 		// so a runner that reported the first shard's exit code would pass.
 		driver := permissiveDriver()
@@ -315,7 +315,7 @@ func TestShardArtifactsAreKeptApartPerShard(t *testing.T) {
 			"appId: com.example.a\n---\n- assertVisible: Nope\n")
 	}
 
-	runner := TestRunner{NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+	runner := TestRunner{NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 		return DeviceSession{
 			Driver:          emptyScreenDriver(),
 			OutputDirectory: shard.OutputDirectory,
@@ -355,7 +355,7 @@ func TestAnUnshardedRunKeepsItsArtifactsWhereTheyWere(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "a.yaml"),
 		"appId: com.example.a\n---\n- assertVisible: Nope\n")
 
-	runner := TestRunner{NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+	runner := TestRunner{NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 		return DeviceSession{
 			Driver:          emptyScreenDriver(),
 			OutputDirectory: shard.OutputDirectory,
@@ -398,7 +398,7 @@ func TestTheRunnerCarriesTheWorkspaceOrderIntoTheSession(t *testing.T) {
 		"executionOrder:\n  flowsOrder:\n    - a\n    - b\n  continueOnFailure: true\n")
 
 	var seen TestOptions
-	runner := TestRunner{NewSession: func(shard Shard, options TestOptions) (TestSession, error) {
+	runner := TestRunner{NewSession: func(_ context.Context, shard Shard, options TestOptions) (TestSession, error) {
 		seen = options
 		return DeviceSession{
 			Driver:          permissiveDriver(),

@@ -31,6 +31,7 @@ func TestDriverIsADeviceDriver(t *testing.T) {
 	t.Parallel()
 
 	var _ device.Driver = (*Driver)(nil)
+	var _ device.OrientationReader = (*Driver)(nil)
 }
 
 func TestDriverRefusesTheOperationsIOSCannotPerform(t *testing.T) {
@@ -111,6 +112,79 @@ func TestBackPressIsUnsupportedOnIOS(t *testing.T) {
 	}
 	if len(reached) != 0 {
 		t.Fatalf("BackPress() called %v; iOS has no back", reached)
+	}
+}
+
+func TestSetOrientationMapsEveryCanonicalFlowValue(t *testing.T) {
+	t.Parallel()
+
+	tests := map[device.Orientation]string{
+		"PORTRAIT":        "portrait",
+		"LANDSCAPE_LEFT":  "landscapeLeft",
+		"LANDSCAPE_RIGHT": "landscapeRight",
+		"UPSIDE_DOWN":     "upsideDown",
+	}
+	for input, want := range tests {
+		input, want := input, want
+		t.Run(string(input), func(t *testing.T) {
+			t.Parallel()
+			var got string
+			driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/setOrientation" {
+					t.Errorf("path = %q, want /setOrientation", request.URL.Path)
+				}
+				var body struct {
+					Orientation string `json:"orientation"`
+				}
+				if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+					t.Errorf("decode orientation request: %v", err)
+				}
+				got = body.Orientation
+				writeJSON(t, writer, map[string]any{})
+			})
+			if err := driver.SetOrientation(context.Background(), input); err != nil {
+				t.Fatalf("SetOrientation(%s) error = %v", input, err)
+			}
+			if got != want {
+				t.Fatalf("orientation = %q, want %q", got, want)
+			}
+		})
+	}
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unsupported orientation reached the runner")
+	})
+	if err := driver.SetOrientation(context.Background(), "DIAGONAL"); !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("SetOrientation(DIAGONAL) error = %v, want device.ErrUnsupported", err)
+	}
+}
+
+func TestCurrentOrientationMapsEveryWireValue(t *testing.T) {
+	t.Parallel()
+
+	for wire, want := range map[ScreenOrientation]device.Orientation{
+		ScreenOrientationPortrait:       "PORTRAIT",
+		ScreenOrientationUpsideDown:     "UPSIDE_DOWN",
+		ScreenOrientationLandscapeLeft:  "LANDSCAPE_LEFT",
+		ScreenOrientationLandscapeRight: "LANDSCAPE_RIGHT",
+	} {
+		wire, want := wire, want
+		t.Run(string(wire), func(t *testing.T) {
+			t.Parallel()
+			driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+				if request.URL.Path != "/deviceInfo" {
+					t.Errorf("path = %q, want /deviceInfo", request.URL.Path)
+				}
+				writeJSON(t, writer, DeviceInfo{Orientation: wire})
+			})
+			got, err := driver.CurrentOrientation(context.Background())
+			if err != nil {
+				t.Fatalf("CurrentOrientation() error = %v", err)
+			}
+			if got != want {
+				t.Fatalf("CurrentOrientation() = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -522,7 +596,13 @@ func newTestDriverWithSimctl(t *testing.T, handler http.HandlerFunc, runner Comm
 	t.Helper()
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
-	return NewDriver("UDID-1", 41001, NewClient(server.URL), NewSimctl("UDID-1", runner), nil)
+	httpClient := server.Client()
+	httpClient.Timeout = defaultTimeout
+	return NewDriver(
+		"UDID-1", 41001,
+		NewClient(server.URL, WithHTTPClient(httpClient)),
+		NewSimctl("UDID-1", runner), nil,
+	)
 }
 
 func writeJSON(t *testing.T, writer http.ResponseWriter, value any) {

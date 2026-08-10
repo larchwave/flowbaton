@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -25,7 +26,7 @@ func rootShard(udid string) Shard {
 func TestDeviceResolutionRequiresAPlatform(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewDeviceSession(TestOptions{Roots: []string{"flow.yaml"}}, rootShard("UDID-1"))
+	_, err := NewDeviceSession(context.Background(), TestOptions{Roots: []string{"flow.yaml"}}, rootShard("UDID-1"))
 	if err == nil {
 		t.Fatal("a session was built with no platform")
 	}
@@ -40,7 +41,7 @@ func TestDeviceResolutionRequiresAUDID(t *testing.T) {
 	// A shard with no device is a guess waiting to happen. Spreading a suite
 	// over several devices is sharding's job, and PlanShards refuses the
 	// combinations that do not add up before anything reaches here.
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}}, rootShard(""))
 	if err == nil {
 		t.Fatal("a session was built with no udid")
@@ -55,7 +56,7 @@ func TestIOSResolvesToADriverNamedForItsSimulator(t *testing.T) {
 
 	// The positive control: without it, every refusal above would be satisfied
 	// by a resolver that refuses everything.
-	session, err := NewDeviceSession(
+	session, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}}, rootShard("UDID-1"))
 	if err != nil {
 		t.Fatalf("NewDeviceSession() error = %v", err)
@@ -82,7 +83,7 @@ func TestEachShardResolvesItsOwnDevice(t *testing.T) {
 		Roots:    []string{"flow.yaml"},
 		Devices:  []string{"UDID-1", "UDID-2"},
 	}
-	session, err := NewDeviceSession(options, Shard{Index: 1, Device: "UDID-2", DriverPort: 41001})
+	session, err := NewDeviceSession(context.Background(), options, Shard{Index: 1, Device: "UDID-2", DriverPort: 41001})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +95,7 @@ func TestEachShardResolvesItsOwnDevice(t *testing.T) {
 func TestAShardWritesWhereTheRunnerSentIt(t *testing.T) {
 	t.Parallel()
 
-	session, err := NewDeviceSession(
+	session, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}},
 		Shard{Device: "UDID-1", DriverPort: 22087, OutputDirectory: "/artifacts/shard-1"})
 	if err != nil {
@@ -108,7 +109,7 @@ func TestAShardWritesWhereTheRunnerSentIt(t *testing.T) {
 func TestAndroidResolvesToADriverNamedForItsDevice(t *testing.T) {
 	t.Parallel()
 
-	session, err := NewDeviceSession(
+	session, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}},
 		Shard{Device: "emulator-5554", DriverPort: 7001})
 	if err != nil {
@@ -134,7 +135,7 @@ func withAndroidInventory(t *testing.T, devices []android.Device, err error) {
 func TestAndroidWithNoDeviceUsesTheOnlyConnectedOne(t *testing.T) {
 	withAndroidInventory(t, []android.Device{{Serial: "emulator-5554", State: "device"}}, nil)
 
-	session, err := NewDeviceSession(
+	session, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}},
 		Shard{Device: "", DriverPort: 7001})
 	if err != nil {
@@ -151,7 +152,7 @@ func TestAndroidWithSeveralDevicesRefusesToGuess(t *testing.T) {
 		{Serial: "R58M12ABCDE", State: "device"},
 	}, nil)
 
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}},
 		Shard{Device: "", DriverPort: 7001})
 	if err == nil {
@@ -169,7 +170,7 @@ func TestAndroidWithSeveralDevicesRefusesToGuess(t *testing.T) {
 func TestAndroidWithNoDevicesExplains(t *testing.T) {
 	withAndroidInventory(t, nil, nil)
 
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}},
 		Shard{Device: "", DriverPort: 7001})
 	if err == nil {
@@ -180,10 +181,32 @@ func TestAndroidWithNoDevicesExplains(t *testing.T) {
 	}
 }
 
+func TestCanceledContextReachesSingleAndroidInventory(t *testing.T) {
+	previous := androidInventory
+	called := false
+	androidInventory = func(ctx context.Context) ([]android.Device, error) {
+		called = true
+		return nil, ctx.Err()
+	}
+	t.Cleanup(func() { androidInventory = previous })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := NewDeviceSession(ctx,
+		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}},
+		Shard{DriverPort: 7001})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("NewDeviceSession() error = %v, want context.Canceled", err)
+	}
+	if !called {
+		t.Fatal("session construction did not call the Android inventory")
+	}
+}
+
 func TestAndroidRequiresAShardPortLikeIOS(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}},
 		Shard{Device: "emulator-5554", DriverPort: 0})
 	if err == nil {
@@ -199,7 +222,7 @@ func TestAndroidRequiresAShardPortLikeIOS(t *testing.T) {
 func TestWebResolvesToABrowserDriver(t *testing.T) {
 	t.Parallel()
 
-	session, err := NewDeviceSession(
+	session, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "web", Roots: []string{"flow.yaml"}},
 		Shard{DriverPort: 9222})
 	if err != nil {
@@ -221,7 +244,7 @@ func TestWebResolvesToABrowserDriver(t *testing.T) {
 func TestWebNeedsNoDeviceButStillNeedsAPort(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "web", Roots: []string{"flow.yaml"}}, Shard{DriverPort: 0})
 	if err == nil {
 		t.Fatal("a web session was built with no devtools port assigned")
@@ -236,7 +259,7 @@ func TestWebNeedsNoDeviceButStillNeedsAPort(t *testing.T) {
 func TestAnUnknownPlatformNamesWhatIsSupported(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "blackberry", Roots: []string{"flow.yaml"}}, rootShard("UDID-1"))
 	if err == nil {
 		t.Fatal("an unknown platform was accepted")
@@ -255,7 +278,7 @@ func TestTheBaseDirectoryFollowsTheFirstRoot(t *testing.T) {
 	// its directory and a directory root contributes itself. Getting this
 	// wrong makes every runScript path in a workspace fail to resolve.
 	directory := t.TempDir()
-	session, err := NewDeviceSession(
+	session, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "ios", Roots: []string{directory}}, rootShard("UDID-1"))
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +289,7 @@ func TestTheBaseDirectoryFollowsTheFirstRoot(t *testing.T) {
 
 	file := directory + "/flow.yaml"
 	writeFile(t, file, "appId: com.example.a\n---\n- launchApp\n")
-	session, err = NewDeviceSession(
+	session, err = NewDeviceSession(context.Background(),
 		TestOptions{Platform: "ios", Roots: []string{file}}, rootShard("UDID-1"))
 	if err != nil {
 		t.Fatal(err)
@@ -284,18 +307,18 @@ func TestAndroidAgentAPKsComeFromTheEnvironmentTogether(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("FLOWBATON_ANDROID_APP_APK", "")
 	t.Setenv("FLOWBATON_ANDROID_TEST_APK", "")
-	apks, err := androidAgentAPKs()
+	apks, err := androidAgentAPKs(context.Background())
 	if err != nil || apks != nil {
 		t.Fatalf("androidAgentAPKs() = %v, %v; want nil, nil with nothing set and nothing installed", apks, err)
 	}
 
 	t.Setenv("FLOWBATON_ANDROID_APP_APK", "/apks/app.apk")
-	if _, err := androidAgentAPKs(); err == nil {
+	if _, err := androidAgentAPKs(context.Background()); err == nil {
 		t.Fatal("one variable alone must be refused, not half-honored")
 	}
 
 	t.Setenv("FLOWBATON_ANDROID_TEST_APK", "/apks/test.apk")
-	apks, err = androidAgentAPKs()
+	apks, err = androidAgentAPKs(context.Background())
 	if err != nil {
 		t.Fatalf("androidAgentAPKs() error = %v", err)
 	}
@@ -308,13 +331,13 @@ func TestAndroidAgentAPKsComeFromTheEnvironmentTogether(t *testing.T) {
 func TestNoReinstallDriverSkipsManagedAndroidAssetResolution(t *testing.T) {
 	previous := resolveAndroidAgentAPKs
 	called := false
-	resolveAndroidAgentAPKs = func() (*android.AgentAPKs, error) {
+	resolveAndroidAgentAPKs = func(context.Context) (*android.AgentAPKs, error) {
 		called = true
 		return nil, fmt.Errorf("managed Android assets must not be resolved")
 	}
 	t.Cleanup(func() { resolveAndroidAgentAPKs = previous })
 
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "android", Roots: []string{"flow.yaml"}, ReinstallDriver: false},
 		Shard{Device: "emulator-5554", DriverPort: 7001})
 	if err != nil {
@@ -328,13 +351,13 @@ func TestNoReinstallDriverSkipsManagedAndroidAssetResolution(t *testing.T) {
 func TestNoReinstallDriverSkipsManagedIOSAssetResolution(t *testing.T) {
 	previous := resolveIOSRunnerBundle
 	called := false
-	resolveIOSRunnerBundle = func() (*ios.RunnerBundle, error) {
+	resolveIOSRunnerBundle = func(context.Context) (*ios.RunnerBundle, error) {
 		called = true
 		return nil, fmt.Errorf("managed iOS assets must not be resolved")
 	}
 	t.Cleanup(func() { resolveIOSRunnerBundle = previous })
 
-	_, err := NewDeviceSession(
+	_, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}, ReinstallDriver: false},
 		rootShard("UDID-1"))
 	if err != nil {
@@ -342,5 +365,50 @@ func TestNoReinstallDriverSkipsManagedIOSAssetResolution(t *testing.T) {
 	}
 	if called {
 		t.Fatal("--no-reinstall-driver still resolved managed iOS assets")
+	}
+}
+
+func TestCanceledContextReachesManagedAssetVerification(t *testing.T) {
+	previousAndroid := resolveAndroidAgentAPKs
+	previousIOS := resolveIOSRunnerBundle
+	t.Cleanup(func() {
+		resolveAndroidAgentAPKs = previousAndroid
+		resolveIOSRunnerBundle = previousIOS
+	})
+
+	for _, test := range []struct {
+		name     string
+		platform string
+		device   string
+	}{
+		{name: "android", platform: "android", device: "emulator-5554"},
+		{name: "ios", platform: "ios", device: "UDID-1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			called := false
+			switch test.platform {
+			case "android":
+				resolveAndroidAgentAPKs = func(ctx context.Context) (*android.AgentAPKs, error) {
+					called = true
+					return nil, ctx.Err()
+				}
+			case "ios":
+				resolveIOSRunnerBundle = func(ctx context.Context) (*ios.RunnerBundle, error) {
+					called = true
+					return nil, ctx.Err()
+				}
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			_, err := NewDeviceSession(ctx,
+				TestOptions{Platform: test.platform, ReinstallDriver: true},
+				Shard{Device: test.device, DriverPort: 7001})
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("NewDeviceSession() error = %v, want context.Canceled", err)
+			}
+			if !called {
+				t.Fatal("session construction did not reach managed asset verification")
+			}
+		})
 	}
 }

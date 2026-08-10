@@ -2,16 +2,16 @@
 package auth
 
 import (
-	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 var (
@@ -20,6 +20,13 @@ var (
 )
 
 var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+const maxTokenNonceLength = 128
+
+const (
+	DefaultTokenTTL = 5 * time.Minute
+	MaxTokenTTL     = time.Hour
+)
 
 // Claims are the authenticated facts carried by a FlowBaton-issued token.
 // Tenant and principal are derived from a certificate mapping, never request JSON.
@@ -51,21 +58,36 @@ type Issuer struct {
 
 // Issue signs claims after overwriting key and validity fields.
 func (issuer Issuer) Issue(claims Claims) (string, error) {
+	ttl, err := NormalizeTokenTTL(issuer.TTL)
+	if err != nil {
+		return "", err
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	if issuer.Now != nil {
+		now = issuer.Now().UTC().Truncate(time.Second)
+	}
+	return issuer.IssueAt(claims, now, now.Add(ttl))
+}
+
+// IssueAt signs claims using an exact, externally-authoritative validity
+// window. Both endpoints must use whole-second precision.
+func (issuer Issuer) IssueAt(claims Claims, issuedAt, expiresAt time.Time) (string, error) {
 	if issuer.KeyID == "" || len(issuer.PrivateKey) != ed25519.PrivateKeySize {
 		return "", fmt.Errorf("issue session token: invalid signing key")
 	}
-	if claims.TenantID == "" || claims.PrincipalID == "" || !sha256Pattern.MatchString(claims.CertificateFingerprint) || !sha256Pattern.MatchString(claims.ChannelBindingSHA256) || len(claims.Nonce) < 16 || len(claims.Scopes) == 0 {
+	if claims.TenantID == "" || claims.PrincipalID == "" || !sha256Pattern.MatchString(claims.CertificateFingerprint) || !sha256Pattern.MatchString(claims.ChannelBindingSHA256) || len(claims.Nonce) < 16 || len(claims.Nonce) > maxTokenNonceLength || len(claims.Scopes) == 0 {
 		return "", fmt.Errorf("issue session token: incomplete authenticated claims")
 	}
-	ttl := issuer.TTL
-	if ttl <= 0 {
-		ttl = 5 * time.Minute
+	issuedAt = issuedAt.UTC()
+	expiresAt = expiresAt.UTC()
+	if !issuedAt.Equal(issuedAt.Truncate(time.Second)) || !expiresAt.Equal(expiresAt.Truncate(time.Second)) {
+		return "", fmt.Errorf("issue session token: validity window must use whole-second precision")
 	}
-	now := time.Now().UTC()
-	if issuer.Now != nil {
-		now = issuer.Now().UTC()
+	ttl := expiresAt.Sub(issuedAt)
+	if ttl <= 0 || ttl > MaxTokenTTL {
+		return "", fmt.Errorf("issue session token: validity window is outside the supported range")
 	}
-	claims.KeyID, claims.IssuedAt, claims.ExpiresAt = issuer.KeyID, now.Unix(), now.Add(ttl).Unix()
+	claims.KeyID, claims.IssuedAt, claims.ExpiresAt = issuer.KeyID, issuedAt.Unix(), expiresAt.Unix()
 	header := tokenHeader{Algorithm: "EdDSA", Type: "FBST", KeyID: issuer.KeyID}
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
@@ -89,6 +111,28 @@ type Verifier struct {
 // Verify validates strict encoding, the Ed25519 signature, time bounds, and all
 // mandatory channel-bound identity fields.
 func (verifier Verifier) Verify(token string) (Claims, error) {
+	now := time.Now().UTC()
+	if verifier.Now != nil {
+		now = verifier.Now().UTC()
+	}
+	return verifier.VerifyAt(token, now)
+}
+
+// VerifyAt validates a token at an explicitly supplied authoritative time.
+func (verifier Verifier) VerifyAt(token string, now time.Time) (Claims, error) {
+	claims, err := verifier.VerifySignature(token)
+	if err != nil {
+		return Claims{}, err
+	}
+	if now.UTC().Unix() < claims.IssuedAt || now.UTC().Unix() >= claims.ExpiresAt {
+		return Claims{}, ErrExpiredToken
+	}
+	return claims, nil
+}
+
+// VerifySignature validates strict encoding, the Ed25519 signature, and all
+// mandatory claims without consulting a clock.
+func (verifier Verifier) VerifySignature(token string) (Claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return Claims{}, ErrInvalidToken
@@ -114,17 +158,22 @@ func (verifier Verifier) Verify(token string) (Claims, error) {
 		return Claims{}, ErrInvalidToken
 	}
 	var claims Claims
-	if err := decodeStrict(claimsBytes, &claims); err != nil || claims.KeyID != header.KeyID || claims.TenantID == "" || claims.PrincipalID == "" || !sha256Pattern.MatchString(claims.CertificateFingerprint) || !sha256Pattern.MatchString(claims.ChannelBindingSHA256) || len(claims.Nonce) < 16 || len(claims.Scopes) == 0 || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt {
+	if err := decodeStrict(claimsBytes, &claims); err != nil || claims.KeyID != header.KeyID || claims.TenantID == "" || claims.PrincipalID == "" || !sha256Pattern.MatchString(claims.CertificateFingerprint) || !sha256Pattern.MatchString(claims.ChannelBindingSHA256) || len(claims.Nonce) < 16 || len(claims.Nonce) > maxTokenNonceLength || len(claims.Scopes) == 0 || claims.IssuedAt <= 0 || claims.ExpiresAt <= claims.IssuedAt || claims.ExpiresAt-claims.IssuedAt > int64(MaxTokenTTL/time.Second) {
 		return Claims{}, ErrInvalidToken
 	}
-	now := time.Now().UTC()
-	if verifier.Now != nil {
-		now = verifier.Now().UTC()
-	}
-	if now.Unix() < claims.IssuedAt || now.Unix() >= claims.ExpiresAt {
-		return Claims{}, ErrExpiredToken
-	}
 	return claims, nil
+}
+
+// NormalizeTokenTTL applies the safe default and rejects negative,
+// sub-second, or overly long token lifetimes.
+func NormalizeTokenTTL(ttl time.Duration) (time.Duration, error) {
+	if ttl == 0 {
+		ttl = DefaultTokenTTL
+	}
+	if ttl <= 0 || ttl > MaxTokenTTL || ttl%time.Second != 0 {
+		return 0, fmt.Errorf("token TTL must be a whole number of seconds between 1s and %s", MaxTokenTTL)
+	}
+	return ttl, nil
 }
 
 // HasScope reports exact scope membership.
@@ -142,13 +191,5 @@ func encode(value []byte) string { return base64.RawURLEncoding.EncodeToString(v
 func decode(value string) ([]byte, error) { return base64.RawURLEncoding.Strict().DecodeString(value) }
 
 func decodeStrict(data []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return ErrInvalidToken
-	}
-	return nil
+	return strictjson.Decode(data, target)
 }

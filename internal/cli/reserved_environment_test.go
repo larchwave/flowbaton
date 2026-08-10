@@ -239,8 +239,8 @@ func shardSessionFactory(
 	baseDirectory string,
 	record func(Shard, *enginetest.FakeDriver),
 ) SessionFactory {
-	return func(shard Shard, _ TestOptions) (TestSession, error) {
-		session, err := NewDeviceSession(
+	return func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
+		session, err := NewDeviceSession(context.Background(),
 			TestOptions{Platform: "ios", Roots: []string{baseDirectory}}, shard)
 		if err != nil {
 			return nil, err

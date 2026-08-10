@@ -131,6 +131,7 @@ final class RequestRouterTests: XCTestCase {
     let decoded = try JSONDecoder().decode(DeviceInfoPayload.self, from: response.body)
     XCTAssertEqual(decoded.widthPoints, 390)
     XCTAssertEqual(decoded.widthPixels, 1170)
+    XCTAssertEqual(decoded.orientation, "landscape-right")
   }
 
   func testTheHierarchyIsPassedThroughWithoutARoundTrip() throws {
@@ -323,7 +324,8 @@ final class RecordingAutomation: DeviceAutomation, @unchecked Sendable {
   func deviceInfo() throws -> DeviceInfoPayload {
     try check()
     return DeviceInfoPayload(
-      widthPoints: 390, heightPoints: 844, widthPixels: 1170, heightPixels: 2532)
+      widthPoints: 390, heightPoints: 844, widthPixels: 1170, heightPixels: 2532,
+      orientation: "landscape-right")
   }
 
   func setOrientation(_ orientation: String) throws { try check() }

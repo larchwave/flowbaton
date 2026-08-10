@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/larchwave/flowbaton/internal/workspace"
@@ -40,10 +41,10 @@ type Shard struct {
 func (shard Shard) Count() int { return shard.Index + 1 }
 
 // PlanShards divides a discovered plan into per-device shards.
-func PlanShards(options TestOptions, plan workspace.Plan) ([]Shard, error) {
+func PlanShards(ctx context.Context, options TestOptions, plan workspace.Plan) ([]Shard, error) {
 	count, replicate := shardCount(options)
 	// What is attached, unless --device narrows it. See shard_devices.go.
-	devices, err := options.devicePool(count)
+	devices, err := options.devicePool(ctx, count)
 	if err != nil {
 		return nil, err
 	}

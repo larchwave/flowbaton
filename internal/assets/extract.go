@@ -6,7 +6,6 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -17,6 +16,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 func extractArchive(root string, asset Asset, archive []byte) error {
@@ -297,14 +298,9 @@ func readCacheMarker(root string) (cacheMarker, error) {
 	if err != nil {
 		return cacheMarker{}, fmt.Errorf("%w: read cache marker: %v", ErrInvalidAssetCache, err)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(contents))
-	decoder.DisallowUnknownFields()
 	var marker cacheMarker
-	if err := decoder.Decode(&marker); err != nil {
+	if err := strictjson.Decode(contents, &marker); err != nil {
 		return cacheMarker{}, fmt.Errorf("%w: decode cache marker: %v", ErrInvalidAssetCache, err)
-	}
-	if err := ensureJSONEOF(decoder); err != nil {
-		return cacheMarker{}, fmt.Errorf("%w: trailing cache marker data", ErrInvalidAssetCache)
 	}
 	return marker, nil
 }

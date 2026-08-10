@@ -2,7 +2,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,11 +15,13 @@ import (
 	integrationv1 "github.com/larchwave/flowbaton/contracts/integration/v1"
 	"github.com/larchwave/flowbaton/internal/auth"
 	"github.com/larchwave/flowbaton/internal/sessionstore"
+	"github.com/larchwave/flowbaton/internal/strictjson"
 	"github.com/larchwave/flowbaton/internal/transport"
 )
 
 const maxRequestBody = 1 << 20
 const maxDurationMilliseconds = int64((1<<63)-1) / int64(time.Millisecond)
+const maxTokenNonceLength = 128
 
 type RequestIdentity func(*http.Request) (certificateFingerprint, channelBindingSHA256 string, err error)
 
@@ -30,12 +31,12 @@ type Config struct {
 	Verifier           auth.Verifier
 	Integration        integrationv1.Document
 	RequestIdentity    RequestIdentity
+	Readiness          func(context.Context) error
 	LeaseDuration      time.Duration
 	Heartbeat          time.Duration
 	StreamDuration     time.Duration
 	StreamHeartbeat    time.Duration
 	StreamWriteTimeout time.Duration
-	Now                func() time.Time
 }
 
 type Handler struct {
@@ -47,12 +48,18 @@ func New(config Config) (*Handler, error) {
 	if config.Store == nil || len(config.Issuer.PrivateKey) == 0 || len(config.Verifier.Keys) == 0 {
 		return nil, errors.New("server requires store, issuer, and verifier")
 	}
+	if _, err := auth.NormalizeTokenTTL(config.Issuer.TTL); err != nil {
+		return nil, errors.New("server requires a valid token lifetime")
+	}
 	integrationJSON, err := json.Marshal(config.Integration)
 	if err != nil || integrationv1.ValidateJSON(integrationJSON) != nil {
 		return nil, errors.New("server requires a validated Integration v1 document")
 	}
 	if config.RequestIdentity == nil {
 		config.RequestIdentity = tlsRequestIdentity
+	}
+	if config.Readiness == nil {
+		config.Readiness = config.Store.Ping
 	}
 	if config.LeaseDuration <= 0 {
 		config.LeaseDuration = 60 * time.Second
@@ -77,6 +84,7 @@ func New(config Config) (*Handler, error) {
 	handler.mux.HandleFunc("POST /v1/device-sessions", handler.withToken("device-session", handler.acquire))
 	handler.mux.HandleFunc("POST /v1/device-sessions/{sessionID}/requests", handler.withToken("device-session", handler.request))
 	handler.mux.HandleFunc("GET /v1/device-sessions/{sessionID}/events", handler.withToken("device-session", handler.events))
+	handler.mux.HandleFunc("GET /v1/device-sessions/{sessionID}/frames/{streamEpoch}/{frameSequence}", handler.withToken("device-session", handler.frameContent))
 	return handler, nil
 }
 
@@ -89,8 +97,8 @@ func (handler *Handler) live(writer http.ResponseWriter, _ *http.Request) {
 }
 
 func (handler *Handler) ready(writer http.ResponseWriter, request *http.Request) {
-	if err := handler.config.Store.Ping(request.Context()); err != nil {
-		writeError(writer, http.StatusServiceUnavailable, "NOT_READY", "database is unavailable")
+	if err := handler.config.Readiness(request.Context()); err != nil {
+		writeError(writer, http.StatusServiceUnavailable, "NOT_READY", "runtime is unavailable")
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]string{"status": "ready"})
@@ -118,29 +126,32 @@ func (handler *Handler) issueToken(writer http.ResponseWriter, request *http.Req
 	if err := decodeRequest(writer, request, &input); err != nil {
 		return
 	}
-	if len(input.Nonce) < 16 || len(input.Scopes) != 1 || input.Scopes[0] != "device-session" {
+	if len(input.Nonce) < 16 || len(input.Nonce) > maxTokenNonceLength || len(input.Scopes) != 1 || input.Scopes[0] != "device-session" {
 		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "nonce and the device-session scope are required")
 		return
 	}
-	now := handler.now()
-	ttl := handler.config.Issuer.TTL
-	if ttl <= 0 {
-		ttl = 5 * time.Minute
+	ttl, err := auth.NormalizeTokenTTL(handler.config.Issuer.TTL)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "INTERNAL", "token lifetime is invalid")
+		return
 	}
-	if err := handler.config.Store.ConsumeTokenNonce(request.Context(), fingerprint, input.Nonce, now.Add(ttl)); err != nil {
+	window, err := handler.config.Store.ReserveTokenNonce(request.Context(), fingerprint, input.Nonce, ttl)
+	if err != nil {
 		if errors.Is(err, sessionstore.ErrConflict) {
 			writeError(writer, http.StatusConflict, "NONCE_REPLAY", "token nonce has already been used")
+		} else if errors.Is(err, sessionstore.ErrBackpressure) {
+			writeError(writer, http.StatusTooManyRequests, "BACKPRESSURE_LIMIT", "too many live token nonces")
 		} else {
 			writeError(writer, http.StatusInternalServerError, "INTERNAL", "token nonce could not be stored")
 		}
 		return
 	}
-	token, err := handler.config.Issuer.Issue(auth.Claims{TenantID: identity.TenantID, PrincipalID: identity.PrincipalID, CertificateFingerprint: fingerprint, ChannelBindingSHA256: binding, Nonce: input.Nonce, Scopes: input.Scopes})
+	token, err := handler.config.Issuer.IssueAt(auth.Claims{TenantID: identity.TenantID, PrincipalID: identity.PrincipalID, CertificateFingerprint: fingerprint, ChannelBindingSHA256: binding, Nonce: input.Nonce, Scopes: input.Scopes}, window.IssuedAt, window.ExpiresAt)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "INTERNAL", "token issuance failed")
 		return
 	}
-	claims, err := handler.config.Verifier.Verify(token)
+	claims, err := handler.config.Verifier.VerifyAt(token, window.IssuedAt)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "INTERNAL", "issued token failed verification")
 		return
@@ -158,7 +169,17 @@ func (handler *Handler) withToken(scope string, next authenticatedHandler) http.
 			writeError(writer, http.StatusUnauthorized, "AUTHENTICATION_FAILED", "FlowBaton session token is required")
 			return
 		}
-		claims, err := handler.config.Verifier.Verify(strings.TrimPrefix(authorization, prefix))
+		token := strings.TrimPrefix(authorization, prefix)
+		if _, err := handler.config.Verifier.VerifySignature(token); err != nil {
+			writeError(writer, http.StatusUnauthorized, "AUTHENTICATION_FAILED", "session token is invalid")
+			return
+		}
+		databaseNow, err := handler.config.Store.CurrentTime(request.Context())
+		if err != nil {
+			writeError(writer, http.StatusServiceUnavailable, "AUTHENTICATION_UNAVAILABLE", "session token time could not be validated")
+			return
+		}
+		claims, err := handler.config.Verifier.VerifyAt(token, databaseNow)
 		if err != nil || !claims.HasScope(scope) {
 			writeError(writer, http.StatusUnauthorized, "AUTHENTICATION_FAILED", "session token is invalid")
 			return
@@ -187,8 +208,7 @@ func (handler *Handler) acquire(writer http.ResponseWriter, request *http.Reques
 	if err := decodeRequest(writer, request, &input); err != nil {
 		return
 	}
-	now := handler.now()
-	result, err := handler.config.Store.Acquire(request.Context(), sessionstore.AcquireInput{TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, AuthProfileID: devicesessionv1.RemoteCloudMacV1.ProfileID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestNonce: claims.Nonce, BindingExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(), ResourceID: input.ResourceID, RequestedCapabilities: input.Capabilities, IdempotencyKey: input.IdempotencyKey, ReleaseIdempotencyKey: input.ReleaseIdempotencyKey, LeaseDuration: handler.config.LeaseDuration, HeartbeatInterval: handler.config.Heartbeat, Now: now})
+	result, err := handler.config.Store.Acquire(request.Context(), sessionstore.AcquireInput{TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, AuthProfileID: devicesessionv1.RemoteCloudMacV1.ProfileID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestNonce: claims.Nonce, BindingExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(), ResourceID: input.ResourceID, RequestedCapabilities: input.Capabilities, IdempotencyKey: input.IdempotencyKey, ReleaseIdempotencyKey: input.ReleaseIdempotencyKey, LeaseDuration: handler.config.LeaseDuration, HeartbeatInterval: handler.config.Heartbeat})
 	if err != nil {
 		writeStoreError(writer, err)
 		return
@@ -220,7 +240,7 @@ func (handler *Handler) request(writer http.ResponseWriter, request *http.Reques
 		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "requested extension is outside the supported duration range")
 		return
 	}
-	result, err := handler.config.Store.Apply(request.Context(), sessionstore.MutationInput{SessionID: request.PathValue("sessionID"), TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestID: input.RequestID, Type: input.Type, IdempotencyKey: input.IdempotencyKey, Generation: input.Generation, FencingTokenSHA256: input.FencingTokenSHA256, Payload: input.Payload, CommandPayload: input.CommandPayload, RequestedExtension: requestedExtension, LastAcknowledgedEvent: input.LastAcknowledgedEvent, Now: handler.now()})
+	result, err := handler.config.Store.Apply(request.Context(), sessionstore.MutationInput{SessionID: request.PathValue("sessionID"), TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestNonce: claims.Nonce, BindingExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(), RequestID: input.RequestID, Type: input.Type, IdempotencyKey: input.IdempotencyKey, Generation: input.Generation, FencingTokenSHA256: input.FencingTokenSHA256, Payload: input.Payload, CommandPayload: input.CommandPayload, RequestedExtension: requestedExtension, LastAcknowledgedEvent: input.LastAcknowledgedEvent})
 	if err != nil {
 		writeStoreError(writer, err)
 		return
@@ -249,6 +269,17 @@ func (handler *Handler) events(writer http.ResponseWriter, request *http.Request
 		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "after must be a non-negative sequence")
 		return
 	}
+	generation, fence, err := sessionFenceHeaders(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "session generation and fence headers are required")
+		return
+	}
+	if err := handler.config.Store.ValidateSessionAccess(request.Context(), claims.TenantID, claims.PrincipalID,
+		request.PathValue("sessionID"), claims.ChannelBindingSHA256, claims.Nonce,
+		time.Unix(claims.ExpiresAt, 0).UTC(), generation, fence); err != nil {
+		writeStoreError(writer, err)
+		return
+	}
 	waiter, live := handler.config.Store.(interface {
 		WaitEvents(context.Context, string, string, string, int64, time.Duration) ([]devicesessionv1.Event, bool, error)
 	})
@@ -261,6 +292,9 @@ func (handler *Handler) events(writer http.ResponseWriter, request *http.Request
 		terminal = true
 	}
 	if err != nil {
+		if request.Context().Err() != nil {
+			handler.recordDisconnect(request, claims, generation, fence)
+		}
 		writeStoreError(writer, err)
 		return
 	}
@@ -270,7 +304,6 @@ func (handler *Handler) events(writer http.ResponseWriter, request *http.Request
 	writer.Header().Set("Trailer", "X-FlowBaton-Next-Sequence")
 	writer.WriteHeader(http.StatusOK)
 	encoder := json.NewEncoder(writer)
-	flusher, canFlush := writer.(http.Flusher)
 	controller := http.NewResponseController(writer)
 	deadline := time.Now().Add(handler.config.StreamDuration)
 	for {
@@ -284,31 +317,110 @@ func (handler *Handler) events(writer http.ResponseWriter, request *http.Request
 			events, terminal, err = waiter.WaitEvents(request.Context(), claims.TenantID, claims.PrincipalID, request.PathValue("sessionID"), after, wait)
 		}
 		if err != nil {
+			handler.recordDisconnect(request, claims, generation, fence)
+			return
+		}
+		if accessErr := handler.config.Store.ValidateSessionAccess(request.Context(), claims.TenantID, claims.PrincipalID,
+			request.PathValue("sessionID"), claims.ChannelBindingSHA256, claims.Nonce,
+			time.Unix(claims.ExpiresAt, 0).UTC(), generation, fence); accessErr != nil {
 			return
 		}
 		for _, event := range events {
 			_ = controller.SetWriteDeadline(time.Now().Add(handler.config.StreamWriteTimeout))
 			if err := encoder.Encode(event); err != nil {
+				handler.recordDisconnect(request, claims, generation, fence)
 				return
 			}
 			after = int64(event.Sequence)
 			writer.Header().Set("X-FlowBaton-Next-Sequence", strconv.FormatInt(after, 10))
 		}
-		if canFlush {
-			_ = controller.SetWriteDeadline(time.Now().Add(handler.config.StreamWriteTimeout))
-			flusher.Flush()
+		_ = controller.SetWriteDeadline(time.Now().Add(handler.config.StreamWriteTimeout))
+		if err := controller.Flush(); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			handler.recordDisconnect(request, claims, generation, fence)
+			return
 		}
-		if terminal || time.Now().After(deadline) || request.Context().Err() != nil {
+		if request.Context().Err() != nil && !terminal {
+			handler.recordDisconnect(request, claims, generation, fence)
+			return
+		}
+		if terminal || time.Now().After(deadline) {
 			return
 		}
 	}
 }
 
-func (handler *Handler) now() time.Time {
-	if handler.config.Now != nil {
-		return handler.config.Now().UTC()
+func (handler *Handler) frameContent(writer http.ResponseWriter, request *http.Request, claims auth.Claims) {
+	generation, fence, err := sessionFenceHeaders(request)
+	if err != nil {
+		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "session generation and fence headers are required")
+		return
 	}
-	return time.Now().UTC()
+	streamEpoch, err := strconv.ParseInt(request.PathValue("streamEpoch"), 10, 64)
+	if err != nil || streamEpoch < 1 {
+		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "stream epoch must be positive")
+		return
+	}
+	frameSequence, err := strconv.ParseInt(request.PathValue("frameSequence"), 10, 64)
+	if err != nil || frameSequence < 1 {
+		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "frame sequence must be positive")
+		return
+	}
+	digest := request.Header.Get("X-FlowBaton-Content-SHA256")
+	if err := handler.config.Store.ValidateSessionAccess(request.Context(), claims.TenantID, claims.PrincipalID,
+		request.PathValue("sessionID"), claims.ChannelBindingSHA256, claims.Nonce,
+		time.Unix(claims.ExpiresAt, 0).UTC(), generation, fence); err != nil {
+		writeStoreError(writer, err)
+		return
+	}
+	provider, ok := handler.config.Store.(interface {
+		FrameContent(context.Context, sessionstore.FrameContentRequest) (sessionstore.FrameContent, error)
+	})
+	if !ok {
+		writeError(writer, http.StatusNotImplemented, "CAPABILITY_UNSUPPORTED", "frame content is unavailable")
+		return
+	}
+	content, err := provider.FrameContent(request.Context(), sessionstore.FrameContentRequest{
+		SessionID: request.PathValue("sessionID"), TenantID: claims.TenantID,
+		PrincipalID: claims.PrincipalID, ChannelBindingSHA256: claims.ChannelBindingSHA256,
+		RequestNonce: claims.Nonce, BindingExpiresAt: time.Unix(claims.ExpiresAt, 0).UTC(),
+		Generation: generation, FencingTokenSHA256: fence, StreamEpoch: streamEpoch,
+		FrameSequence: frameSequence, ContentSHA256: digest,
+	})
+	if err != nil {
+		writeStoreError(writer, err)
+		return
+	}
+	writer.Header().Set("Content-Type", content.ContentType)
+	writer.Header().Set("Content-Length", strconv.Itoa(len(content.Content)))
+	writer.Header().Set("ETag", `"`+content.SHA256+`"`)
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writer.Header().Set("X-Content-Type-Options", "nosniff")
+	writer.WriteHeader(http.StatusOK)
+	_, _ = writer.Write(content.Content)
+}
+
+func sessionFenceHeaders(request *http.Request) (int64, string, error) {
+	generation, err := strconv.ParseInt(request.Header.Get("X-FlowBaton-Generation"), 10, 64)
+	fence := request.Header.Get("X-FlowBaton-Fence")
+	if err != nil || generation < 1 || fence == "" {
+		return 0, "", sessionstore.ErrInvalidArgument
+	}
+	return generation, fence, nil
+}
+
+func (handler *Handler) recordDisconnect(request *http.Request, claims auth.Claims, generation int64, fence string) {
+	marker, ok := handler.config.Store.(interface {
+		MarkDisconnected(context.Context, string, string, string, string, string, time.Time, int64, string, string) error
+	})
+	if !ok {
+		return
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), 5*time.Second)
+	defer cancel()
+	_ = marker.MarkDisconnected(cleanupCtx, claims.TenantID, claims.PrincipalID,
+		request.PathValue("sessionID"), claims.ChannelBindingSHA256, claims.Nonce,
+		time.Unix(claims.ExpiresAt, 0).UTC(), generation, fence,
+		"transport_interrupted")
 }
 
 func tlsRequestIdentity(request *http.Request) (string, string, error) {
@@ -333,15 +445,9 @@ func decodeRequest(writer http.ResponseWriter, request *http.Request, target any
 		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "request body is invalid or too large")
 		return err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
+	if err := strictjson.Decode(data, target); err != nil {
 		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "request JSON is invalid")
 		return err
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "request contains trailing JSON")
-		return errors.New("trailing JSON")
 	}
 	return nil
 }
@@ -364,6 +470,8 @@ func writeStoreError(writer http.ResponseWriter, err error) {
 		writeError(writer, http.StatusUnauthorized, "AUTHENTICATION_FAILED", "certificate identity is revoked")
 	case errors.Is(err, sessionstore.ErrInvalidArgument):
 		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "request arguments are invalid")
+	case errors.Is(err, sessionstore.ErrBackpressure):
+		writeError(writer, http.StatusTooManyRequests, "BACKPRESSURE_LIMIT", "runtime backpressure limit was reached")
 	default:
 		writeError(writer, http.StatusInternalServerError, "INTERNAL", "request failed")
 	}

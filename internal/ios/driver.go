@@ -773,11 +773,30 @@ func (driver *Driver) SetOrientation(ctx context.Context, orientation device.Ori
 	return driver.client.SetOrientation(ctx, value)
 }
 
+func (driver *Driver) CurrentOrientation(ctx context.Context) (device.Orientation, error) {
+	info, err := driver.client.DeviceInfo(ctx)
+	if err != nil {
+		return "", err
+	}
+	orientation, ok := currentOrientations[info.Orientation]
+	if !ok {
+		return "", fmt.Errorf("iOS runner reported unsupported orientation %q", info.Orientation)
+	}
+	return orientation, nil
+}
+
+var currentOrientations = map[ScreenOrientation]device.Orientation{
+	ScreenOrientationPortrait:       "PORTRAIT",
+	ScreenOrientationUpsideDown:     "UPSIDE_DOWN",
+	ScreenOrientationLandscapeLeft:  "LANDSCAPE_LEFT",
+	ScreenOrientationLandscapeRight: "LANDSCAPE_RIGHT",
+}
+
 var orientations = map[string]Orientation{
-	"portrait":       OrientationPortrait,
-	"landscapeleft":  OrientationLandscapeLeft,
-	"landscaperight": OrientationLandscapeRight,
-	"upsidedown":     OrientationUpsideDown,
+	"portrait":        OrientationPortrait,
+	"landscape_left":  OrientationLandscapeLeft,
+	"landscape_right": OrientationLandscapeRight,
+	"upside_down":     OrientationUpsideDown,
 }
 
 func (driver *Driver) EraseText(ctx context.Context, request device.EraseTextRequest) error {

@@ -31,6 +31,11 @@ Managed startup performs these steps:
 Hierarchy bounds and gesture coordinates use device pixels. WebView nodes may be
 merged only when the flow enables the Android developer-tools mode.
 
+`addMedia` requires Android API 29 or newer because the agent uses the scoped
+MediaStore insertion path. When a prepared program contains that command, the
+host reads `ro.build.version.sdk` before managed startup and refuses API 26--28
+before uninstalling or installing driver packages.
+
 ## 3. iOS Simulator
 
 The iOS host divides work between `simctl` and the XCTest runner. `simctl` owns
@@ -45,6 +50,11 @@ bundle.
 
 Hierarchy bounds and gesture coordinates use points. Screenshot crops convert
 point-space bounds to the captured pixel dimensions.
+
+Orientation values use the four canonical flow enums: `PORTRAIT`,
+`LANDSCAPE_LEFT`, `LANDSCAPE_RIGHT`, and `UPSIDE_DOWN`. The host maps them to
+the XCTest runner's lower-camel-case wire values without dropping underscores
+before lookup.
 
 ## 4. Web
 

@@ -35,4 +35,6 @@ notices. FlowBaton remains fully usable without any proprietary consumer.
 The Go package exports `Document`, its component types, normative authentication
 profiles, and `NewDocument`. Runtime producers must construct the handshake with
 `NewDocument`; it performs the same semantic validation as `ValidateJSON` before
-the document can be emitted.
+the document can be emitted. `flowbaton serve` publishes the resulting document
+at `GET /v1/integration` before any configured driver opens. Its readiness route
+stays closed until every driver is open and the database node is active.

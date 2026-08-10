@@ -140,7 +140,7 @@ func TestAShardTalksToItsOwnPort(t *testing.T) {
 
 	// The plumbing that matters: the driver has to be built against the port
 	// the shard was assigned, not the package default.
-	session, err := NewDeviceSession(
+	session, err := NewDeviceSession(context.Background(),
 		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}},
 		Shard{Device: "UDID-1", DriverPort: 41001})
 	if err != nil {
@@ -166,7 +166,7 @@ func TestTheRunnerGivesEveryShardItsOwnPort(t *testing.T) {
 	runner := TestRunner{
 		Environ:      func() []string { return nil },
 		AllocatePort: fixedAllocator(41001),
-		NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+		NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 			mutex.Lock()
 			ports[shard.Index] = shard.DriverPort
 			mutex.Unlock()
@@ -211,7 +211,7 @@ func TestAnAllocationFailureStopsTheRunBeforeAnyDevice(t *testing.T) {
 	runner := TestRunner{
 		Environ:      func() []string { return nil },
 		AllocatePort: func() (int, error) { return 0, errAllocatorExhausted },
-		NewSession: func(Shard, TestOptions) (TestSession, error) {
+		NewSession: func(_ context.Context, _ Shard, _ TestOptions) (TestSession, error) {
 			built.Store(true)
 			return DeviceSession{Driver: permissiveDriver(), BaseDirectory: dir}, nil
 		},

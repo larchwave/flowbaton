@@ -29,9 +29,6 @@ func TestEveryManifestAuthoredFormCompiles(t *testing.T) {
 	entries := loadCommandManifest(t)
 	covered := 0
 	for _, entry := range entries {
-		if entry.RuntimeStatus != "planned-v1" {
-			continue
-		}
 		if _, registered := registry.lookup(model.CommandKeyword(entry.Keyword)); !registered {
 			continue
 		}
@@ -99,9 +96,6 @@ func TestEveryManifestAuthoredFormEvaluates(t *testing.T) {
 	}
 	evaluation := manifestEvaluationContext(t)
 	for _, entry := range loadCommandManifest(t) {
-		if entry.RuntimeStatus != "planned-v1" {
-			continue
-		}
 		if _, registered := registry.lookup(model.CommandKeyword(entry.Keyword)); !registered {
 			continue
 		}
@@ -155,9 +149,6 @@ func TestEveryManifestAuthoredFormExecutes(t *testing.T) {
 	t.Parallel()
 
 	for _, entry := range loadCommandManifest(t) {
-		if entry.RuntimeStatus != "planned-v1" {
-			continue
-		}
 		for _, form := range []struct {
 			name string
 			yaml string

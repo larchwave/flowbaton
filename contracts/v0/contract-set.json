@@ -42,7 +42,7 @@
       "language": "go",
       "path": "internal/device/driver.go",
       "coverage": "contract-complete",
-      "sha256": "32bbaad3535eff6bb53718933731a08e7e38b8b6ed0a9b7aca6155ed85a719da"
+      "sha256": "bc23f8e50aaff9364dd318a7abb9e2b08fbc1c01646a176d9319c9e952a7f0e2"
     },
     {
       "id": "driver-json-descriptor",
@@ -130,7 +130,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/ios-http.json",
       "coverage": "contract-complete",
-      "sha256": "e2735a4c83a9940cef690cbf085232fdfe908b5b6016072ce1a50552e0b1c3b1"
+      "sha256": "baa8d0c0217ff191632dc783483514c68e2f2e382ce1f0f422e59a2ca9a032c0"
     },
     {
       "id": "ios-swift-declarations",
@@ -138,7 +138,7 @@
       "language": "swift",
       "path": "drivers/ios/Sources/FlowBatonIOSRunner/WireContractV0.swift",
       "coverage": "contract-complete",
-      "sha256": "9bd0374518a742f7a3fcfda7a6cabc402712c6081c8b5c1fafe93b2164f545af"
+      "sha256": "0bcf87a670a67e10ee2821c6050cf3763c0302156c123064e642ccda4da831bf"
     },
     {
       "id": "ios-g001-runtime",

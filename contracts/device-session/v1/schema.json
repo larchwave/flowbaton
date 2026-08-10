@@ -26,7 +26,7 @@
         "principal_id": {"type": "string", "minLength": 3},
         "auth_profile_id": {"type": "string", "minLength": 8},
         "channel_binding_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "request_nonce": {"type": "string", "minLength": 16},
+        "request_nonce": {"type": "string", "minLength": 16, "maxLength": 128},
         "issued_at": {"type": "string", "format": "date-time"},
         "expires_at": {"type": "string", "format": "date-time"}
       }
@@ -153,13 +153,15 @@
     "reconnect_request_data": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["session_id", "lease_id", "generation", "fencing_token_sha256", "last_acknowledged_sequence"],
+      "required": ["session_id", "lease_id", "generation", "fencing_token_sha256", "last_acknowledged_sequence", "request_nonce", "binding_expires_at"],
       "properties": {
         "session_id": {"type": "string", "minLength": 8},
         "lease_id": {"type": "string", "minLength": 8},
         "generation": {"type": "integer", "minimum": 1},
         "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "last_acknowledged_sequence": {"type": "integer", "minimum": 1}
+        "last_acknowledged_sequence": {"type": "integer", "minimum": 1},
+        "request_nonce": {"type": "string", "minLength": 16, "maxLength": 128},
+        "binding_expires_at": {"type": "string", "format": "date-time"}
       }
     },
     "cancel_request_data": {
@@ -180,7 +182,8 @@
       "properties": {
         "lease_id": {"type": "string", "minLength": 8},
         "generation": {"type": "integer", "minimum": 1},
-        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "fencing_token_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "server_reason": {"type": "string", "const": "lease_expired"}
       }
     },
     "acquired_data": {

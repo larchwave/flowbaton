@@ -52,6 +52,22 @@ jobs:
     needs: repository-language
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      FLOWBATON_TEST_POSTGRES_URL: postgres://flowbaton_ci:flowbaton_ci@127.0.0.1:5432/flowbaton_test?sslmode=disable
+    services:
+      postgres:
+        image: postgres:17.6-alpine3.22@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+        env:
+          POSTGRES_DB: flowbaton_test
+          POSTGRES_USER: flowbaton_ci
+          POSTGRES_PASSWORD: flowbaton_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flowbaton_ci -d flowbaton_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func TestTheInstalledAgentIsFoundWithoutAnyVariables(t *testing.T) {
 	writeAPK(t, filepath.Join(directory, androidAppAPKName))
 	writeAPK(t, filepath.Join(directory, androidTestAPKName))
 
-	apks, err := androidAgentAPKs()
+	apks, err := androidAgentAPKs(context.Background())
 	if err != nil {
 		t.Fatalf("androidAgentAPKs() error = %v", err)
 	}
@@ -50,7 +51,7 @@ func TestTheInstalledAgentIsFoundWithoutAnyVariables(t *testing.T) {
 func TestNoInstalledAgentIsNotAFailure(t *testing.T) {
 	agentHome(t)
 
-	apks, err := androidAgentAPKs()
+	apks, err := androidAgentAPKs(context.Background())
 	if err != nil {
 		t.Fatalf("androidAgentAPKs() error = %v", err)
 	}
@@ -65,7 +66,7 @@ func TestHalfAnInstalledAgentIsRefused(t *testing.T) {
 	directory := agentHome(t)
 	writeAPK(t, filepath.Join(directory, androidAppAPKName))
 
-	_, err := androidAgentAPKs()
+	_, err := androidAgentAPKs(context.Background())
 	if err == nil {
 		t.Fatal("a half-installed agent was accepted")
 	}
@@ -82,7 +83,7 @@ func TestTheVariablesOutrankTheInstalledAgent(t *testing.T) {
 	t.Setenv("FLOWBATON_ANDROID_APP_APK", "/elsewhere/app.apk")
 	t.Setenv("FLOWBATON_ANDROID_TEST_APK", "/elsewhere/test.apk")
 
-	apks, err := androidAgentAPKs()
+	apks, err := androidAgentAPKs(context.Background())
 	if err != nil {
 		t.Fatalf("androidAgentAPKs() error = %v", err)
 	}

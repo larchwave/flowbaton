@@ -65,7 +65,7 @@ func newContinuousRunner(
 	harness.runner = TestRunner{
 		Clock:        &advancingClock{now: moment},
 		PollInterval: time.Millisecond,
-		NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+		NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 			harness.mu.Lock()
 			harness.runs++
 			current := harness.runs

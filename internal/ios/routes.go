@@ -41,6 +41,16 @@ const (
 	OrientationUpsideDown     Orientation = "upsideDown"
 )
 
+// ScreenOrientation is the deviceInfo orientation vocabulary.
+type ScreenOrientation string
+
+const (
+	ScreenOrientationPortrait       ScreenOrientation = "portrait"
+	ScreenOrientationUpsideDown     ScreenOrientation = "portrait-upside-down"
+	ScreenOrientationLandscapeLeft  ScreenOrientation = "landscape-left"
+	ScreenOrientationLandscapeRight ScreenOrientation = "landscape-right"
+)
+
 // SwipeRequest is the v1 swipe, which carries a single optional appId.
 type SwipeRequest struct {
 	AppID    string  `json:"appId,omitempty"`
@@ -72,10 +82,11 @@ type TouchRequest struct {
 
 // DeviceInfo is the runner's screen geometry, in points and pixels.
 type DeviceInfo struct {
-	WidthPoints  float64 `json:"widthPoints"`
-	HeightPoints float64 `json:"heightPoints"`
-	WidthPixels  float64 `json:"widthPixels"`
-	HeightPixels float64 `json:"heightPixels"`
+	WidthPoints  float64           `json:"widthPoints"`
+	HeightPoints float64           `json:"heightPoints"`
+	WidthPixels  float64           `json:"widthPixels"`
+	HeightPixels float64           `json:"heightPixels"`
+	Orientation  ScreenOrientation `json:"orientation"`
 }
 
 // Frame is an element's screen-space rectangle.

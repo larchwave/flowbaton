@@ -35,6 +35,7 @@ func TestDriverIsADeviceDriver(t *testing.T) {
 	t.Parallel()
 
 	var _ device.Driver = (*Driver)(nil)
+	var _ device.OrientationReader = (*Driver)(nil)
 }
 
 // agentRecorder remembers every rpc the stub served, in order.
@@ -284,6 +285,203 @@ func awaitInstrumentCall(t *testing.T, runner *recordingRunner) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+}
+
+func isADBOperation(args []string, operation ...string) bool {
+	if len(args) < 2+len(operation) {
+		return false
+	}
+	return slices.Equal(args[2:2+len(operation)], operation)
+}
+
+func managedCleanupTail(port int) [][]string {
+	return [][]string{
+		{"-s", testSerial, "forward", "--remove", "tcp:" + strconv.Itoa(port)},
+		{"-s", testSerial, "uninstall", AgentAppPackage},
+		{"-s", testSerial, "uninstall", AgentTestPackage},
+	}
+}
+
+func assertCallTail(t *testing.T, calls, want [][]string) {
+	t.Helper()
+	if len(calls) < len(want) {
+		t.Fatalf("adb calls = %v, want tail %v", calls, want)
+	}
+	tail := calls[len(calls)-len(want):]
+	for index := range want {
+		if !reflect.DeepEqual(tail[index][1:], want[index]) {
+			t.Fatalf("adb call tail = %v, want %v", tail, want)
+		}
+	}
+}
+
+func TestManagedOpenRollsBackAtEveryMutationFailureBoundary(t *testing.T) {
+	t.Parallel()
+
+	primaryErr := errors.New("injected open failure")
+	tests := []struct {
+		name        string
+		fails       func([]string) bool
+		wantForward bool
+	}{
+		{
+			name:  "app install",
+			fails: func(args []string) bool { return slices.Contains(args, "/apks/agent-app.apk") },
+		},
+		{
+			name:  "test install",
+			fails: func(args []string) bool { return slices.Contains(args, "/apks/agent-test.apk") },
+		},
+		{
+			name: "mock location grant",
+			fails: func(args []string) bool {
+				return isADBOperation(args, "shell", "appops")
+			},
+		},
+		{
+			name: "forward",
+			fails: func(args []string) bool {
+				return isADBOperation(args, "forward") && !slices.Contains(args, "--remove")
+			},
+			wantForward: true,
+		},
+		{
+			name:        "instrumentation start",
+			fails:       func(args []string) bool { return slices.Contains(args, "instrument") },
+			wantForward: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			failed := false
+			runner := &recordingRunner{respond: func(args []string) ([]byte, error) {
+				if !failed && test.fails(args) {
+					failed = true
+					return nil, primaryErr
+				}
+				return nil, nil
+			}}
+			port := deadPort(t)
+			driver := newManagedDriver(port, runner)
+			err := driver.Open(context.Background())
+			if !errors.Is(err, primaryErr) {
+				t.Fatalf("Open() error = %v, want injected failure", err)
+			}
+			if driver.stopInstrumentation != nil {
+				t.Fatal("failed Open left an instrumentation cancel function installed")
+			}
+			calls := runner.recorded()
+			want := managedCleanupTail(port)[1:]
+			if test.wantForward {
+				want = managedCleanupTail(port)
+			}
+			assertCallTail(t, calls, want)
+		})
+	}
+}
+
+type cancellingFailureRunner struct {
+	recordingRunner
+	cancel              context.CancelFunc
+	primaryErr          error
+	rollbackErr         error
+	failed              bool
+	cleanupContextErr   error
+	cleanupHasDeadline  bool
+	rollbackFailureUsed bool
+}
+
+func (runner *cancellingFailureRunner) Run(
+	ctx context.Context, name string, args ...string,
+) ([]byte, error) {
+	runner.mu.Lock()
+	runner.calls = append(runner.calls, append([]string{name}, args...))
+	runner.mu.Unlock()
+	if !runner.failed && isADBOperation(args, "shell", "appops") {
+		runner.failed = true
+		runner.cancel()
+		return nil, runner.primaryErr
+	}
+	if runner.failed && isADBOperation(args, "uninstall") {
+		runner.cleanupContextErr = ctx.Err()
+		_, runner.cleanupHasDeadline = ctx.Deadline()
+		if !runner.rollbackFailureUsed {
+			runner.rollbackFailureUsed = true
+			return nil, runner.rollbackErr
+		}
+	}
+	return nil, nil
+}
+
+func TestManagedOpenUsesFreshBoundedCleanupAndJoinsRollbackFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	primaryErr := errors.New("mock location setup failed")
+	rollbackErr := errors.New("package cleanup failed")
+	runner := &cancellingFailureRunner{
+		cancel:      cancel,
+		primaryErr:  primaryErr,
+		rollbackErr: rollbackErr,
+	}
+	driver := newManagedDriver(deadPort(t), runner)
+	err := driver.Open(ctx)
+	if !errors.Is(err, primaryErr) {
+		t.Fatalf("Open() error = %v, want original failure", err)
+	}
+	if !errors.Is(err, rollbackErr) {
+		t.Fatalf("Open() error = %v, want rollback failure", err)
+	}
+	if ctx.Err() != context.Canceled {
+		t.Fatalf("execution context error = %v, want cancellation", ctx.Err())
+	}
+	if runner.cleanupContextErr != nil {
+		t.Fatalf("rollback context error = %v, want fresh context", runner.cleanupContextErr)
+	}
+	if !runner.cleanupHasDeadline {
+		t.Fatal("rollback context had no deadline")
+	}
+}
+
+type blockingInstrumentationRunner struct {
+	recordingRunner
+	stopped chan struct{}
+}
+
+func (runner *blockingInstrumentationRunner) Run(
+	ctx context.Context, name string, args ...string,
+) ([]byte, error) {
+	runner.mu.Lock()
+	runner.calls = append(runner.calls, append([]string{name}, args...))
+	runner.mu.Unlock()
+	if slices.Contains(args, "instrument") {
+		<-ctx.Done()
+		close(runner.stopped)
+		return nil, ctx.Err()
+	}
+	return nil, nil
+}
+
+func TestManagedOpenStopsInstrumentationWhenReachabilityFails(t *testing.T) {
+	t.Parallel()
+
+	port := deadPort(t)
+	runner := &blockingInstrumentationRunner{stopped: make(chan struct{})}
+	driver := newManagedDriver(port, runner)
+	driver.startupTimeout = 20 * time.Millisecond
+	driver.startupPoll = time.Millisecond
+	if err := driver.Open(context.Background()); err == nil {
+		t.Fatal("Open() succeeded against an unreachable managed agent")
+	}
+	select {
+	case <-runner.stopped:
+	default:
+		t.Fatal("failed Open returned before instrumentation stopped")
+	}
+	assertCallTail(t, runner.recorded(), managedCleanupTail(port))
 }
 
 func TestOpenInstallsAndStartsTheAgentWhenAPKsAreGiven(t *testing.T) {
@@ -536,6 +734,33 @@ func TestAddMediaRefusesAPI28BeforeUploading(t *testing.T) {
 	}
 	if got := recorder.messagesFor(pbwire.MethodAddMedia); len(got) != 0 {
 		t.Fatalf("agent received %d addMedia frames before the refusal", len(got))
+	}
+}
+
+func TestRuntimePreflightRefusesAddMediaBeforeManagedOpenMutation(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	runner.respond = func(args []string) ([]byte, error) {
+		if slices.Contains(args, "ro.build.version.sdk") {
+			return []byte("28\n"), nil
+		}
+		return nil, nil
+	}
+	driver := NewDriver(testSerial, 7001, runner, &AgentAPKs{App: "agent.apk", Test: "agent-test.apk"})
+	err := driver.PreflightRuntime(context.Background(), device.RuntimeRequirements{
+		Commands: []string{"launchApp", "addMedia"},
+	})
+	if !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("PreflightRuntime() error = %v, want device.ErrUnsupported", err)
+	}
+	for _, call := range runner.calls {
+		if slices.Contains(call, "install") || slices.Contains(call, "uninstall") || slices.Contains(call, "instrument") {
+			t.Fatalf("runtime preflight mutated the managed driver: %v", runner.calls)
+		}
+	}
+	if len(runner.calls) != 1 || !slices.Contains(runner.calls[0], "ro.build.version.sdk") {
+		t.Fatalf("runtime preflight calls = %v, want only the read-only SDK query", runner.calls)
 	}
 }
 

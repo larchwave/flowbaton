@@ -29,7 +29,7 @@ func TestShardingFindsTheAttachedDevicesWhenNoneAreNamed(t *testing.T) {
 		return []string{"emulator-5554", "emulator-5556"}, nil
 	}
 
-	shards, err := PlanShards(options, devicePlan("a.yaml", "b.yaml", "c.yaml", "d.yaml"))
+	shards, err := PlanShards(context.Background(), options, devicePlan("a.yaml", "b.yaml", "c.yaml", "d.yaml"))
 	if err != nil {
 		t.Fatalf("PlanShards() error = %v", err)
 	}
@@ -52,7 +52,7 @@ func TestNamingFewerDevicesThanShardsIsStillRefused(t *testing.T) {
 		return []string{"emulator-5554", "emulator-5556"}, nil
 	}
 
-	_, err := PlanShards(options, devicePlan("a.yaml", "b.yaml"))
+	_, err := PlanShards(context.Background(), options, devicePlan("a.yaml", "b.yaml"))
 	if err == nil {
 		t.Fatal("one named device was stretched across two shards")
 	}
@@ -68,7 +68,7 @@ func TestTooFewAttachedDevicesIsRefusedWithTheCount(t *testing.T) {
 		return []string{"emulator-5554", "emulator-5556"}, nil
 	}
 
-	_, err := PlanShards(options, devicePlan("a.yaml", "b.yaml", "c.yaml"))
+	_, err := PlanShards(context.Background(), options, devicePlan("a.yaml", "b.yaml", "c.yaml"))
 	if err == nil {
 		t.Fatal("three shards were planned onto two devices")
 	}
@@ -87,7 +87,7 @@ func TestExtraAttachedDevicesAreLeftAlone(t *testing.T) {
 		return []string{"emulator-5554", "emulator-5556"}, nil
 	}
 
-	shards, err := PlanShards(options, devicePlan("a.yaml"))
+	shards, err := PlanShards(context.Background(), options, devicePlan("a.yaml"))
 	if err != nil {
 		t.Fatalf("PlanShards() error = %v", err)
 	}
@@ -106,9 +106,29 @@ func TestAFailedListingIsReportedAsOne(t *testing.T) {
 		return nil, errors.New("adb: no such tool")
 	}
 
-	_, err := PlanShards(options, devicePlan("a.yaml", "b.yaml"))
+	_, err := PlanShards(context.Background(), options, devicePlan("a.yaml", "b.yaml"))
 	if err == nil || !strings.Contains(err.Error(), "no such tool") {
 		t.Fatalf("the listing failure was swallowed: %v", err)
+	}
+}
+
+func TestCanceledContextReachesShardInventory(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	called := false
+	options := TestOptions{Platform: "android", ShardSplit: 2}
+	options.attachedDevices = func(got context.Context, _ string) ([]string, error) {
+		called = true
+		return nil, got.Err()
+	}
+
+	_, err := PlanShards(ctx, options, devicePlan("a.yaml", "b.yaml"))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("PlanShards() error = %v, want context.Canceled", err)
+	}
+	if !called {
+		t.Fatal("shard planning did not call the device inventory")
 	}
 }
 
@@ -125,7 +145,7 @@ func TestAnUnshardedRunDoesNotListDevices(t *testing.T) {
 		return nil, errors.New("should not have been called")
 	}
 
-	if _, err := PlanShards(options, devicePlan("a.yaml")); err != nil {
+	if _, err := PlanShards(context.Background(), options, devicePlan("a.yaml")); err != nil {
 		t.Fatalf("PlanShards() error = %v", err)
 	}
 	if listed {

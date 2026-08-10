@@ -32,12 +32,34 @@ may drop declared frames but never silently drop control or terminal events.
 
 Disconnect does not imply release. Reconnect is legal only while the same fenced lease
 is live and resumes from the last acknowledged server sequence with a new stream epoch.
+Remote reconnect uses a fresh channel-bound token on a different TLS channel, with a new
+nonce and expiry. It atomically rotates the channel digest, nonce, and binding expiry while
+tenant, principal, lease generation, and fence remain fixed; the prior token identity
+cannot continue the session. A newly issued token on the same channel does not replace the
+active binding outside reconnect. Semantic verification requires the authenticated token's
+expiry to equal the final transcript binding expiry exactly.
 Cancellation is idempotent before release and repeated requests return the first terminal
 outcome. After release, only an exact retry of the release idempotency key and payload may
 read that same outcome; every other request is rejected without mutation.
 Authentication, authorization, tenant, lease, capability, backpressure, transport,
 device, and transition failures use the enumerated typed errors and never fall back to
 an unscoped session.
+
+Frame bytes are available through a bounded authenticated content plane keyed by
+session ID, stream epoch, frame sequence, and SHA-256. Access also requires the current
+tenant, principal, channel binding, token nonce, token expiry, generation, and fence.
+Only the latest frame content is retained for a live session; terminal release removes
+it. A failed frame capture is retried a bounded number of times and then blocks later
+input instead of permitting use of stale frame state.
+
+PostgreSQL time is authoritative for token validity, lease, binding, claim, request,
+event, and expiry decisions. Token issuance reserves a database-derived issue/expiry
+window, and authenticated requests are checked against database time. Automatic expiry
+records the release request and its replay record with the lease's predeclared release
+key, resolves unfinished jobs as non-retryable, clears the device lease, and emits the
+one terminal `released` event with the `error` outcome. Cancellation resolves queued
+work and signals an executing operation; once physical input has started, interruption
+is recorded as an unknown, non-retryable outcome.
 
 JSON Schema closes each request/event payload. Cross-document equalities, authenticated
 context, time validity, lifecycle ordering, frame links, reconnect cursors, and
@@ -49,3 +71,9 @@ The Go package exports the document, binding, lease, request, and event types,
 plus constructors for validated transcripts and strictly encoded request/event
 payloads. The PostgreSQL runtime integration suite uses a disposable database
 from `FLOWBATON_TEST_POSTGRES_URL`; it skips only when that variable is absent.
+
+The runtime binds each node process to a database-issued epoch and readiness
+lease. Device ownership, frame claims, input claims, starts, completions, and
+restart recovery carry that epoch plus a monotonic claim number. An input that
+reached `executing` on an older epoch receives one unknown-outcome event and is
+never queued for another device call.

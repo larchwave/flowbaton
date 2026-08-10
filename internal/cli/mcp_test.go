@@ -178,7 +178,7 @@ func runFlowMCPRunner(base string) MCPRunner {
 		Checker: stubChecker{},
 		RunFlow: TestRunner{
 			Environ: func() []string { return nil },
-			NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+			NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 				return DeviceSession{
 					Driver:          permissiveDriver(),
 					OutputDirectory: shard.OutputDirectory,
@@ -280,7 +280,7 @@ func TestMCPRunFlowToolSurfacesASessionFailure(t *testing.T) {
 
 	base := t.TempDir()
 	runner := runFlowMCPRunner(base)
-	runner.RunFlow.NewSession = func(Shard, TestOptions) (TestSession, error) {
+	runner.RunFlow.NewSession = func(context.Context, Shard, TestOptions) (TestSession, error) {
 		return nil, errors.New("no device behind that udid")
 	}
 	session := connectMCP(t, runner)

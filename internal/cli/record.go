@@ -25,7 +25,7 @@ import (
 // RecordRunner records one flow. The session hook is the same one TestRunner
 // takes, so a test drives it without a device.
 type RecordRunner struct {
-	NewSession func(Shard, TestOptions) (TestSession, error)
+	NewSession SessionFactory
 }
 
 func (runner RecordRunner) Run(

@@ -145,7 +145,7 @@ func TestRunnerRejectsAPlatformImpossibleFlowBeforeSessionCreation(t *testing.T)
 	writeFile(t, path, "appId: com.example.a\n---\n- back\n")
 
 	sessionCreated := false
-	runner := TestRunner{NewSession: func(Shard, TestOptions) (TestSession, error) {
+	runner := TestRunner{NewSession: func(_ context.Context, _ Shard, _ TestOptions) (TestSession, error) {
 		sessionCreated = true
 		return DeviceSession{}, nil
 	}}

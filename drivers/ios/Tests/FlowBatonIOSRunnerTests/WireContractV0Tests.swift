@@ -7,7 +7,7 @@ final class WireContractV0Tests: XCTestCase {
     XCTAssertEqual(IOSWireContractV0.contractVersion, "v0")
     XCTAssertEqual(
       IOSWireContractV0.descriptorSHA256,
-      "e2735a4c83a9940cef690cbf085232fdfe908b5b6016072ce1a50552e0b1c3b1")
+      "baa8d0c0217ff191632dc783483514c68e2f2e382ce1f0f422e59a2ca9a032c0")
     XCTAssertEqual(IOSWireContractV0.bindHost, "127.0.0.1")
     XCTAssertEqual(IOSWireContractV0.defaultPort, 22_087)
     XCTAssertEqual(
@@ -86,10 +86,13 @@ final class WireContractV0Tests: XCTestCase {
           ]),
         schema(
           "DeviceInfoResponse", "object",
-          required: ["widthPoints", "heightPoints", "widthPixels", "heightPixels"],
+          required: ["widthPoints", "heightPoints", "widthPixels", "heightPixels", "orientation"],
           fields: [
             field("widthPoints", "number"), field("heightPoints", "number"),
             field("widthPixels", "number"), field("heightPixels", "number"),
+            field(
+              "orientation",
+              "string{portrait,portrait-upside-down,landscape-left,landscape-right}"),
           ]),
         schema(
           "SetOrientationRequest", "object", required: ["orientation"],

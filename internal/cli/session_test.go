@@ -8,12 +8,16 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/larchwave/flowbaton/internal/capability"
 	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/engine"
 	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // These tests exercise the command-line path through discovery, preflight,
@@ -210,6 +214,40 @@ func TestSessionRefusesToRunWithoutADriver(t *testing.T) {
 	}
 }
 
+func TestRuntimePreflightRefusesBeforeDriverOpen(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	flowPath := filepath.Join(directory, "media.yaml")
+	mediaPath := filepath.Join(directory, "photo.png")
+	writeFile(t, mediaPath, "image")
+	writeFile(t, flowPath, "appId: com.example.a\n---\n- repeat:\n    times: 1\n    commands:\n      - addMedia:\n          - photo.png\n")
+	program, err := engine.PrepareForPlatform(
+		context.Background(),
+		model.ExecutionPlan{SelectedRoots: []string{flowPath}},
+		capability.FileLoader{},
+		capability.ExecutionPlatformAndroid,
+	)
+	if err != nil {
+		t.Fatalf("PrepareForPlatform() error = %v", err)
+	}
+	refusal := errors.New("device API is too old")
+	driver := &refusingRuntimePreflightDriver{
+		FakeDriver: enginetest.NewFakeDriver(),
+		err:        refusal,
+	}
+	_, err = (DeviceSession{Driver: driver}).Execute(context.Background(), program, TestOptions{})
+	if !errors.Is(err, refusal) {
+		t.Fatalf("Execute() error = %v, want runtime preflight refusal", err)
+	}
+	if calledMethod(driver.FakeDriver, enginetest.MethodOpen) {
+		t.Fatalf("driver actions = %v; Open ran after runtime preflight refused", driver.Actions())
+	}
+	if !slices.Contains(driver.requirements.Commands, "addMedia") {
+		t.Fatalf("runtime commands = %v, want nested addMedia", driver.requirements.Commands)
+	}
+}
+
 func TestDeviceSessionCleanupUsesABoundedContextAfterExecutionCancellation(t *testing.T) {
 	t.Parallel()
 
@@ -277,6 +315,20 @@ type cleanupObservingDriver struct {
 	closeHadDeadline bool
 }
 
+type refusingRuntimePreflightDriver struct {
+	*enginetest.FakeDriver
+	requirements device.RuntimeRequirements
+	err          error
+}
+
+func (driver *refusingRuntimePreflightDriver) PreflightRuntime(
+	_ context.Context,
+	requirements device.RuntimeRequirements,
+) error {
+	driver.requirements = requirements
+	return driver.err
+}
+
 func (driver *cleanupObservingDriver) Open(ctx context.Context) error {
 	if err := driver.FakeDriver.Open(ctx); err != nil {
 		return err
@@ -339,7 +391,7 @@ func fakeRunner(driver *enginetest.FakeDriver, baseDirectory string) TestRunner 
 	moment := time.Unix(1_700_000_000, 0).UTC()
 	return TestRunner{
 		Clock: &advancingClock{now: moment},
-		NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+		NewSession: func(_ context.Context, shard Shard, _ TestOptions) (TestSession, error) {
 			return DeviceSession{
 				Driver:          driver,
 				OutputDirectory: shard.OutputDirectory,

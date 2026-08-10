@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -35,14 +36,29 @@ func realQueryFetch(
 	if err != nil {
 		return nil, err
 	}
-	driver, err := newDriver(TestOptions{Platform: platform}, udid, port, 1)
+	driver, err := newDriver(ctx, TestOptions{Platform: platform}, udid, port, 1)
 	if err != nil {
 		return nil, err
 	}
+	return queryDriverFetch(ctx, driver, appID, expression)
+}
+
+func queryDriverFetch(
+	ctx context.Context, driver device.Driver, appID, expression string,
+) (matches []device.TreeNode, resultErr error) {
 	if err := driver.Open(ctx); err != nil {
 		return nil, err
 	}
-	defer func() { _ = driver.Close(ctx) }()
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), deviceSessionCleanupTimeout)
+		defer cancel()
+		closeErr := driver.Close(cleanupCtx)
+		if closeErr != nil {
+			closeErr = fmt.Errorf("closing query driver: %w", closeErr)
+		}
+		resultErr = errors.Join(resultErr, closeErr)
+	}()
 
 	// The hierarchy, then the host's own matcher — see query_match.go for why
 	// this does not go to the driver's QueryOnDeviceElements.

@@ -39,7 +39,7 @@ func androidAgentPath() (string, error) {
 
 // androidAgentAPKs finds the agent to install, if there is one. A nil pair is
 // not a failure: it means the operator started the agent.
-func androidAgentAPKs() (*android.AgentAPKs, error) {
+func androidAgentAPKs(ctx context.Context) (*android.AgentAPKs, error) {
 	app := os.Getenv(androidAppAPKVariable)
 	test := os.Getenv(androidTestAPKVariable)
 	switch {
@@ -50,7 +50,7 @@ func androidAgentAPKs() (*android.AgentAPKs, error) {
 			androidAppAPKVariable, androidTestAPKVariable)
 	}
 
-	acquired, err := loadCachedDriverAsset(context.Background(), "android")
+	acquired, err := loadCachedDriverAsset(ctx, "android")
 	if err == nil {
 		return installedAgentAPKs(acquired.Directory)
 	}

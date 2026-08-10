@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ import (
 func TestTheRunnerBundleComesFromTheOverrideWhenSet(t *testing.T) {
 	t.Setenv(iosXCTestRunVariable, "/somewhere/Custom.xctestrun")
 
-	bundle, err := iosRunnerBundle()
+	bundle, err := iosRunnerBundle(context.Background())
 	if err != nil {
 		t.Fatalf("iosRunnerBundle() error = %v", err)
 	}
@@ -30,7 +31,7 @@ func TestNoBuiltRunnerLeavesTheOperatorInCharge(t *testing.T) {
 	t.Setenv(iosXCTestRunVariable, "")
 	t.Setenv("HOME", t.TempDir())
 
-	bundle, err := iosRunnerBundle()
+	bundle, err := iosRunnerBundle(context.Background())
 	if err != nil {
 		t.Fatalf("iosRunnerBundle() error = %v", err)
 	}
@@ -45,7 +46,7 @@ func TestTheRunnerBundleIsFoundWhereDriverSetupPutIt(t *testing.T) {
 	t.Setenv("HOME", home)
 	built := writeXCTestRun(t, home, "FlowBatonIOSRunnerUITests_iphonesimulator26.2-arm64.xctestrun")
 
-	bundle, err := iosRunnerBundle()
+	bundle, err := iosRunnerBundle(context.Background())
 	if err != nil {
 		t.Fatalf("iosRunnerBundle() error = %v", err)
 	}
@@ -63,7 +64,7 @@ func TestTwoBuiltRunnersAskWhichOne(t *testing.T) {
 	writeXCTestRun(t, home, "one_iphonesimulator26.2-arm64.xctestrun")
 	writeXCTestRun(t, home, "two_iphoneos26.2-arm64.xctestrun")
 
-	_, err := iosRunnerBundle()
+	_, err := iosRunnerBundle(context.Background())
 	if err == nil {
 		t.Fatal("two built runners were accepted without a word")
 	}

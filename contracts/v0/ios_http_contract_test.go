@@ -269,8 +269,9 @@ func expectedIOSShapes() map[string]completeExpectedShape {
 		}),
 		"PressButtonRequest": object([]string{"button"}, map[string]string{"button": "string:enum=home|lock"}),
 		"EraseTextRequest":   object([]string{"charactersToErase", "appIds"}, map[string]string{"charactersToErase": "integer:min=0", "appIds": "array:string"}),
-		"DeviceInfoResponse": object([]string{"widthPoints", "heightPoints", "widthPixels", "heightPixels"}, map[string]string{
+		"DeviceInfoResponse": object([]string{"widthPoints", "heightPoints", "widthPixels", "heightPixels", "orientation"}, map[string]string{
 			"widthPoints": "number", "heightPoints": "number", "widthPixels": "number", "heightPixels": "number",
+			"orientation": "string:enum=portrait|portrait-upside-down|landscape-left|landscape-right",
 		}),
 		"SetOrientationRequest": object([]string{"orientation"}, map[string]string{"orientation": "string:enum=portrait|landscapeLeft|landscapeRight|upsideDown"}),
 		"SetPermissionsRequest": object([]string{"permissions"}, map[string]string{"permissions": "object:additional=string"}),

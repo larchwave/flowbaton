@@ -36,11 +36,11 @@ func iosDerivedDataPath() (string, error) {
 // iosRunnerBundle finds the built runner, if there is one. A nil bundle is not
 // a failure: it means the operator starts the runner, the mode this driver has
 // always had.
-func iosRunnerBundle() (*ios.RunnerBundle, error) {
+func iosRunnerBundle(ctx context.Context) (*ios.RunnerBundle, error) {
 	if override := os.Getenv(iosXCTestRunVariable); override != "" {
 		return &ios.RunnerBundle{XCTestRun: override}, nil
 	}
-	acquired, err := loadCachedDriverAsset(context.Background(), "ios")
+	acquired, err := loadCachedDriverAsset(ctx, "ios")
 	if err == nil {
 		return iosRunnerBundleAt(acquired.Directory)
 	}

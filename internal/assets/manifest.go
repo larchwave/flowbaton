@@ -1,15 +1,14 @@
 package assets
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 const ManifestSchemaVersion = "flowbaton.assets.v0"
@@ -126,14 +125,9 @@ type ResolvedAsset struct {
 }
 
 func ParseManifest(contents []byte) (Manifest, error) {
-	decoder := json.NewDecoder(bytes.NewReader(contents))
-	decoder.DisallowUnknownFields()
 	var manifest Manifest
-	if err := decoder.Decode(&manifest); err != nil {
+	if err := strictjson.Decode(contents, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("%w: decode: %v", ErrInvalidAssetManifest, err)
-	}
-	if err := ensureJSONEOF(decoder); err != nil {
-		return Manifest{}, err
 	}
 	if manifest.SchemaVersion != ManifestSchemaVersion || manifest.ManifestVersion == "" {
 		return Manifest{}, fmt.Errorf("%w: unsupported schema or empty manifest version", ErrInvalidAssetManifest)
@@ -142,17 +136,6 @@ func ParseManifest(contents []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return manifest, nil
-}
-
-func ensureJSONEOF(decoder *json.Decoder) error {
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return fmt.Errorf("%w: multiple JSON values", ErrInvalidAssetManifest)
-		}
-		return fmt.Errorf("%w: trailing data: %v", ErrInvalidAssetManifest, err)
-	}
-	return nil
 }
 
 func Resolve(manifest Manifest, runtime Runtime, request Request) (ResolvedAsset, error) {

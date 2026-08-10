@@ -193,7 +193,8 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
         widthPoints: points.width,
         heightPoints: points.height,
         widthPixels: screenshot.size.width * screenshot.scale,
-        heightPixels: screenshot.size.height * screenshot.scale)
+        heightPixels: screenshot.size.height * screenshot.scale,
+        orientation: try Self.wireOrientation(XCUIDevice.shared.orientation))
     }
   }
 
@@ -335,6 +336,21 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     "LANDSCAPE_RIGHT": .landscapeRight,
     "UPSIDE_DOWN": .portraitUpsideDown,
   ]
+
+  private static func wireOrientation(_ orientation: UIDeviceOrientation) throws -> String {
+    switch orientation {
+    case .portrait:
+      return "portrait"
+    case .portraitUpsideDown:
+      return "portrait-upside-down"
+    case .landscapeLeft:
+      return "landscape-left"
+    case .landscapeRight:
+      return "landscape-right"
+    default:
+      throw AutomationError.precondition("the device orientation is not screen-aligned")
+    }
+  }
 }
 
 /// SnapshotAdapter is the whole reason the hierarchy walk is testable.
@@ -343,24 +359,35 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
 /// exists so `hierarchyPayload` can be exercised against a plain struct in
 /// `swift test` rather than only against a booted simulator.
 struct SnapshotAdapter: AccessibilitySnapshot {
-  let snapshot: XCUIElementSnapshot
+  let identifier: String
+  let frameOrigin: (x: Double, y: Double)
+  let frameSize: (width: Double, height: Double)
+  let stringValue: String?
+  let title: String?
+  let label: String
+  let elementTypeCode: Int
+  let enabled: Bool
+  let placeholder: String?
+  let selected: Bool
+  let focused: Bool
+  let isKeyboard: Bool
+  let childSnapshots: [any AccessibilitySnapshot]
 
+  @MainActor
   init(_ snapshot: XCUIElementSnapshot) {
-    self.snapshot = snapshot
+    identifier = snapshot.identifier
+    frameOrigin = (snapshot.frame.origin.x, snapshot.frame.origin.y)
+    frameSize = (snapshot.frame.width, snapshot.frame.height)
+    // XCUITest types value as Any?; the contract types it as a string.
+    stringValue = snapshot.value.map { String(describing: $0) }
+    title = snapshot.title.isEmpty ? nil : snapshot.title
+    label = snapshot.label
+    elementTypeCode = Int(snapshot.elementType.rawValue)
+    enabled = snapshot.isEnabled
+    placeholder = snapshot.placeholderValue
+    selected = snapshot.isSelected
+    focused = snapshot.hasFocus
+    isKeyboard = snapshot.elementType == .keyboard
+    childSnapshots = snapshot.children.map(SnapshotAdapter.init)
   }
-
-  var identifier: String { snapshot.identifier }
-  var frameOrigin: (x: Double, y: Double) { (snapshot.frame.origin.x, snapshot.frame.origin.y) }
-  var frameSize: (width: Double, height: Double) { (snapshot.frame.width, snapshot.frame.height) }
-  // XCUITest types value as Any?; the contract types it as a string.
-  var stringValue: String? { snapshot.value.map { String(describing: $0) } }
-  var title: String? { snapshot.title.isEmpty ? nil : snapshot.title }
-  var label: String { snapshot.label }
-  var elementTypeCode: Int { Int(snapshot.elementType.rawValue) }
-  var enabled: Bool { snapshot.isEnabled }
-  var placeholder: String? { snapshot.placeholderValue }
-  var selected: Bool { snapshot.isSelected }
-  var focused: Bool { snapshot.hasFocus }
-  var isKeyboard: Bool { snapshot.elementType == .keyboard }
-  var childSnapshots: [any AccessibilitySnapshot] { snapshot.children.map(SnapshotAdapter.init) }
 }

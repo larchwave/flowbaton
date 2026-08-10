@@ -105,23 +105,48 @@ final class ServerRoundTripTests: XCTestCase {
     }
     request.timeoutInterval = 10
 
-    var result: (Int, Data, String)?
-    var failure: Error?
+    let capture = ResponseCapture()
     let finished = XCTestExpectation(description: "response")
     URLSession.shared.dataTask(with: request) { data, response, error in
       if let error {
-        failure = error
+        capture.store(error: error)
       } else if let http = response as? HTTPURLResponse {
-        result = (
-          http.statusCode, data ?? Data(),
-          http.value(forHTTPHeaderField: "Content-Type") ?? ""
-        )
+        capture.store(
+          result: (
+            http.statusCode, data ?? Data(),
+            http.value(forHTTPHeaderField: "Content-Type") ?? ""
+          ))
       }
       finished.fulfill()
     }.resume()
     wait(for: [finished], timeout: 15)
 
+    let (result, failure) = capture.load()
     if let failure { throw failure }
     return try XCTUnwrap(result)
+  }
+}
+
+private final class ResponseCapture: @unchecked Sendable {
+  private let lock = NSLock()
+  private var result: (Int, Data, String)?
+  private var failure: Error?
+
+  func store(result: (Int, Data, String)) {
+    lock.lock()
+    defer { lock.unlock() }
+    self.result = result
+  }
+
+  func store(error: Error) {
+    lock.lock()
+    defer { lock.unlock() }
+    failure = error
+  }
+
+  func load() -> ((Int, Data, String)?, Error?) {
+    lock.lock()
+    defer { lock.unlock() }
+    return (result, failure)
   }
 }

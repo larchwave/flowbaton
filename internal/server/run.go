@@ -16,6 +16,7 @@ type RuntimeConfig struct {
 	TLSConfig *tls.Config
 	Handler   http.Handler
 	Listener  net.Listener
+	Started   func()
 }
 
 // Run serves the runtime until context cancellation, then performs a bounded shutdown.
@@ -51,6 +52,9 @@ func Run(ctx context.Context, config RuntimeConfig) error {
 	}
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
+	if config.Started != nil {
+		config.Started()
+	}
 	select {
 	case err := <-done:
 		if errors.Is(err, http.ErrServerClosed) {

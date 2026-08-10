@@ -84,7 +84,7 @@ public enum IOSWireContractV0 {
   public static let schemaVersion = 1
   public static let contractVersion = "v0"
   public static let descriptorSHA256 =
-    "e2735a4c83a9940cef690cbf085232fdfe908b5b6016072ce1a50552e0b1c3b1"
+    "baa8d0c0217ff191632dc783483514c68e2f2e382ce1f0f422e59a2ca9a032c0"
   public static let semanticManifest = [
     "descriptor|1|v0",
     "transport|http|127.0.0.1|22087",
@@ -192,8 +192,10 @@ public enum IOSWireContractV0 {
     "schema-required|DeviceInfoResponse|1|heightPoints",
     "schema-required|DeviceInfoResponse|2|widthPixels",
     "schema-required|DeviceInfoResponse|3|heightPixels",
+    "schema-required|DeviceInfoResponse|4|orientation",
     "schema-field|DeviceInfoResponse|heightPixels|number",
     "schema-field|DeviceInfoResponse|heightPoints|number",
+    "schema-field|DeviceInfoResponse|orientation|string{portrait,portrait-upside-down,landscape-left,landscape-right}",
     "schema-field|DeviceInfoResponse|widthPixels|number",
     "schema-field|DeviceInfoResponse|widthPoints|number",
     "schema|EmptyResponse|empty",
@@ -383,10 +385,12 @@ public enum IOSWireContractV0 {
       fields: [field("charactersToErase", "integer(minimum=0)"), field("appIds", "array<string>")]),
     schema(
       "DeviceInfoResponse", "object",
-      required: ["widthPoints", "heightPoints", "widthPixels", "heightPixels"],
+      required: ["widthPoints", "heightPoints", "widthPixels", "heightPixels", "orientation"],
       fields: [
         field("widthPoints", "number"), field("heightPoints", "number"),
         field("widthPixels", "number"), field("heightPixels", "number"),
+        field(
+          "orientation", "string{portrait,portrait-upside-down,landscape-left,landscape-right}"),
       ]),
     schema(
       "SetOrientationRequest", "object", required: ["orientation"],

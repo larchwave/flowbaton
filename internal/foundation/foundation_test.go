@@ -386,6 +386,22 @@ func TestPublicDeliverySurfaceManifestIsDecidable(t *testing.T) {
 }
 
 func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
+	// These exact objects predate the Lore requirement. Keeping the list exact
+	// avoids rewriting published objects and makes any policy widening visible.
+	grandfathered := map[string]bool{
+		"338d5849a01fcc07269bedc3ec36878f042b7efe": false,
+		"001c30f27cf5c4aaac0106a7fd636b6eca579f1f": false,
+		"f17cacf47d12a41721e06774c0f8051c984b73a1": false,
+		"ec7a530693df4dc75762f68aec64eac379c6a5e8": false,
+		"539e92006c2dd2d4566f40008942978045d97c9f": false,
+		"d1992e9d2b3e38f45fa7794df6eee27b1dedc6dc": false,
+		"1b4c640a2e342d32d7ad1317fdedf600c215f182": false,
+		"55caed91902bf3d7968655f2b55f43182692c91b": false,
+		"cf9445c192cbb3866e510782aa692c50793be10a": false,
+	}
+	if len(grandfathered) != 9 {
+		t.Fatalf("Lore grandfather set has %d entries, want exactly 9", len(grandfathered))
+	}
 	hasGitMetadata, err := repositoryHasGitMetadata(repoRoot(t))
 	if err != nil {
 		t.Fatalf("inspect repository Git metadata: %v", err)
@@ -407,12 +423,49 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 	for len(fields) >= 3 {
 		hash, subject, body := fields[0], fields[1], fields[2]
 		fields = fields[3:]
+		hash = strings.TrimSpace(hash)
 		if strings.TrimSpace(subject) == "" {
 			t.Errorf("commit %s has an empty intent line", hash)
+		}
+		if _, ok := grandfathered[hash]; ok {
+			grandfathered[hash] = true
+			complete := true
+			for _, trailer := range []string{"Confidence:", "Scope-risk:", "Tested:", "Not-tested:"} {
+				complete = complete && strings.Contains(body, trailer)
+			}
+			if complete {
+				t.Errorf("Lore grandfather entry %s already has every required trailer", hash)
+			}
+			continue
 		}
 		for _, trailer := range []string{"Confidence:", "Scope-risk:", "Tested:", "Not-tested:"} {
 			if !strings.Contains(body, trailer) {
 				t.Errorf("commit %s is missing %s Lore trailer", hash, trailer)
+			}
+		}
+	}
+	for hash, seen := range grandfathered {
+		if !seen {
+			t.Errorf("Lore grandfather entry %s is not present in repository history", hash)
+		}
+	}
+}
+
+func TestGoRaceWorkflowsExercisePostgres(t *testing.T) {
+	const postgresImage = "postgres:17.6-alpine3.22@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
+	for _, path := range []string{
+		".github/workflows/ci.yml",
+		".github/workflows/release-publish.yml",
+	} {
+		workflow := readFile(t, path)
+		for _, want := range []string{
+			"FLOWBATON_TEST_POSTGRES_URL: postgres://flowbaton_ci:flowbaton_ci@127.0.0.1:5432/flowbaton_test?sslmode=disable",
+			"image: " + postgresImage,
+			"--health-cmd \"pg_isready -U flowbaton_ci -d flowbaton_test\"",
+			"go test -race ./...",
+		} {
+			if !strings.Contains(workflow, want) {
+				t.Errorf("%s does not contain required PostgreSQL race-gate wiring %q", path, want)
 			}
 		}
 	}
