@@ -1,5 +1,6 @@
 package dev.larchwave.flowbaton.driver;
 
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -26,7 +27,7 @@ public interface FlowBatonDriverHandlers {
 
     void launchApp(String packageName, List<LaunchArgument> arguments) throws Exception;
 
-    void addMedia(String mediaName, String mediaExt, byte[] data) throws Exception;
+    void addMedia(String mediaName, String mediaExt, InputStream data) throws Exception;
 
     void enableMockLocationProviders() throws Exception;
 

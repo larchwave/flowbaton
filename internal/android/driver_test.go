@@ -513,6 +513,32 @@ func TestLaunchAppMapsTypedArgumentsToJavaClassNames(t *testing.T) {
 	}
 }
 
+func TestAddMediaRefusesAPI28BeforeUploading(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "holiday.mp4")
+	if err := os.WriteFile(path, []byte("media"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	driver, runner, recorder := newOpenDriver(t, nil)
+	runner.respond = func(args []string) ([]byte, error) {
+		if slices.Contains(args, "ro.build.version.sdk") {
+			return []byte("28\n"), nil
+		}
+		return nil, nil
+	}
+
+	err := driver.AddMedia(context.Background(), device.AddMediaRequest{
+		Files: []device.MediaFile{{Path: path}},
+	})
+	if !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("AddMedia() error = %v, want device.ErrUnsupported", err)
+	}
+	if got := recorder.messagesFor(pbwire.MethodAddMedia); len(got) != 0 {
+		t.Fatalf("agent received %d addMedia frames before the refusal", len(got))
+	}
+}
+
 func TestLaunchAppRefusesAnUnknownArgumentTypeBeforeTheWire(t *testing.T) {
 	t.Parallel()
 
@@ -763,7 +789,13 @@ func TestAddMediaStreamsChunksCarryingNameAndExtension(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	driver, _, recorder := newOpenDriver(t, nil)
+	driver, runner, recorder := newOpenDriver(t, nil)
+	runner.respond = func(args []string) ([]byte, error) {
+		if slices.Contains(args, "ro.build.version.sdk") {
+			return []byte("34\n"), nil
+		}
+		return nil, nil
+	}
 	if err := driver.AddMedia(context.Background(), device.AddMediaRequest{
 		Files: []device.MediaFile{{Path: path}},
 	}); err != nil {
@@ -1227,14 +1259,18 @@ func TestEveryMethodRefusesBeforeOpen(t *testing.T) {
 // fakeAndroidRecorder stands in for the long-lived `adb shell screenrecord`
 // child so the start/stop wiring is testable without a device.
 type fakeAndroidRecorder struct {
-	stopped  bool
-	sinkPath string
-	stopErr  error
+	stopped             bool
+	sinkPath            string
+	stopErr             error
+	stopCtxWasCancelled bool
+	stopCtxHadDeadline  bool
 }
 
-func (r *fakeAndroidRecorder) stop(_ context.Context, sinkPath string) error {
+func (r *fakeAndroidRecorder) stop(ctx context.Context, sinkPath string) error {
 	r.stopped = true
 	r.sinkPath = sinkPath
+	r.stopCtxWasCancelled = ctx.Err() != nil
+	_, r.stopCtxHadDeadline = ctx.Deadline()
 	return r.stopErr
 }
 
@@ -1287,6 +1323,27 @@ func TestStopScreenRecordingRejectsAnUnknownCapture(t *testing.T) {
 	}
 }
 
+func TestScreenRecordingRejectsADuplicateCaptureIDBeforeSpawning(t *testing.T) {
+	t.Parallel()
+
+	driver := NewDriver(testSerial, 7001, &recordingRunner{}, nil)
+	spawned := 0
+	driver.spawnRecorder = func(context.Context, string) (screenRecorder, error) {
+		spawned++
+		return &fakeAndroidRecorder{}, nil
+	}
+	request := device.ScreenRecordingRequest{OutputPath: "/host/out.mp4"}
+	if _, err := driver.StartScreenRecording(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := driver.StartScreenRecording(context.Background(), request); err == nil {
+		t.Fatal("StartScreenRecording accepted a duplicate capture id")
+	}
+	if spawned != 1 {
+		t.Fatalf("recorders spawned = %d, want one", spawned)
+	}
+}
+
 func TestScreenRecordingRejectsAnUnsafeSink(t *testing.T) {
 	t.Parallel()
 
@@ -1325,6 +1382,50 @@ func TestStopScreenRecordingSurfacesAStopFailure(t *testing.T) {
 	}
 	if _, err := driver.StopScreenRecording(context.Background(), id); err == nil {
 		t.Fatal("StopScreenRecording swallowed the recorder's stop failure")
+	}
+}
+
+func TestCloseDrainsEveryRecordingWithBoundedNonCancelledCleanup(t *testing.T) {
+	t.Parallel()
+
+	driver := NewDriver(testSerial, 7001, &recordingRunner{}, nil)
+	first := &fakeAndroidRecorder{stopErr: errors.New("first stop failed")}
+	second := &fakeAndroidRecorder{stopErr: errors.New("second stop failed")}
+	recorders := []screenRecorder{first, second}
+	driver.spawnRecorder = func(context.Context, string) (screenRecorder, error) {
+		recorder := recorders[0]
+		recorders = recorders[1:]
+		return recorder, nil
+	}
+	for _, sink := range []string{"/host/first.mp4", "/host/second.mp4"} {
+		if _, err := driver.StartScreenRecording(
+			context.Background(), device.ScreenRecordingRequest{OutputPath: sink}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := driver.Close(cancelled)
+	if err == nil ||
+		!strings.Contains(err.Error(), "first stop failed") ||
+		!strings.Contains(err.Error(), "second stop failed") {
+		t.Fatalf("Close() error = %v, want both recorder failures", err)
+	}
+	for index, recorder := range []*fakeAndroidRecorder{first, second} {
+		if !recorder.stopped {
+			t.Fatalf("recorder %d was not drained", index)
+		}
+		if recorder.stopCtxWasCancelled {
+			t.Fatalf("recorder %d received an already-cancelled cleanup context", index)
+		}
+		if !recorder.stopCtxHadDeadline {
+			t.Fatalf("recorder %d cleanup context has no deadline", index)
+		}
+	}
+	driver.recMu.Lock()
+	defer driver.recMu.Unlock()
+	if len(driver.recordings) != 0 {
+		t.Fatalf("recordings after Close = %d, want none", len(driver.recordings))
 	}
 }
 
@@ -1448,5 +1549,39 @@ func TestRecorderStopFinalizesOnDeviceBeforePulling(t *testing.T) {
 	}
 	if remove := indexOf("rm"); remove >= 0 && remove < pull {
 		t.Fatalf("stop() removed the device copy before pulling it: %v", calls)
+	}
+}
+
+func TestRecorderStopCleansDeviceAndPartialHostFileWhenPullFails(t *testing.T) {
+	t.Parallel()
+
+	sink := filepath.Join(t.TempDir(), "partial.mp4")
+	var calls [][]string
+	recorder := &adbRecorder{
+		serial:     testSerial,
+		devicePath: "/sdcard/out.mp4",
+		run: func(_ context.Context, args ...string) ([]byte, error) {
+			calls = append(calls, args)
+			if slices.Contains(args, "pull") {
+				if err := os.WriteFile(sink, []byte("partial"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return []byte("pull failed"), errors.New("exit status 1")
+			}
+			return nil, nil
+		},
+	}
+	if err := recorder.stop(context.Background(), sink); err == nil {
+		t.Fatal("stop() swallowed the pull failure")
+	}
+	if _, err := os.Stat(sink); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("partial host artifact still exists: %v", err)
+	}
+	removed := false
+	for _, call := range calls {
+		removed = removed || slices.Contains(call, "rm")
+	}
+	if !removed {
+		t.Fatalf("device artifact was not removed after pull failure: %v", calls)
 	}
 }

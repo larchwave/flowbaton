@@ -24,6 +24,7 @@ import dev.larchwave.flowbaton.driver.LaunchArgument
 import dev.larchwave.flowbaton.driver.FlowBatonDriverHandlers
 import dev.larchwave.flowbaton.driver.WindowOrder
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.util.concurrent.TimeoutException
 
 /** Device glue behind the twelve FlowBatonDriver RPCs, on raw UiAutomation. */
@@ -180,7 +181,7 @@ class AndroidDriverHandlers(
         context.startActivity(intent)
     }
 
-    override fun addMedia(mediaName: String, mediaExt: String, data: ByteArray) {
+    override fun addMedia(mediaName: String, mediaExt: String, data: InputStream) {
         MediaStoreWriter.write(context.contentResolver, mediaName, mediaExt, data)
     }
 

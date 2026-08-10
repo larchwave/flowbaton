@@ -2,12 +2,14 @@ package android
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -330,32 +332,53 @@ func (driver *Driver) awaitAgent(
 // simulator running — the state after a failed run is something an operator
 // inspects.
 func (driver *Driver) Close(ctx context.Context) error {
-	var firstErr error
+	var cleanupErrs []error
+	cleanupErrs = append(cleanupErrs, driver.drainRecordings(context.WithoutCancel(ctx))...)
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordingFinalizeTimeout)
+	defer cancel()
 	if conn := driver.takeConn(); conn != nil {
-		firstErr = conn.Close()
+		cleanupErrs = append(cleanupErrs, conn.Close())
 	}
 	// A run that ends mid-flow with the devtools hierarchy on is the ordinary
 	// crash case, and its forward would outlive the run.
-	if err := driver.disableDevTools(ctx); err != nil && firstErr == nil {
-		firstErr = err
-	}
+	cleanupErrs = append(cleanupErrs, driver.disableDevTools(cleanupCtx))
 	if driver.stopInstrumentation != nil {
 		driver.stopInstrumentation()
 		driver.stopInstrumentation = nil
 	}
-	if err := driver.adb.ForwardRemove(ctx, driver.hostPort); err != nil && firstErr == nil {
-		firstErr = err
-	}
+	cleanupErrs = append(cleanupErrs, driver.adb.ForwardRemove(cleanupCtx, driver.hostPort))
 	if driver.apks != nil {
 		// The uninstall-on-close half of spec 02 §2.2's reinstallDriver.
-		if err := driver.adb.Uninstall(ctx, AgentAppPackage); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		if err := driver.adb.Uninstall(ctx, AgentTestPackage); err != nil && firstErr == nil {
-			firstErr = err
+		cleanupErrs = append(cleanupErrs,
+			driver.adb.Uninstall(cleanupCtx, AgentAppPackage),
+			driver.adb.Uninstall(cleanupCtx, AgentTestPackage),
+		)
+	}
+	return errors.Join(cleanupErrs...)
+}
+
+func (driver *Driver) drainRecordings(ctx context.Context) []error {
+	driver.recMu.Lock()
+	ids := make([]device.CaptureID, 0, len(driver.recordings))
+	for id := range driver.recordings {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	recordings := driver.recordings
+	driver.recordings = nil
+	driver.recMu.Unlock()
+
+	errs := make([]error, 0, len(ids))
+	for _, id := range ids {
+		recording := recordings[id]
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordingFinalizeTimeout)
+		err := recording.recorder.stop(cleanupCtx, recording.sinkPath)
+		cancel()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("stopping android screen recording %q: %w", id, err))
 		}
 	}
-	return firstErr
+	return errs
 }
 
 func (driver *Driver) setConn(conn *grpcwire.Conn) {
@@ -735,6 +758,12 @@ func (driver *Driver) StartScreenRecording(
 		return "", err
 	}
 	devicePath := "/sdcard/" + base
+	id := device.CaptureID(sink)
+	driver.recMu.Lock()
+	defer driver.recMu.Unlock()
+	if _, exists := driver.recordings[id]; exists {
+		return "", fmt.Errorf("an android screen recording is already running for %q", id)
+	}
 	spawn := driver.spawnRecorder
 	if spawn == nil {
 		spawn = driver.realSpawnRecorder
@@ -743,13 +772,10 @@ func (driver *Driver) StartScreenRecording(
 	if err != nil {
 		return "", fmt.Errorf("starting android screen recording: %w", err)
 	}
-	id := device.CaptureID(sink)
-	driver.recMu.Lock()
 	if driver.recordings == nil {
 		driver.recordings = map[device.CaptureID]androidRecording{}
 	}
 	driver.recordings[id] = androidRecording{recorder: recorder, sinkPath: sink}
-	driver.recMu.Unlock()
 	return id, nil
 }
 
@@ -823,6 +849,7 @@ func (r *adbRecorder) adb(ctx context.Context, args ...string) ([]byte, error) {
 // process today; if concurrent recordings on one device ever appear, match the
 // pid screenrecord was started with instead.
 func (r *adbRecorder) stop(ctx context.Context, sinkPath string) error {
+	var stopErrs []error
 	interrupted := true
 	if _, err := r.adb(ctx, "shell", "pkill", "-INT", "screenrecord"); err != nil {
 		// A device without pkill still has the local child: worse output than a
@@ -846,18 +873,27 @@ func (r *adbRecorder) stop(ctx context.Context, sinkPath string) error {
 		select {
 		case <-exited:
 		case <-timer.C:
+			stopErrs = append(stopErrs, fmt.Errorf(
+				"screenrecord did not exit within %v", recordingFinalizeTimeout))
 			if interrupted && r.cmd.Process != nil {
 				_ = r.cmd.Process.Signal(os.Interrupt)
 			}
 		}
 	}
-	if out, err := r.adb(ctx, "pull", r.devicePath, sinkPath); err != nil {
-		return fmt.Errorf("adb pull: %w: %s", err, strings.TrimSpace(string(out)))
+	artifactCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordingFinalizeTimeout)
+	defer cancel()
+	if out, err := r.adb(artifactCtx, "pull", r.devicePath, sinkPath); err != nil {
+		stopErrs = append(stopErrs, fmt.Errorf(
+			"adb pull: %w: %s", err, strings.TrimSpace(string(out))))
+		if removeErr := os.Remove(sinkPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			stopErrs = append(stopErrs, fmt.Errorf("removing partial recording %q: %w", sinkPath, removeErr))
+		}
 	}
-	// Best-effort cleanup: a stale /sdcard copy wastes space but does not fail
-	// the recording that already reached the host.
-	_, _ = r.adb(ctx, "shell", "rm", "-f", r.devicePath)
-	return nil
+	if out, err := r.adb(artifactCtx, "shell", "rm", "-f", r.devicePath); err != nil {
+		stopErrs = append(stopErrs, fmt.Errorf(
+			"removing device recording: %w: %s", err, strings.TrimSpace(string(out))))
+	}
+	return errors.Join(stopErrs...)
 }
 
 // SetLocation enables the agent's mock providers first, then pushes the
@@ -997,6 +1033,18 @@ func (driver *Driver) Capabilities() device.Capabilities {
 // its payload chunk — the metadata is idempotent, which keeps the agent free
 // of first-frame special cases. One rpc moves one file.
 func (driver *Driver) AddMedia(ctx context.Context, request device.AddMediaRequest) error {
+	if len(request.Files) == 0 {
+		return nil
+	}
+	apiLevel, err := driver.adb.APILevel(ctx)
+	if err != nil {
+		return fmt.Errorf("addMedia: determining Android API level: %w", err)
+	}
+	if apiLevel < 29 {
+		return fmt.Errorf(
+			"%w: addMedia requires Android API 29+, device reports API %d",
+			device.ErrUnsupported, apiLevel)
+	}
 	for _, file := range request.Files {
 		if err := driver.addMediaFile(ctx, file.Path); err != nil {
 			return err
@@ -1010,27 +1058,23 @@ func (driver *Driver) addMediaFile(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	// ponytail: whole-file read; media links are photos and short
-	// clips, stream from disk if that ceiling is ever hit.
-	data, err := os.ReadFile(path)
+	media, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("addMedia: %w", err)
 	}
+	defer func() { _ = media.Close() }()
 	extension := strings.TrimPrefix(filepath.Ext(path), ".")
 	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 
-	chunks := chunkPayload(data)
-	frames := make(chan []byte, len(chunks))
-	for _, chunk := range chunks {
-		frames <- pbwire.AddMediaRequest{
-			Payload:   &pbwire.Payload{Data: chunk},
-			MediaName: name,
-			MediaExt:  extension,
-		}.Marshal()
-	}
-	close(frames)
-	reply, err := conn.InvokeClientStream(ctx, pbwire.StreamAddMedia, frames)
-	if err != nil {
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	frames := make(chan []byte, 1)
+	producerErr := make(chan error, 1)
+	go streamMediaFrames(streamCtx, media, name, extension, frames, producerErr)
+	reply, invokeErr := conn.InvokeClientStream(streamCtx, pbwire.StreamAddMedia, frames)
+	cancel()
+	readErr := <-producerErr
+	if err := errors.Join(readErr, invokeErr); err != nil {
 		return err
 	}
 	var response pbwire.AddMediaResponse
@@ -1040,18 +1084,54 @@ func (driver *Driver) addMediaFile(ctx context.Context, path string) error {
 	return nil
 }
 
-// chunkPayload always yields at least one chunk, so an empty file still
-// sends one frame carrying the name and extension.
-func chunkPayload(data []byte) [][]byte {
-	if len(data) == 0 {
-		return [][]byte{nil}
+func streamMediaFrames(
+	ctx context.Context,
+	media io.Reader,
+	name string,
+	extension string,
+	frames chan<- []byte,
+	result chan<- error,
+) {
+	defer close(frames)
+	buffer := make([]byte, mediaChunkBytes)
+	sent := false
+	for {
+		read, err := media.Read(buffer)
+		if read > 0 {
+			sent = true
+			message := pbwire.AddMediaRequest{
+				Payload:   &pbwire.Payload{Data: buffer[:read]},
+				MediaName: name,
+				MediaExt:  extension,
+			}.Marshal()
+			select {
+			case frames <- message:
+			case <-ctx.Done():
+				result <- ctx.Err()
+				return
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			if !sent {
+				select {
+				case frames <- pbwire.AddMediaRequest{
+					Payload:   &pbwire.Payload{},
+					MediaName: name,
+					MediaExt:  extension,
+				}.Marshal():
+				case <-ctx.Done():
+					result <- ctx.Err()
+					return
+				}
+			}
+			result <- nil
+			return
+		}
+		if err != nil {
+			result <- fmt.Errorf("addMedia: reading %q: %w", name, err)
+			return
+		}
 	}
-	chunks := make([][]byte, 0, len(data)/mediaChunkBytes+1)
-	for start := 0; start < len(data); start += mediaChunkBytes {
-		end := min(start+mediaChunkBytes, len(data))
-		chunks = append(chunks, data[start:end])
-	}
-	return chunks
 }
 
 func (driver *Driver) IsAirplaneModeEnabled(ctx context.Context) (bool, error) {

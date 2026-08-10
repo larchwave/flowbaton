@@ -186,6 +186,32 @@ func TestAdbExecutableFollowsAndroidHome(t *testing.T) {
 	}
 }
 
+func TestAPILevelReadsTheImmutableSDKProperty(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{output: []byte("28\n")}
+	level, err := NewAdb("emulator-5554", runner).APILevel(context.Background())
+	if err != nil {
+		t.Fatalf("APILevel() error = %v", err)
+	}
+	if level != 28 {
+		t.Fatalf("APILevel() = %d, want 28", level)
+	}
+	want := []string{"-s", "emulator-5554", "shell", "getprop", "ro.build.version.sdk"}
+	if got := runner.calls[0][1:]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("argv = %v, want %v", got, want)
+	}
+}
+
+func TestAPILevelRejectsAnInvalidProperty(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{output: []byte("unknown\n")}
+	if _, err := NewAdb("emulator-5554", runner).APILevel(context.Background()); err == nil {
+		t.Fatal("APILevel accepted a non-numeric SDK property")
+	}
+}
+
 func TestAdbRequiresASerialForDeviceScopedCommands(t *testing.T) {
 	t.Parallel()
 

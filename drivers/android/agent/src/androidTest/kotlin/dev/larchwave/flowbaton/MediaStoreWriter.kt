@@ -5,10 +5,15 @@ import android.content.ContentValues
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import io.grpc.Context
+import java.io.InputStream
+import java.util.concurrent.CancellationException
 
 /** Lands a streamed addMedia payload in MediaStore, classified by extension. */
 object MediaStoreWriter {
-    fun write(resolver: ContentResolver, mediaName: String, mediaExt: String, data: ByteArray) {
+    private const val BUFFER_BYTES = 64 * 1024
+
+    fun write(resolver: ContentResolver, mediaName: String, mediaExt: String, data: InputStream) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             throw UnsupportedOperationException(
                 "addMedia needs the API 29+ scoped MediaStore insert path",
@@ -28,13 +33,41 @@ object MediaStoreWriter {
         val uri =
             resolver.insert(collectionFor(mime), values)
                 ?: throw IllegalStateException("MediaStore refused the insert for $mediaName")
-        val stream =
-            resolver.openOutputStream(uri)
-                ?: throw IllegalStateException("MediaStore returned no stream for $uri")
-        stream.use { it.write(data) }
-        values.clear()
-        values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-        resolver.update(uri, values, null, null)
+        try {
+            val stream =
+                resolver.openOutputStream(uri)
+                    ?: throw IllegalStateException("MediaStore returned no stream for $uri")
+            stream.use { output ->
+                val buffer = ByteArray(BUFFER_BYTES)
+                while (true) {
+                    if (Context.current().isCancelled) {
+                        throw CancellationException("addMedia was cancelled")
+                    }
+                    val read = data.read(buffer)
+                    if (read < 0) break
+                    output.write(buffer, 0, read)
+                }
+            }
+            if (Context.current().isCancelled) {
+                throw CancellationException("addMedia was cancelled")
+            }
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            if (resolver.update(uri, values, null, null) != 1) {
+                throw IllegalStateException("MediaStore did not publish $uri")
+            }
+        } catch (failure: Throwable) {
+            try {
+                if (resolver.delete(uri, null, null) != 1) {
+                    failure.addSuppressed(
+                        IllegalStateException("MediaStore did not remove partial output $uri"),
+                    )
+                }
+            } catch (cleanupFailure: Throwable) {
+                failure.addSuppressed(cleanupFailure)
+            }
+            throw failure
+        }
     }
 
     private fun mimeFor(ext: String): String =

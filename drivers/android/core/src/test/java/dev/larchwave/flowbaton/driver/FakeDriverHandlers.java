@@ -1,5 +1,7 @@
 package dev.larchwave.flowbaton.driver;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 
 /** Recording fake for server contract tests; set {@link #failure} to make every handler throw. */
@@ -84,11 +86,11 @@ final class FakeDriverHandlers implements FlowBatonDriverHandlers {
     }
 
     @Override
-    public void addMedia(String mediaName, String mediaExt, byte[] data) {
+    public void addMedia(String mediaName, String mediaExt, InputStream data) throws IOException {
         failIfArmed();
         this.mediaName = mediaName;
         this.mediaExt = mediaExt;
-        this.mediaData = data;
+        this.mediaData = data.readAllBytes();
     }
 
     @Override

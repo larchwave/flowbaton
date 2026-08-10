@@ -220,6 +220,21 @@ func (adb *Adb) KeyboardShown(ctx context.Context) (bool, error) {
 	return strings.Contains(string(output), "mInputShown=true"), nil
 }
 
+// APILevel reads Android's immutable SDK property without starting the agent
+// or mutating device state. Runtime-gated operations use it before upload.
+func (adb *Adb) APILevel(ctx context.Context) (int, error) {
+	output, err := adb.shellOutput(ctx, "getprop", "ro.build.version.sdk")
+	if err != nil {
+		return 0, err
+	}
+	raw := strings.TrimSpace(string(output))
+	level, err := strconv.Atoi(raw)
+	if err != nil || level < 1 {
+		return 0, fmt.Errorf("adb: ro.build.version.sdk reported %q, want a positive integer", raw)
+	}
+	return level, nil
+}
+
 // Install replaces an existing install (-r): the agent APKs are reinstalled
 // per session, and a plain install fails on the second one.
 func (adb *Adb) Install(ctx context.Context, apkPath string) error {

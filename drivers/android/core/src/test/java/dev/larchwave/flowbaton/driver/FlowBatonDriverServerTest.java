@@ -111,6 +111,22 @@ public final class FlowBatonDriverServerTest {
     }
 
     @Test
+    public void incomingMediaUsesBoundedDiskSpoolingAndDeletesItsTemporaryFile() throws Exception {
+        IncomingMedia incoming = new IncomingMedia(8);
+        incoming.append(new byte[] {0, 1, 2, 3});
+        incoming.append(new byte[] {4, 5, 6, 7});
+        try {
+            incoming.append(new byte[] {8});
+            fail("incoming media accepted bytes above its configured ceiling");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("ceiling"));
+        }
+        assertTrue(incoming.path().toFile().exists());
+        incoming.close();
+        assertTrue(!incoming.path().toFile().exists());
+    }
+
+    @Test
     public void anyHandlerFailureCarriesTheSpecErrorContract() throws Exception {
         FakeDriverHandlers handlers = new FakeDriverHandlers();
         handlers.failure =

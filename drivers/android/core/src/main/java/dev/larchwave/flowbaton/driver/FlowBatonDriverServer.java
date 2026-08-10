@@ -11,7 +11,6 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.ServerCalls;
 import io.grpc.stub.StreamObserver;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
@@ -38,6 +37,7 @@ public final class FlowBatonDriverServer implements AutoCloseable {
 
     public static final int KEEPALIVE_TIMEOUT_SECONDS = 20;
     public static final int MAX_CONNECTION_IDLE_MINUTES = 30;
+    public static final long MAX_MEDIA_BYTES = 512L * 1024L * 1024L;
 
     public static final Metadata.Key<String> ERROR_TYPE_TRAILER = trailerKey("error-type");
     public static final Metadata.Key<String> ERROR_MESSAGE_TRAILER = trailerKey("error-message");
@@ -228,8 +228,8 @@ public final class FlowBatonDriverServer implements AutoCloseable {
         return ServerCalls.asyncClientStreamingCall(
                 (StreamObserver<byte[]> observer) ->
                         new StreamObserver<byte[]>() {
-                            private final ByteArrayOutputStream data =
-                                    new ByteArrayOutputStream();
+                            private final IncomingMedia data =
+                                    new IncomingMedia(MAX_MEDIA_BYTES);
                             private String mediaName = "";
                             private String mediaExt = "";
                             private boolean failed;
@@ -245,16 +245,15 @@ public final class FlowBatonDriverServer implements AutoCloseable {
                                     if (mediaExt.isEmpty()) {
                                         mediaExt = chunk.mediaExt();
                                     }
-                                    data.write(chunk.payload(), 0, chunk.payload().length);
+                                    data.append(chunk.payload());
                                 } catch (Throwable failure) {
-                                    failed = true;
-                                    observer.onError(internalError(failure));
+                                    fail(failure, true);
                                 }
                             }
 
                             @Override
                             public void onError(Throwable failure) {
-                                failed = true;
+                                fail(failure, false);
                             }
 
                             @Override
@@ -262,14 +261,29 @@ public final class FlowBatonDriverServer implements AutoCloseable {
                                 if (failed) {
                                     return;
                                 }
-                                try {
-                                    handlers.addMedia(mediaName, mediaExt, data.toByteArray());
+                                try (data; InputStream input = data.openInputStream()) {
+                                    handlers.addMedia(mediaName, mediaExt, input);
                                 } catch (Throwable failure) {
                                     observer.onError(internalError(failure));
                                     return;
                                 }
                                 observer.onNext(EMPTY_MESSAGE);
                                 observer.onCompleted();
+                            }
+
+                            private void fail(Throwable failure, boolean report) {
+                                if (failed) {
+                                    return;
+                                }
+                                failed = true;
+                                try {
+                                    data.close();
+                                } catch (Throwable cleanupFailure) {
+                                    failure.addSuppressed(cleanupFailure);
+                                }
+                                if (report) {
+                                    observer.onError(internalError(failure));
+                                }
                             }
                         });
     }
