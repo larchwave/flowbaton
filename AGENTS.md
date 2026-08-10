@@ -1,7 +1,9 @@
 # FlowBaton agent guide
 
 FlowBaton is a mobile UI automation toolkit: a Go host CLI, an Android device
-agent, and an iOS Simulator runner. Test flows are plain YAML.
+agent, and an iOS runner that drives Simulators and physical devices (iOS 17+
+hardware over usbmuxd). Test flows are plain YAML. `-p ios` covers both iOS
+flavors — the UDID decides whether a Simulator or an attached device runs.
 
 ## CLI surface
 

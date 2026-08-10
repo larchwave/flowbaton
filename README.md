@@ -80,6 +80,19 @@ flowbaton test -p ios --device <simulator-udid> path/to/flow.yaml
 ```
 
 Find a booted Simulator's UDID with `xcrun simctl list devices booted`.
+
+For a physical iPhone or iPad (iOS 17+), build the device runner once —
+this needs Xcode with a signed-in Apple ID (a free account works, with
+7-day profiles) — then run flows over USB; no sudo, no extra daemons:
+
+```sh
+export FLOWBATON_IOS_TEAM=<your team id>   # Xcode > Settings > Accounts
+scripts/build-ios-device-runner.sh
+flowbaton test -p ios --device <device-udid> path/to/flow.yaml
+```
+
+`flowbaton list-devices -p ios` shows attached hardware alongside
+Simulators; the same `-p ios` picks the right driver from the UDID.
 Record a run to a video with `flowbaton record path/to/flow.yaml`. Run
 `flowbaton` with no arguments to print the command summary.
 

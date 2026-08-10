@@ -9,9 +9,12 @@ options:
 settings:
   base:
     CODE_SIGN_STYLE: Automatic
+    # Physical-device builds need a signing team. Export FLOWBATON_IOS_TEAM
+    # before `xcodegen generate`; simulator-only builds may leave it unset.
+    DEVELOPMENT_TEAM: ${FLOWBATON_IOS_TEAM}
     GENERATE_INFOPLIST_FILE: true
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
-    SUPPORTED_PLATFORMS: iphonesimulator
+    SUPPORTED_PLATFORMS: iphoneos iphonesimulator
     SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1,2"
 
