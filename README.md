@@ -23,7 +23,8 @@ appId: com.example.app
 ## Install
 
 ```sh
-brew install larchwave/flowbaton/flowbaton
+brew tap larchwave/flowbaton
+brew install flowbaton
 ```
 
 Or with Go:
