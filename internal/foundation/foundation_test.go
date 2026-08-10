@@ -15,9 +15,9 @@ func TestModuleIdentity(t *testing.T) {
 	contents := readFile(t, "go.mod")
 	for _, want := range []string{
 		"module github.com/larchwave/flowbaton",
-		// The MCP Go SDK requires Go 1.25, and the CI toolchain satisfies that
+		// go-ios requires Go 1.26, and the CI toolchain (1.26.1) satisfies that
 		// minimum. See docs/dependency-policy.md.
-		"go 1.25.0",
+		"go 1.26.0",
 	} {
 		if !strings.Contains(contents, want) {
 			t.Errorf("go.mod does not contain %q", want)

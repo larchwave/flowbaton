@@ -22,7 +22,7 @@ pass the full repository checks.
 
 | Tool | Version | Role |
 | --- | --- | --- |
-| Go | 1.26.1 in CI; module floor 1.25 | Host, CLI, and contract tests |
+| Go | 1.26.1 in CI; module floor 1.26 (raised by go-ios v1.2.0) | Host, CLI, and contract tests |
 | GoReleaser | 2.17.0 | Archives, checksums, and SBOM generation |
 | Syft | 1.42.3 | Release SBOM generation |
 | XcodeGen | 2.44.1 | Build-only MIT-licensed Xcode project generator downloaded by CI; the release archive SHA-256 is `a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73`; it is not shipped in FlowBaton |
@@ -47,6 +47,19 @@ The direct Go modules are declared in `go.mod`; their resolved checksums are in
 - multimodal AI provider clients.
 - PostgreSQL transactions, connection pooling, advisory-lock schema application, and
   `LISTEN/NOTIFY`-ready distributed session coordination through `pgx/v5`.
+- physical iOS device transport (usbmuxd enumeration, app install, XCUITest
+  launch, port forwarding, iOS 17+ tunneling) through `go-ios`.
+
+`github.com/danielpaulus/go-ios` v1.2.0 is the minimum supported physical-iOS
+transport. It is MIT licensed and is used instead of shelling out to a
+separately installed go-ios binary so FlowBaton stays a single self-contained
+binary with typed calls; its declared `go 1.26` raised the module floor from
+1.25 to 1.26 (CI already runs 1.26.1). Every go-ios import is confined to
+`internal/iosdevice`, whose boundary tests pin the exact symbols FlowBaton
+calls; a go-ios API break fails at compile/test time, not on a device.
+Hardware integration tests run only against the device named by
+`FLOWBATON_TEST_IOS_DEVICE_UDID`; absence of that variable is the sole skip
+path.
 
 `github.com/jackc/pgx/v5` v5.10.0 is the minimum supported PostgreSQL driver.
 It is MIT licensed, supports the module's Go floor, and is used instead of a
