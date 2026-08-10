@@ -109,11 +109,13 @@ func routeCases() []routeCase {
 		{
 			name: "pressKey",
 			call: func(ctx context.Context, client *Client) error {
-				return client.PressKey(ctx, KeyReturn)
+				return client.PressKey(ctx, KeyReturn, []string{"com.example.a"})
 			},
 			wantMethod: http.MethodPost,
 			wantPath:   "/pressKey",
-			wantBody:   map[string]any{"key": "return"},
+			wantBody: map[string]any{
+				"key": "return", "appIds": []any{"com.example.a"},
+			},
 		},
 		{
 			name: "pressButton",

@@ -21,7 +21,7 @@ public protocol DeviceAutomation: Sendable {
   func touch(x: Double, y: Double, duration: Double?) throws
   func screenshot(compressed: Bool) throws -> Data
   func isScreenStatic() throws -> Bool
-  func pressKey(_ key: String) throws
+  func pressKey(_ key: String, appIDs: [String]) throws
   func pressButton(_ button: String) throws
   func eraseText(charactersToErase: Int, appIDs: [String]) throws
   func deviceInfo() throws -> DeviceInfoPayload

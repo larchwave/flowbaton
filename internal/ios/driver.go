@@ -3,15 +3,18 @@ package ios
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/larchwave/flowbaton/internal/device"
@@ -63,6 +66,10 @@ type Driver struct {
 	// It is a field so a test drives the start/stop lifecycle without a booted
 	// simulator; nil means spawn for real.
 	spawnRecorder func(ctx context.Context, args []string) (screenRecorder, error)
+	// ClearAppState preserves the installed bundle across the uninstall. These
+	// seams keep the filesystem work deterministic in tests.
+	makeTemporaryDirectory func() (string, error)
+	copyAppBundle          func(context.Context, string, string) error
 
 	// runner names a prebuilt runner Open may start itself; nil leaves the
 	// runner the operator's job. process is the child it started, so Close can
@@ -125,7 +132,7 @@ func (driver *Driver) Open(ctx context.Context) error {
 // should decide its fate. An operator-started runner is left alone for the
 // same reason.
 func (driver *Driver) Close(context.Context) error {
-	return driver.stopRunnerProcess()
+	return errors.Join(driver.stopAllRecordings(), driver.stopRunnerProcess())
 }
 
 func (driver *Driver) DeviceInfo(ctx context.Context) (device.DeviceInfo, error) {
@@ -170,12 +177,59 @@ func (driver *Driver) KillApp(ctx context.Context, request device.AppRequest) er
 	return driver.simctl.Terminate(ctx, request.AppID)
 }
 
-// ClearAppState uninstalls. A simulator has no per-app "clear data" verb, and
-// reporting success without clearing anything would leave a flow running
-// against the previous session's data.
+// ClearAppState preserves the installed application bundle, uninstalls it to
+// clear its data container, then reinstalls the same bundle. The engine applies
+// permissions and launches only after this call succeeds.
 func (driver *Driver) ClearAppState(ctx context.Context, request device.AppRequest) error {
-	return driver.simctl.Uninstall(ctx, request.AppID)
+	installedPath, err := driver.simctl.AppContainer(ctx, request.AppID)
+	if err != nil {
+		return fmt.Errorf("locating installed iOS application %q: %w", request.AppID, err)
+	}
+	makeTemporaryDirectory := driver.makeTemporaryDirectory
+	if makeTemporaryDirectory == nil {
+		makeTemporaryDirectory = func() (string, error) {
+			return os.MkdirTemp("", "flowbaton-ios-clear-state-")
+		}
+	}
+	temporaryDirectory, err := makeTemporaryDirectory()
+	if err != nil {
+		return fmt.Errorf("creating temporary iOS application directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(temporaryDirectory) }()
+
+	bundleName := filepath.Base(filepath.Clean(installedPath))
+	if bundleName == "." || bundleName == string(filepath.Separator) {
+		return fmt.Errorf("installed iOS application path %q has no bundle name", installedPath)
+	}
+	preservedPath := filepath.Join(temporaryDirectory, bundleName)
+	copyAppBundle := driver.copyAppBundle
+	if copyAppBundle == nil {
+		copyAppBundle = copyIOSAppBundle
+	}
+	if err := copyAppBundle(ctx, installedPath, preservedPath); err != nil {
+		return fmt.Errorf("preserving installed iOS application %q: %w", request.AppID, err)
+	}
+	if err := driver.simctl.Uninstall(ctx, request.AppID); err != nil {
+		return err
+	}
+	restoreContext, cancelRestore := context.WithTimeout(
+		context.WithoutCancel(ctx), iosAppRestoreTimeout)
+	defer cancelRestore()
+	if err := driver.simctl.Install(restoreContext, preservedPath); err != nil {
+		return fmt.Errorf("reinstalling cleared iOS application %q: %w", request.AppID, err)
+	}
+	return nil
 }
+
+func copyIOSAppBundle(ctx context.Context, source, destination string) error {
+	output, err := exec.CommandContext(ctx, "ditto", source, destination).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ditto: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+const iosAppRestoreTimeout = 30 * time.Second
 
 func (driver *Driver) ClearKeychain(ctx context.Context) error {
 	return driver.simctl.ResetKeychain(ctx)
@@ -200,7 +254,7 @@ func (driver *Driver) PressKey(ctx context.Context, request device.PressKeyReque
 	if !ok {
 		return fmt.Errorf("%w: iOS has no key %q", device.ErrUnsupported, request.Code)
 	}
-	return driver.client.PressKey(ctx, key)
+	return driver.client.PressKey(ctx, key, driver.defaultAppIDs(request.AppIDs))
 }
 
 // keyCodes are the keys the frozen contract's pressKey route accepts. A code
@@ -432,11 +486,9 @@ func swipeGridEnd(
 		device.ErrUnsupported, direction)
 }
 
-// BackPress is a no-op: specs/02-device-drivers.md line 49 defines that iOS
-// has no back gesture at the driver level. Returning an error would fail every
-// flow that shares a back step with Android.
+// BackPress agrees with Capabilities: iOS has no platform back gesture.
 func (driver *Driver) BackPress(context.Context) error {
-	return nil
+	return fmt.Errorf("%w: iOS has no platform back gesture", device.ErrUnsupported)
 }
 
 func (driver *Driver) InputText(ctx context.Context, request device.InputTextRequest) error {
@@ -458,7 +510,7 @@ func (driver *Driver) OpenLink(ctx context.Context, request device.OpenLinkReque
 // HideKeyboard has no route of its own. The keyboard dismisses on return,
 // which is the gesture a person would use.
 func (driver *Driver) HideKeyboard(ctx context.Context) error {
-	return driver.client.PressKey(ctx, KeyReturn)
+	return driver.client.PressKey(ctx, KeyReturn, driver.defaultAppIDs(nil))
 }
 
 func (driver *Driver) TakeScreenshot(
@@ -513,17 +565,55 @@ func (driver *Driver) StopScreenRecording(
 	if !ok {
 		return nil, fmt.Errorf("no iOS screen recording is running for %q", id)
 	}
-	if err := recording.recorder.stop(); err != nil {
-		return nil, fmt.Errorf("stopping iOS screen recording: %w", err)
+	if err := stopIOSRecording(recording); err != nil {
+		return nil, err
 	}
 	return []device.Artifact{{Kind: "recording", Path: recording.outputPath}}, nil
+}
+
+func (driver *Driver) stopAllRecordings() error {
+	driver.recMu.Lock()
+	recordings := driver.recordings
+	driver.recordings = nil
+	driver.recMu.Unlock()
+
+	ids := make([]string, 0, len(recordings))
+	for id := range recordings {
+		ids = append(ids, string(id))
+	}
+	slices.Sort(ids)
+	errs := make([]error, 0, len(ids))
+	for _, rawID := range ids {
+		if err := stopIOSRecording(recordings[device.CaptureID(rawID)]); err != nil {
+			errs = append(errs, fmt.Errorf("screen recording %q: %w", rawID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func stopIOSRecording(recording iosRecording) error {
+	stopErr := recording.recorder.stop()
+	info, statErr := os.Stat(recording.outputPath)
+	if statErr == nil && (!info.Mode().IsRegular() || info.Size() == 0) {
+		statErr = fmt.Errorf("artifact %q is not a non-empty regular file", recording.outputPath)
+	}
+	if statErr != nil {
+		statErr = fmt.Errorf("validating iOS screen recording: %w", statErr)
+	}
+	if stopErr != nil {
+		stopErr = fmt.Errorf("stopping iOS screen recording: %w", stopErr)
+	}
+	return errors.Join(stopErr, statErr)
 }
 
 // realIOSRecorder spawns the simctl recorder. It uses exec.Command, NOT
 // CommandContext: cancelling the context would SIGKILL simctl and leave a
 // truncated .mov, whereas stop() sends SIGINT so the recorder writes the moov
 // atom and finalizes the file.
-func realIOSRecorder(_ context.Context, args []string) (screenRecorder, error) {
+func realIOSRecorder(ctx context.Context, args []string) (screenRecorder, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cmd := exec.Command("xcrun", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -535,10 +625,11 @@ func realIOSRecorder(_ context.Context, args []string) (screenRecorder, error) {
 	}
 	// Start waits for the capture marker so a later interrupt finalizes a valid
 	// video file.
-	if err := awaitRecordingStarted(stdout); err != nil {
+	startupErr := awaitRecordingStartedWithin(ctx, stdout, iosRecordingStartupTimeout)
+	if startupErr != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return nil, err
+		return nil, startupErr
 	}
 	// simctl keeps talking after that line, and a full pipe would wedge it.
 	go func() { _, _ = io.Copy(io.Discard, stdout) }()
@@ -553,6 +644,23 @@ func realIOSRecorder(_ context.Context, args []string) (screenRecorder, error) {
 //	Recording completed. Writing to disk.
 //	Wrote video to: capture.mp4
 const recordingStartedMarker = "Recording started"
+
+const iosRecordingStartupTimeout = 15 * time.Second
+
+func awaitRecordingStartedWithin(ctx context.Context, output io.Reader, timeout time.Duration) error {
+	started := make(chan error, 1)
+	go func() { started <- awaitRecordingStarted(output) }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case err := <-started:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return fmt.Errorf("timed out after %s", timeout)
+	}
+}
 
 // awaitRecordingStarted reads until the recorder says it is recording. A
 // recorder that ends without ever saying so is reported with what it did say,
@@ -583,10 +691,17 @@ func (r *execRecorder) stop() error {
 	if err := r.cmd.Process.Signal(os.Interrupt); err != nil {
 		return err
 	}
-	// The interrupt finishes the recording, so the resulting exit is ordinary.
-	// The caller checks the output path for the finalized file.
-	_ = r.cmd.Wait()
-	return nil
+	err := r.cmd.Wait()
+	if err == nil {
+		return nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() && status.Signal() == syscall.SIGINT {
+			return nil
+		}
+	}
+	return err
 }
 
 func (driver *Driver) SetLocation(ctx context.Context, location device.Location) error {

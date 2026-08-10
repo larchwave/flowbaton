@@ -130,7 +130,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/ios-http.json",
       "coverage": "contract-complete",
-      "sha256": "bfe573e32bcaf07392bb5b6766c795f5df0b44615066d832400a858662bc604e"
+      "sha256": "e2735a4c83a9940cef690cbf085232fdfe908b5b6016072ce1a50552e0b1c3b1"
     },
     {
       "id": "ios-swift-declarations",
@@ -138,7 +138,7 @@
       "language": "swift",
       "path": "drivers/ios/Sources/FlowBatonIOSRunner/WireContractV0.swift",
       "coverage": "contract-complete",
-      "sha256": "144ae958da6fca652c2a4ca1a447edde67028cf969500512cfc2d46d49159a30"
+      "sha256": "9bd0374518a742f7a3fcfda7a6cabc402712c6081c8b5c1fafe93b2164f545af"
     },
     {
       "id": "ios-g001-runtime",

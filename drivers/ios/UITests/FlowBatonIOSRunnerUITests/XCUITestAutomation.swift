@@ -136,11 +136,11 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     try onMain { try Self.foregroundApp(among: appIDs).keyboards.firstMatch.exists }
   }
 
-  func pressKey(_ key: String) throws {
+  func pressKey(_ key: String, appIDs: [String]) throws {
     guard let keyboardKey = Self.keyboardKeys[key] else {
       throw AutomationError.precondition("unsupported key \(key)")
     }
-    try onMain { try Self.foregroundApp(among: []).typeText(keyboardKey.rawValue) }
+    try onMain { try Self.foregroundApp(among: appIDs).typeText(keyboardKey.rawValue) }
   }
 
   func pressButton(_ button: String) throws {
@@ -325,6 +325,7 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     "Enter": .return, "Return": .return, "return": .return,
     "Backspace": .delete, "delete": .delete,
     "Tab": .tab, "tab": .tab,
+    "Space": .space, "space": .space,
     "Escape": .escape, "escape": .escape,
   ]
 

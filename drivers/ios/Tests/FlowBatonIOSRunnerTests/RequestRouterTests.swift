@@ -93,6 +93,18 @@ final class RequestRouterTests: XCTestCase {
     XCTAssertEqual(automation.touches[1].duration, 3)
   }
 
+  func testPressKeyCarriesTheActiveApplicationIDs() throws {
+    let automation = RecordingAutomation()
+    let response = RequestRouter(automation: automation).route(
+      request(
+        "POST", "/pressKey",
+        body: #"{"key":"return","appIds":["com.example.a"]}"#))
+    XCTAssertEqual(response.statusCode, 200)
+    XCTAssertEqual(automation.pressedKeys.count, 1)
+    XCTAssertEqual(automation.pressedKeys[0].key, "return")
+    XCTAssertEqual(automation.pressedKeys[0].appIDs, ["com.example.a"])
+  }
+
   func testScreenshotReadsItsFlagFromTheQueryAndReturnsBytes() throws {
     // The one route whose request is a query string and whose response is not
     // JSON. A compressed flag read as false would return a PNG where the host
@@ -226,7 +238,7 @@ final class RequestRouterTests: XCTestCase {
       "swipeV2": #"{"startX":0,"startY":0,"endX":1,"endY":1,"duration":1}"#,
       "inputText": #"{"text":"a","appIds":[]}"#,
       "touch": #"{"x":0,"y":0}"#,
-      "pressKey": #"{"key":"enter"}"#,
+      "pressKey": #"{"key":"enter","appIds":["com.example.a"]}"#,
       "pressButton": #"{"button":"home"}"#,
       "eraseText": #"{"charactersToErase":1,"appIds":[]}"#,
       "setOrientation": #"{"orientation":"portrait"}"#,
@@ -295,7 +307,12 @@ final class RecordingAutomation: DeviceAutomation, @unchecked Sendable {
     return true
   }
 
-  func pressKey(_ key: String) throws { try check() }
+  var pressedKeys: [(key: String, appIDs: [String])] = []
+
+  func pressKey(_ key: String, appIDs: [String]) throws {
+    try check()
+    pressedKeys.append((key: key, appIDs: appIDs))
+  }
   func pressButton(_ button: String) throws { try check() }
 
   func eraseText(charactersToErase: Int, appIDs: [String]) throws {

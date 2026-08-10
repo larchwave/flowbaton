@@ -68,6 +68,14 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 			want: []string{"simctl", "terminate", udid, "com.example.a"},
 		},
 		{
+			name: "app container",
+			call: func(ctx context.Context, simctl *Simctl) error {
+				_, err := simctl.AppContainer(ctx, "com.example.a")
+				return err
+			},
+			want: []string{"simctl", "get_app_container", udid, "com.example.a", "app"},
+		},
+		{
 			name: "uninstall",
 			call: func(ctx context.Context, simctl *Simctl) error { return simctl.Uninstall(ctx, "com.example.a") },
 			want: []string{"simctl", "uninstall", udid, "com.example.a"},
@@ -124,7 +132,7 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			runner := &recordingRunner{}
+			runner := &recordingRunner{output: []byte("/tmp/Probe.app\n")}
 			if err := test.call(context.Background(), NewSimctl(udid, runner)); err != nil {
 				t.Fatalf("%s error = %v", test.name, err)
 			}

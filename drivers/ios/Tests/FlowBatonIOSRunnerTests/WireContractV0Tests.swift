@@ -7,7 +7,7 @@ final class WireContractV0Tests: XCTestCase {
     XCTAssertEqual(IOSWireContractV0.contractVersion, "v0")
     XCTAssertEqual(
       IOSWireContractV0.descriptorSHA256,
-      "bfe573e32bcaf07392bb5b6766c795f5df0b44615066d832400a858662bc604e")
+      "e2735a4c83a9940cef690cbf085232fdfe908b5b6016072ce1a50552e0b1c3b1")
     XCTAssertEqual(IOSWireContractV0.bindHost, "127.0.0.1")
     XCTAssertEqual(IOSWireContractV0.defaultPort, 22_087)
     XCTAssertEqual(
@@ -71,8 +71,11 @@ final class WireContractV0Tests: XCTestCase {
           "ScreenStaticResponse", "object", required: ["isScreenStatic"],
           fields: [field("isScreenStatic", "boolean")]),
         schema(
-          "PressKeyRequest", "object", required: ["key"],
-          fields: [field("key", "string{delete,return,enter,tab,space,escape}")]),
+          "PressKeyRequest", "object", required: ["key", "appIds"],
+          fields: [
+            field("key", "string{delete,return,enter,tab,space,escape}"),
+            field("appIds", "array<string>"),
+          ]),
         schema(
           "PressButtonRequest", "object", required: ["button"],
           fields: [field("button", "string{home,lock}")]),

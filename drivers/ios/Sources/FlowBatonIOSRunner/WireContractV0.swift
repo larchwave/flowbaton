@@ -84,7 +84,7 @@ public enum IOSWireContractV0 {
   public static let schemaVersion = 1
   public static let contractVersion = "v0"
   public static let descriptorSHA256 =
-    "bfe573e32bcaf07392bb5b6766c795f5df0b44615066d832400a858662bc604e"
+    "e2735a4c83a9940cef690cbf085232fdfe908b5b6016072ce1a50552e0b1c3b1"
   public static let semanticManifest = [
     "descriptor|1|v0",
     "transport|http|127.0.0.1|22087",
@@ -236,6 +236,8 @@ public enum IOSWireContractV0 {
     "schema-field|PressButtonRequest|button|string{home,lock}",
     "schema|PressKeyRequest|object",
     "schema-required|PressKeyRequest|0|key",
+    "schema-required|PressKeyRequest|1|appIds",
+    "schema-field|PressKeyRequest|appIds|array<string>",
     "schema-field|PressKeyRequest|key|string{delete,return,enter,tab,space,escape}",
     "schema|RunningAppRequest|object",
     "schema-required|RunningAppRequest|0|appIds",
@@ -368,8 +370,11 @@ public enum IOSWireContractV0 {
       "ScreenStaticResponse", "object", required: ["isScreenStatic"],
       fields: [field("isScreenStatic", "boolean")]),
     schema(
-      "PressKeyRequest", "object", required: ["key"],
-      fields: [field("key", "string{delete,return,enter,tab,space,escape}")]),
+      "PressKeyRequest", "object", required: ["key", "appIds"],
+      fields: [
+        field("key", "string{delete,return,enter,tab,space,escape}"),
+        field("appIds", "array<string>"),
+      ]),
     schema(
       "PressButtonRequest", "object", required: ["button"],
       fields: [field("button", "string{home,lock}")]),

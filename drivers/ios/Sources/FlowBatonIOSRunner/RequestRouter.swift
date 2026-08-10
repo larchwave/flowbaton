@@ -89,7 +89,7 @@ public struct RequestRouter: Sendable {
 
     case "pressKey":
       let decoded: PressKeyRequest = try Self.decode(request)
-      try automation.pressKey(decoded.key)
+      try automation.pressKey(decoded.key, appIDs: decoded.appIds)
       return Self.empty()
 
     case "pressButton":
@@ -255,7 +255,10 @@ struct TouchRequest: Codable {
   let y: Double
   let duration: Double?
 }
-struct PressKeyRequest: Codable { let key: String }
+struct PressKeyRequest: Codable {
+  let key: String
+  let appIds: [String]
+}
 struct PressButtonRequest: Codable { let button: String }
 struct EraseTextRequest: Codable {
   let charactersToErase: Int

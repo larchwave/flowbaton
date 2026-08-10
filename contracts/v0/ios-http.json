@@ -76,7 +76,7 @@
     "TouchRequest": {"kind":"object","required":["x","y"],"fields":{"x":{"type":"number"},"y":{"type":"number"},"duration":{"type":"number"}}},
     "ScreenshotQuery": {"kind":"object","fields":{"compressed":{"type":"boolean"}}},
     "ScreenStaticResponse": {"kind":"object","required":["isScreenStatic"],"fields":{"isScreenStatic":{"type":"boolean"}}},
-    "PressKeyRequest": {"kind":"object","required":["key"],"fields":{"key":{"type":"string","enum":["delete","return","enter","tab","space","escape"]}}},
+    "PressKeyRequest": {"kind":"object","required":["key","appIds"],"fields":{"key":{"type":"string","enum":["delete","return","enter","tab","space","escape"]},"appIds":{"type":"array","items":"string"}}},
     "PressButtonRequest": {"kind":"object","required":["button"],"fields":{"button":{"type":"string","enum":["home","lock"]}}},
     "EraseTextRequest": {"kind":"object","required":["charactersToErase","appIds"],"fields":{"charactersToErase":{"type":"integer","minimum":0},"appIds":{"type":"array","items":"string"}}},
     "DeviceInfoResponse": {

@@ -177,10 +177,11 @@ func (client *Client) IsScreenStatic(ctx context.Context) (bool, error) {
 	return response.IsScreenStatic, nil
 }
 
-func (client *Client) PressKey(ctx context.Context, key Key) error {
+func (client *Client) PressKey(ctx context.Context, key Key, appIDs []string) error {
 	request := struct {
-		Key Key `json:"key"`
-	}{Key: key}
+		Key    Key      `json:"key"`
+		AppIDs []string `json:"appIds"`
+	}{Key: key, AppIDs: wireAppIDs(appIDs)}
 	_, err := client.do(ctx, http.MethodPost, "/pressKey", "", request, nil)
 	return err
 }

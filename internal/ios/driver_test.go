@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/larchwave/flowbaton/internal/device"
 )
@@ -87,17 +91,17 @@ func TestCapabilitiesReportTheSameRefusals(t *testing.T) {
 	}
 }
 
-func TestBackPressIsANoOpOnIOS(t *testing.T) {
+func TestBackPressIsUnsupportedOnIOS(t *testing.T) {
 	t.Parallel()
 
-	// specs/02-device-drivers.md line 49: "backPress() = no-op on iOS." It must
-	// not fail, and it must not reach the runner.
+	// Capabilities declares backPress unsupported. Call time must agree so a
+	// direct driver caller cannot record a successful step that did nothing.
 	var reached []string
 	driver := newTestDriver(t, func(_ http.ResponseWriter, request *http.Request) {
 		reached = append(reached, request.URL.Path)
 	})
-	if err := driver.BackPress(context.Background()); err != nil {
-		t.Fatalf("BackPress() error = %v, want a silent no-op", err)
+	if err := driver.BackPress(context.Background()); !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("BackPress() error = %v, want device.ErrUnsupported", err)
 	}
 	if len(reached) != 0 {
 		t.Fatalf("BackPress() called %v; iOS has no back", reached)
@@ -151,6 +155,29 @@ func TestLongPressUsesTheTouchRouteWithItsDuration(t *testing.T) {
 				t.Fatalf("duration = %#v, want %#v", got, test.wantDuration)
 			}
 		})
+	}
+}
+
+func TestPressKeyTargetsTheRememberedForegroundApplication(t *testing.T) {
+	t.Parallel()
+
+	var body struct {
+		Key    string   `json:"key"`
+		AppIDs []string `json:"appIds"`
+	}
+	driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode pressKey request: %v", err)
+		}
+		writeJSON(t, writer, map[string]any{})
+	})
+	driver.rememberLaunch("com.example.a")
+	if err := driver.PressKey(
+		context.Background(), device.PressKeyRequest{Code: device.KeyCode("enter")}); err != nil {
+		t.Fatalf("PressKey() error = %v", err)
+	}
+	if body.Key != "enter" || !reflect.DeepEqual(body.AppIDs, []string{"com.example.a"}) {
+		t.Fatalf("pressKey body = %#v, want enter targeting com.example.a", body)
 	}
 }
 
@@ -350,20 +377,46 @@ func TestLaunchAppGoesThroughSimctlWithItsArguments(t *testing.T) {
 	}
 }
 
-func TestClearAppStateUninstallsRatherThanPretending(t *testing.T) {
+func TestClearAppStatePreservesAndReinstallsTheApplication(t *testing.T) {
 	t.Parallel()
 
-	// A simulator has no per-app "clear data" verb. Uninstall is the operation
-	// that actually clears state, and pretending otherwise would leave a flow
-	// running against the previous session's data.
-	runner := &recordingRunner{}
+	// A simulator has no per-app "clear data" verb. The installed bundle must be
+	// preserved before uninstall so the engine can still grant permissions and
+	// launch it after this call returns.
+	source := filepath.Join(t.TempDir(), "Probe.app")
+	if err := os.Mkdir(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := &recordingRunner{output: []byte(source + "\n")}
 	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	temporaryRoot := filepath.Join(t.TempDir(), "clear-state")
+	driver.makeTemporaryDirectory = func() (string, error) {
+		if err := os.Mkdir(temporaryRoot, 0o755); err != nil {
+			return "", err
+		}
+		return temporaryRoot, nil
+	}
+	var copiedFrom, copiedTo string
+	driver.copyAppBundle = func(_ context.Context, from, to string) error {
+		copiedFrom, copiedTo = from, to
+		return os.Mkdir(to, 0o755)
+	}
 	if err := driver.ClearAppState(context.Background(), device.AppRequest{AppID: "com.example.a"}); err != nil {
 		t.Fatalf("ClearAppState() error = %v", err)
 	}
-	want := []string{"xcrun", "simctl", "uninstall", "UDID-1", "com.example.a"}
-	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
+	if copiedFrom != source || copiedTo != filepath.Join(temporaryRoot, "Probe.app") {
+		t.Fatalf("copied %q to %q, want %q to temporary Probe.app", copiedFrom, copiedTo, source)
+	}
+	want := [][]string{
+		{"xcrun", "simctl", "get_app_container", "UDID-1", "com.example.a", "app"},
+		{"xcrun", "simctl", "uninstall", "UDID-1", "com.example.a"},
+		{"xcrun", "simctl", "install", "UDID-1", filepath.Join(temporaryRoot, "Probe.app")},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("calls = %v, want %v", runner.calls, want)
+	}
+	if _, err := os.Stat(temporaryRoot); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("temporary bundle directory still exists after reinstall: %v", err)
 	}
 }
 
@@ -633,17 +686,21 @@ func TestScreenRecordingStartsAndStopsCleanly(t *testing.T) {
 		return rec, nil
 	}
 
+	output := filepath.Join(t.TempDir(), "out.mov")
 	id, err := driver.StartScreenRecording(
-		context.Background(), device.ScreenRecordingRequest{OutputPath: "/tmp/out.mov"})
+		context.Background(), device.ScreenRecordingRequest{OutputPath: output})
 	if err != nil {
 		t.Fatalf("StartScreenRecording() error = %v", err)
 	}
-	wantArgs := []string{"simctl", "io", "UDID-1", "recordVideo", "/tmp/out.mov"}
+	wantArgs := []string{"simctl", "io", "UDID-1", "recordVideo", output}
 	if !reflect.DeepEqual(gotArgs, wantArgs) {
 		t.Fatalf("recorder argv = %#v, want %#v", gotArgs, wantArgs)
 	}
 	if rec.stopped {
 		t.Fatal("the recorder was stopped before StopScreenRecording was called")
+	}
+	if err := os.WriteFile(output, []byte("video"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
 	artifacts, err := driver.StopScreenRecording(context.Background(), id)
@@ -653,7 +710,7 @@ func TestScreenRecordingStartsAndStopsCleanly(t *testing.T) {
 	if !rec.stopped {
 		t.Fatal("StopScreenRecording did not interrupt the recorder")
 	}
-	if len(artifacts) != 1 || artifacts[0].Path != "/tmp/out.mov" {
+	if len(artifacts) != 1 || artifacts[0].Path != output {
 		t.Fatalf("artifacts = %#v, want one at the sink path", artifacts)
 	}
 }
@@ -709,6 +766,70 @@ func TestStopScreenRecordingSurfacesAStopFailure(t *testing.T) {
 	}
 }
 
+func TestStopScreenRecordingRejectsAnEmptyArtifact(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	output := filepath.Join(t.TempDir(), "empty.mov")
+	driver.spawnRecorder = func(context.Context, []string) (screenRecorder, error) {
+		return &fakeIOSRecorder{}, nil
+	}
+	id, err := driver.StartScreenRecording(
+		context.Background(), device.ScreenRecordingRequest{OutputPath: output})
+	if err != nil {
+		t.Fatalf("StartScreenRecording() error = %v", err)
+	}
+	if err := os.WriteFile(output, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := driver.StopScreenRecording(context.Background(), id); err == nil {
+		t.Fatal("StopScreenRecording accepted an empty artifact")
+	}
+}
+
+func TestCloseDrainsOutstandingRecordingsIdempotently(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	first := &fakeIOSRecorder{}
+	second := &fakeIOSRecorder{}
+	recorders := []screenRecorder{first, second}
+	driver.spawnRecorder = func(context.Context, []string) (screenRecorder, error) {
+		recorder := recorders[0]
+		recorders = recorders[1:]
+		return recorder, nil
+	}
+	for _, name := range []string{"first.mov", "second.mov"} {
+		output := filepath.Join(t.TempDir(), name)
+		if _, err := driver.StartScreenRecording(
+			context.Background(), device.ScreenRecordingRequest{OutputPath: output}); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(output, []byte("video"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := driver.Close(context.Background()); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if !first.stopped || !second.stopped {
+		t.Fatalf("Close() stopped first=%v second=%v, want both", first.stopped, second.stopped)
+	}
+	if err := driver.Close(context.Background()); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+}
+
+func TestRecordingStartupHonorsCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := realIOSRecorder(ctx, []string{"simctl", "io", "no-device", "recordVideo", "out.mov"}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("realIOSRecorder() error = %v, want context.Canceled", err)
+	}
+}
+
 // simctl must reach its capture loop before an interrupt means "finalize"
 // rather than "stop during startup". The readiness line marks that boundary:
 //
@@ -738,6 +859,49 @@ func TestARecorderThatNeverStartsIsReported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Invalid device state") {
 		t.Fatalf("error = %q, want it to carry what simctl said", err)
+	}
+}
+
+func TestRecorderStartupWaitIsCancellableAndBounded(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name    string
+		context func() (context.Context, context.CancelFunc)
+		timeout time.Duration
+		want    error
+	}{
+		{
+			name: "cancellation",
+			context: func() (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx, func() {}
+			},
+			timeout: time.Second,
+			want:    context.Canceled,
+		},
+		{
+			name: "timeout",
+			context: func() (context.Context, context.CancelFunc) {
+				return context.WithCancel(context.Background())
+			},
+			timeout: time.Millisecond,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reader, writer := io.Pipe()
+			defer writer.Close()
+			ctx, cancel := test.context()
+			defer cancel()
+			err := awaitRecordingStartedWithin(ctx, reader, test.timeout)
+			if test.want != nil && !errors.Is(err, test.want) {
+				t.Fatalf("error = %v, want %v", err, test.want)
+			}
+			if test.want == nil && (err == nil || !strings.Contains(err.Error(), "timed out")) {
+				t.Fatalf("error = %v, want timeout", err)
+			}
+		})
 	}
 }
 

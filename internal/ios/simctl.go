@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -125,6 +126,24 @@ func (simctl *Simctl) Terminate(ctx context.Context, bundleID string) error {
 
 func (simctl *Simctl) Uninstall(ctx context.Context, bundleID string) error {
 	return simctl.run(ctx, []string{"uninstall", simctl.udid, bundleID}, true)
+}
+
+// AppContainer returns the installed .app bundle path, not its data container.
+// ClearAppState preserves that bundle before uninstalling the application.
+func (simctl *Simctl) AppContainer(ctx context.Context, bundleID string) (string, error) {
+	output, err := simctl.runOutput(
+		ctx, []string{"get_app_container", simctl.udid, bundleID, "app"}, true)
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSpace(string(output))
+	if path == "" {
+		return "", fmt.Errorf("simctl get_app_container returned an empty application path")
+	}
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("simctl get_app_container returned non-absolute application path %q", path)
+	}
+	return path, nil
 }
 
 func (simctl *Simctl) Install(ctx context.Context, appPath string) error {

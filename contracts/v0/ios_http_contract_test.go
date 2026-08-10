@@ -264,9 +264,11 @@ func expectedIOSShapes() map[string]completeExpectedShape {
 		"TouchRequest":         object([]string{"x", "y"}, map[string]string{"x": "number", "y": "number", "duration": "number"}),
 		"ScreenshotQuery":      object(nil, map[string]string{"compressed": "boolean"}),
 		"ScreenStaticResponse": object([]string{"isScreenStatic"}, map[string]string{"isScreenStatic": "boolean"}),
-		"PressKeyRequest":      object([]string{"key"}, map[string]string{"key": "string:enum=delete|return|enter|tab|space|escape"}),
-		"PressButtonRequest":   object([]string{"button"}, map[string]string{"button": "string:enum=home|lock"}),
-		"EraseTextRequest":     object([]string{"charactersToErase", "appIds"}, map[string]string{"charactersToErase": "integer:min=0", "appIds": "array:string"}),
+		"PressKeyRequest": object([]string{"key", "appIds"}, map[string]string{
+			"key": "string:enum=delete|return|enter|tab|space|escape", "appIds": "array:string",
+		}),
+		"PressButtonRequest": object([]string{"button"}, map[string]string{"button": "string:enum=home|lock"}),
+		"EraseTextRequest":   object([]string{"charactersToErase", "appIds"}, map[string]string{"charactersToErase": "integer:min=0", "appIds": "array:string"}),
 		"DeviceInfoResponse": object([]string{"widthPoints", "heightPoints", "widthPixels", "heightPixels"}, map[string]string{
 			"widthPoints": "number", "heightPoints": "number", "widthPixels": "number", "heightPixels": "number",
 		}),
