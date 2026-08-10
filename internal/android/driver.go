@@ -1019,20 +1019,7 @@ func (driver *Driver) WaitForAppToSettle(
 // matching ErrUnsupported at call time; preflight reads this so a flow is
 // refused before it runs rather than halfway through.
 func (driver *Driver) Capabilities() device.Capabilities {
-	return device.Capabilities{
-		Platform: Platform,
-		Features: map[string]bool{
-			"proxy":                 true,
-			"airplaneMode":          true,
-			"backPress":             true,
-			"browserChoice":         true,
-			"androidChromeDevTools": true,
-			"screenRecording":       true,
-			"onDeviceQuery":         false,
-			"deviceLogCapture":      true,
-			"crashArtifacts":        true,
-		},
-	}
+	return DeclaredCapabilities()
 }
 
 // AddMedia streams each file to the agent over the service's one

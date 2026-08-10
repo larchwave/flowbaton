@@ -66,27 +66,90 @@ func TestCheckRejectsFeatureOutsideDeclaredPlatforms(t *testing.T) {
 	}
 }
 
-func TestCheckUsesPlatformsForPlannedFeature(t *testing.T) {
+func TestCheckUsesPlatformsForPlatformLimitedFeature(t *testing.T) {
 	t.Parallel()
 
-	root := validFlow("/workspace/keychain.yaml")
+	root := validFlow("/workspace/back.yaml")
 	root.Commands = []model.Command{{
-		Kind:   model.CommandClearKeychain,
+		Kind:   model.CommandBack,
 		Source: testSource(root.Path, 4, 3),
 	}}
 	loader := newFakeFlowLoader(map[string]model.Flow{root.Path: root})
 	plan := model.ExecutionPlan{SelectedRoots: []string{root.Path}}
 
-	_, err := Check(context.Background(), plan, WithLoader(loader), WithPlatform(ExecutionPlatformAndroid))
+	_, err := Check(context.Background(), plan, WithLoader(loader), WithPlatform(ExecutionPlatformIOSSimulator))
 	violation := requireViolation(t, err, "unsupported_platform")
-	if violation.FeatureName != string(model.CommandClearKeychain) {
+	if violation.FeatureName != string(model.CommandBack) {
 		t.Fatalf("platform violation = %#v", violation)
 	}
 
 	if _, err := Check(context.Background(), plan,
 		WithLoader(newFakeFlowLoader(map[string]model.Flow{root.Path: root})),
-		WithPlatform(ExecutionPlatformIOSSimulator)); err != nil {
-		t.Fatalf("Check(ios-simulator): %v", err)
+		WithPlatform(ExecutionPlatformAndroid)); err != nil {
+		t.Fatalf("Check(android): %v", err)
+	}
+}
+
+func TestCheckUsesDriverCommandPlatformsBeforeStartup(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		platform ExecutionPlatform
+		command  model.Command
+		wantErr  bool
+	}{
+		{name: "web launch", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandLaunchApp}},
+		{name: "ios back", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandBack}, wantErr: true},
+		{name: "web back", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandBack}},
+		{name: "ios enter", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "ENTER"}},
+		{name: "ios home", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "HOME"}, wantErr: true},
+		{name: "web tab", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandPressKey, Arguments: "TAB"}},
+		{name: "web power", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandPressKey, Arguments: "POWER"}, wantErr: true},
+		{name: "ios action back", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandAction, Arguments: "back"}, wantErr: true},
+		{name: "ios forced browser", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandOpenLink, Arguments: map[string]any{"link": "https://example.invalid", "browser": true}}, wantErr: true},
+		{name: "dynamic key", platform: ExecutionPlatformAndroid, command: model.Command{Kind: model.CommandPressKey, Arguments: "${output.key}"}, wantErr: true},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			path := "/workspace/command.yaml"
+			flow := validFlow(path)
+			flow.Commands = []model.Command{test.command}
+			_, err := Check(context.Background(), model.ExecutionPlan{SelectedRoots: []string{path}},
+				WithLoader(newFakeFlowLoader(map[string]model.Flow{path: flow})), WithPlatform(test.platform))
+			if test.wantErr {
+				violation := requireViolation(t, err, "unsupported_platform")
+				if violation.FeatureName != string(test.command.Kind) {
+					t.Fatalf("violation = %#v", violation)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Check(%s, %s): %v", test.platform, test.command.Kind, err)
+			}
+		})
+	}
+}
+
+func TestCheckSkipsCommandExcludedByStaticPlatformCondition(t *testing.T) {
+	t.Parallel()
+
+	path := "/workspace/conditional.yaml"
+	androidOnly := model.PlatformAndroid
+	flow := validFlow(path)
+	flow.Commands = []model.Command{{
+		Kind: model.CommandBack,
+		Condition: &model.Condition{
+			Platform: &androidOnly,
+		},
+	}}
+	_, err := Check(context.Background(), model.ExecutionPlan{SelectedRoots: []string{path}},
+		WithLoader(newFakeFlowLoader(map[string]model.Flow{path: flow})),
+		WithPlatform(ExecutionPlatformIOSSimulator))
+	if err != nil {
+		t.Fatalf("statically excluded Android command failed iOS preflight: %v", err)
 	}
 }
 

@@ -7,7 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/larchwave/flowbaton/internal/android"
+	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/drivercontract"
+	"github.com/larchwave/flowbaton/internal/ios"
 	"github.com/larchwave/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/web"
 )
 
 func TestDefaultRegistryIsExhaustiveAndValid(t *testing.T) {
@@ -25,8 +30,8 @@ func TestDefaultRegistryIsExhaustiveAndValid(t *testing.T) {
 		FeatureCommand:         53,
 		FeatureSelector:        29,
 		FeatureConfigExtension: 4,
-		FeatureCLISubcommand:   18,
-		FeatureCLIFlag:         50,
+		FeatureCLISubcommand:   21,
+		FeatureCLIFlag:         119,
 		FeatureHostTarget:      6,
 		FeatureDevicePlatform:  5,
 	}
@@ -49,13 +54,46 @@ func TestDefaultRegistryIsExhaustiveAndValid(t *testing.T) {
 	}
 }
 
+func TestRegistryCommandPlatformsComeFromDriverCapabilities(t *testing.T) {
+	t.Parallel()
+
+	documents := []struct {
+		platform     string
+		capabilities device.Capabilities
+	}{
+		{platform: drivercontract.PlatformAndroid, capabilities: android.DeclaredCapabilities()},
+		{platform: drivercontract.PlatformIOSSimulator, capabilities: ios.DeclaredCapabilities()},
+		{platform: drivercontract.PlatformWeb, capabilities: web.DeclaredCapabilities()},
+	}
+	registry := DefaultRegistry()
+	for _, keyword := range model.CommandKeywords() {
+		entry, found := registry.Lookup(FeatureCommand, string(keyword))
+		if !found {
+			t.Fatalf("command %q is absent", keyword)
+		}
+		want := make([]string, 0, len(documents))
+		for _, document := range documents {
+			if document.capabilities.Features[drivercontract.CommandFeature(string(keyword))] {
+				want = append(want, document.platform)
+			}
+		}
+		if !reflect.DeepEqual(entry.Platforms, want) {
+			t.Errorf("command %q platforms = %v, want driver capability platforms %v", keyword, entry.Platforms, want)
+		}
+		wantStatus := RuntimeStatusPlannedV1
+		if len(want) != 3 {
+			wantStatus = RuntimeStatusPlatformLimited
+		}
+		if entry.RuntimeStatus != wantStatus {
+			t.Errorf("command %q status = %q, want %q", keyword, entry.RuntimeStatus, wantStatus)
+		}
+	}
+}
+
 func TestRegistryDeclaresDocumentedCLIFlagAliases(t *testing.T) {
 	t.Parallel()
 
 	want := []string{
-		"global.-v",
-		"global.-p",
-		"global.--udid",
 		"test.-c",
 		"test.-e",
 		"test.-p",
@@ -74,25 +112,30 @@ func TestRegistryDeclaresDocumentedCLIFlagAliases(t *testing.T) {
 	}
 }
 
-func TestRegistryDeclaresFailClosedDeferredFeatures(t *testing.T) {
+func TestRegistryDeclaresImplementedAndDeferredFeatures(t *testing.T) {
 	t.Parallel()
 
 	registry := DefaultRegistry()
-	tests := []struct {
+	deferred := []struct {
 		kind FeatureKind
 		name string
 	}{
-		{FeatureCLIFlag, "test.--headless"},
-		{FeatureCLIFlag, "test.--screen-size"},
 		{FeatureDevicePlatform, "ios-physical"},
 	}
-	for _, test := range tests {
+	for _, test := range deferred {
 		entry, found := registry.Lookup(test.kind, test.name)
 		if !found {
 			t.Fatalf("missing deferred entry %s/%s", test.kind, test.name)
 		}
 		if entry.ParseStatus != ParseStatusParseable || entry.RuntimeStatus != RuntimeStatusDeferred || entry.Reason == "" {
 			t.Fatalf("deferred entry %s/%s = %#v", test.kind, test.name, entry)
+		}
+	}
+	for _, name := range []string{"test.--headless", "test.--screen-size"} {
+		entry, found := registry.Lookup(FeatureCLIFlag, name)
+		if !found || entry.RuntimeStatus != RuntimeStatusPlatformLimited ||
+			!reflect.DeepEqual(entry.Platforms, []string{"web"}) {
+			t.Errorf("implemented Web flag %q = %#v", name, entry)
 		}
 	}
 }

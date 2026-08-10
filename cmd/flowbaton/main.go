@@ -12,7 +12,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/version"
 )
 
-const topLevelUsage = "usage: flowbaton --version | check-syntax FILE|- | test FILE|DIR... | record [--local] FLOW [OUTPUT] | list-devices [-p ios|android] | start-device -p ios --device UDID | hierarchy -p ios|android [--device UDID] [--csv] | query -p ios|android [--device UDID] EXPRESSION | bugreport -p android [--device SERIAL] [--output PATH] | driver-setup [--apple-team-id ID] | mcp [--no-viewer]\n"
+const topLevelUsage = "usage: flowbaton --version | check-syntax FILE|- | test [options] FILE|DIR... | record [--local] [options] FLOW [OUTPUT] | list-devices [-p ios|android|web] | start-device -p ios|android --device ID | hierarchy -p ios|android [--device ID] [--app-id ID] [--csv|--compact] [--target devtools] | query -p ios|android [--device ID] [--app-id ID] EXPRESSION | bugreport -p ios|android [--device ID] [--output PATH] | driver-setup [-p ios|android] | mcp [--base-dir DIR] [--no-viewer] [--viewer-port PORT] | serve [options] | db apply-schema --database-url URL | auth keygen|cert-map [options] | generate-completion [bash|zsh]\n"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -95,6 +95,15 @@ func runWithCheckerContext(
 	}
 	if len(args) > 0 && args[0] == "mcp" {
 		return flowcli.MCPRunner{Checker: checker}.Run(ctx, args[1:], stdin, stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "serve" {
+		return flowcli.DefaultServeRunner().Run(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "db" {
+		return flowcli.DBRunner{}.Run(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "auth" {
+		return flowcli.AuthRunner{}.Run(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "generate-completion" {
 		return flowcli.GenerateCompletionRunner{}.Run(ctx, args[1:], stdout, stderr)

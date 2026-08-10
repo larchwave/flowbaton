@@ -1,6 +1,11 @@
 package capability
 
-import "github.com/larchwave/flowbaton/internal/model"
+//go:generate go run ./cmd/export-registry -output ../../contracts/v0/support-registry.json
+
+import (
+	"github.com/larchwave/flowbaton/internal/drivercontract"
+	"github.com/larchwave/flowbaton/internal/model"
+)
 
 var configExtensionsV0 = []string{
 	"url",
@@ -28,6 +33,9 @@ var cliSubcommandsV0 = []string{
 	"check-syntax",
 	"driver-setup",
 	"mcp",
+	"serve",
+	"db",
+	"auth",
 }
 
 var cliFlagsV0 = []string{
@@ -58,29 +66,98 @@ var cliFlagsV0 = []string{
 	"test.--exclude-tags",
 	"test.--headless",
 	"test.--screen-size",
-	"test.--analyze",
 	"test.--api-url",
 	"test.--api-key",
 	"test.--reinstall-driver",
 	"test.--no-reinstall-driver",
-	"test.--apple-team-id",
 	"test.-p",
 	"test.--platform",
 	"test.--device",
+	"test.--udid",
 	"record.--local",
+	"record.--config",
+	"record.--shard-split",
+	"record.--shard-all",
+	"record.-c",
+	"record.--continuous",
+	"record.-e",
+	"record.--env",
+	"record.--format",
+	"record.--test-suite-name",
+	"record.--output",
+	"record.--debug-output",
+	"record.--test-output-dir",
+	"record.--flatten-debug-output",
+	"record.--include-tags",
+	"record.--exclude-tags",
+	"record.--headless",
+	"record.--screen-size",
+	"record.--api-url",
+	"record.--api-key",
+	"record.--reinstall-driver",
+	"record.--no-reinstall-driver",
+	"record.-p",
+	"record.--platform",
+	"record.--device",
+	"record.--udid",
+	"list-devices.-p",
+	"list-devices.--platform",
+	"hierarchy.-p",
+	"hierarchy.--platform",
+	"hierarchy.--device",
+	"hierarchy.--udid",
+	"hierarchy.--app-id",
 	"hierarchy.--target",
 	"hierarchy.--target=devtools",
 	"hierarchy.--csv",
+	"hierarchy.--compact",
+	"query.-p",
+	"query.--platform",
+	"query.--device",
+	"query.--udid",
+	"query.--app-id",
 	"query.--text",
 	"query.--id",
+	"bugreport.-p",
+	"bugreport.--platform",
+	"bugreport.--device",
+	"bugreport.--udid",
+	"bugreport.--output",
+	"bugreport.-o",
+	"start-device.-p",
 	"start-device.--platform",
+	"start-device.--device",
+	"start-device.--udid",
 	"start-device.--os-version",
 	"start-device.--device-locale",
+	"start-device.--device-model",
+	"start-device.--system-image",
 	"start-device.--force-create",
-	"driver-setup.--apple-team-id",
+	"driver-setup.-p",
+	"driver-setup.--platform",
 	"mcp.--base-dir",
 	"mcp.--no-viewer",
 	"mcp.--viewer-port",
+	"serve.--address",
+	"serve.--database-url",
+	"serve.--tls-cert",
+	"serve.--tls-key",
+	"serve.--client-ca",
+	"serve.--signing-key",
+	"serve.--signing-key-id",
+	"serve.--node-id",
+	"serve.--public-address",
+	"serve.--inventory",
+	"serve.--worker-concurrency",
+	"serve.--worker-poll",
+	"serve.--worker-claim",
+	"serve.--worker-timeout",
+	"serve.--node-heartbeat",
+	"db.--database-url",
+	"auth.keygen.--key-id",
+	"auth.keygen.--private-key",
+	"auth.keygen.--public-key",
+	"auth.cert-map.--database-url",
 }
 
 var hostTargetsV0 = []string{
@@ -129,23 +206,22 @@ func requiredRegistryKeysV0() map[string]struct{} {
 func defaultEntriesV0() []Entry {
 	entries := make([]Entry, 0, len(requiredRegistryKeysV0()))
 	for _, keyword := range model.CommandKeywords() {
+		platforms := driverCommandPlatforms(keyword)
 		entry := Entry{
 			Kind:          FeatureCommand,
 			Name:          string(keyword),
 			ParseStatus:   ParseStatusParseable,
 			RuntimeStatus: RuntimeStatusPlannedV1,
-			Platforms:     []string{"android", "ios-simulator"},
-			Reason:        "declared FlowBaton v1 command",
+			Platforms:     platforms,
+			Reason:        "command support comes from production driver capability documents",
+		}
+		if len(platforms) != 3 {
+			entry.RuntimeStatus = RuntimeStatusPlatformLimited
+			entry.Reason = "production drivers expose this command only on the listed platforms"
 		}
 		switch keyword {
 		case model.CommandAssertNoDefectsWithAI, model.CommandAssertWithAI, model.CommandExtractTextWithAI:
 			entry.Reason = "AI command executes against an injected provider; fails closed without one"
-		case model.CommandClearKeychain:
-			entry.Platforms = []string{"ios-simulator"}
-			entry.Reason = "keychain state applies to the iOS simulator surface"
-		case model.CommandSetAirplaneMode, model.CommandToggleAirplaneMode:
-			entry.Platforms = []string{"android"}
-			entry.Reason = "airplane-mode automation is declared for Android v1"
 		}
 		entries = append(entries, entry)
 	}
@@ -197,6 +273,32 @@ func defaultEntriesV0() []Entry {
 	return entries
 }
 
+func driverCommandPlatforms(keyword model.CommandKeyword) []string {
+	documents := driverCapabilityDocuments()
+	platforms := make([]string, 0, len(documents))
+	for _, document := range documents {
+		if document.SupportsCommand(keyword) {
+			platforms = append(platforms, document.Platform)
+		}
+	}
+	return platforms
+}
+
+func driverCommandValuePlatforms(keyword model.CommandKeyword, value string) []string {
+	documents := driverCapabilityDocuments()
+	platforms := make([]string, 0, len(documents))
+	for _, document := range documents {
+		if document.SupportsCommandValue(keyword, value) {
+			platforms = append(platforms, document.Platform)
+		}
+	}
+	return platforms
+}
+
+func driverCapabilityDocuments() []drivercontract.Document {
+	return drivercontract.Documents()
+}
+
 func cliSubcommandEntry(name string) Entry {
 	entry := Entry{
 		Kind: FeatureCLISubcommand, Name: name, ParseStatus: ParseStatusParseable,
@@ -204,13 +306,14 @@ func cliSubcommandEntry(name string) Entry {
 		Reason: "declared FlowBaton v1 CLI command",
 	}
 	switch name {
-	case "cloud", "download-samples", "login", "logout", "bugreport", "studio", "list-cloud-devices":
+	case "cloud", "download-samples", "login", "logout", "studio", "list-cloud-devices":
 		entry.ParseStatus = ParseStatusOmitted
 		entry.RuntimeStatus = RuntimeStatusExcluded
 		entry.Reason = "not part of the approved local v1 product surface"
-	case "chat", "mcp":
-		entry.RuntimeStatus = RuntimeStatusDeferred
-		entry.Reason = "post-v1 AI/MCP surface"
+	case "chat":
+		entry.ParseStatus = ParseStatusOmitted
+		entry.RuntimeStatus = RuntimeStatusExcluded
+		entry.Reason = "not part of the approved local v1 product surface"
 	}
 	return entry
 }
@@ -222,9 +325,29 @@ func cliFlagEntry(name string) Entry {
 		Reason: "declared FlowBaton v1 CLI flag",
 	}
 	switch name {
-	case "test.--headless", "test.--screen-size", "test.--analyze", "test.--api-url", "test.--api-key", "hierarchy.--target=devtools", "mcp.--base-dir", "mcp.--no-viewer", "mcp.--viewer-port":
-		entry.RuntimeStatus = RuntimeStatusDeferred
-		entry.Reason = "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+	case "hierarchy.--target", "hierarchy.--target=devtools":
+		entry.RuntimeStatus = RuntimeStatusPlatformLimited
+		entry.Platforms = []string{"android"}
+		entry.Reason = "Chrome DevTools WebView hierarchy is Android-only"
+	case "query.--text", "query.--id":
+		entry.ParseStatus = ParseStatusOmitted
+		entry.RuntimeStatus = RuntimeStatusExcluded
+		entry.Reason = "query uses one positional expression instead of these option spellings"
+	case "global.-v", "global.-p", "global.--platform", "global.--host", "global.--port", "global.--driver-host-port", "global.--device", "global.--udid", "global.--verbose":
+		entry.ParseStatus = ParseStatusOmitted
+		entry.RuntimeStatus = RuntimeStatusExcluded
+		entry.Reason = "the top-level parser does not accept this option spelling"
+	case "test.--headless", "test.--screen-size", "record.--headless", "record.--screen-size":
+		entry.RuntimeStatus = RuntimeStatusPlatformLimited
+		entry.Platforms = []string{"web"}
+		entry.Reason = "browser window options apply only to the Web/CDP driver"
+	case "start-device.--system-image":
+		entry.RuntimeStatus = RuntimeStatusPlatformLimited
+		entry.Platforms = []string{"android"}
+		entry.Reason = "Android virtual devices select SDK system image packages"
+	case "mcp.--base-dir", "mcp.--no-viewer", "mcp.--viewer-port":
+		entry.RuntimeStatus = RuntimeStatusPlannedV1
+		entry.Reason = "implemented MCP server option"
 	}
 	return entry
 }

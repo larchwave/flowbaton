@@ -10,9 +10,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -21,52 +22,54 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
       "name": "killApp",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
         "ios-simulator"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
       "name": "clearState",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
         "ios-simulator"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
       "name": "clearKeychain",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
+        "android",
         "ios-simulator"
       ],
-      "reason": "keychain state applies to the iOS simulator surface"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
       "name": "setPermissions",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
         "ios-simulator"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
@@ -75,9 +78,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -86,9 +90,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -97,9 +102,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -108,9 +114,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -119,9 +126,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -130,9 +138,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -141,7 +150,8 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
       "reason": "AI command executes against an injected provider; fails closed without one"
     },
@@ -152,9 +162,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -163,7 +174,8 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
       "reason": "AI command executes against an injected provider; fails closed without one"
     },
@@ -174,7 +186,8 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
       "reason": "AI command executes against an injected provider; fails closed without one"
     },
@@ -182,12 +195,12 @@
       "kind": "command",
       "name": "back",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
@@ -196,9 +209,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -207,9 +221,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -218,9 +233,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -229,9 +245,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -240,9 +257,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -251,9 +269,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -262,9 +281,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -273,9 +293,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -284,9 +305,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -295,9 +317,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -306,9 +329,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -317,9 +341,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -328,9 +353,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -339,20 +365,21 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
       "name": "openBrowser",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
-        "ios-simulator"
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
@@ -361,9 +388,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -372,9 +400,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -383,9 +412,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -394,9 +424,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -405,9 +436,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -416,9 +448,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -427,20 +460,21 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
       "name": "setOrientation",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
         "ios-simulator"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
@@ -449,9 +483,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -460,9 +495,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -471,9 +507,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -482,9 +519,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -493,9 +531,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -504,9 +543,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -515,9 +555,10 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
@@ -526,62 +567,63 @@
       "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
-        "ios-simulator"
+        "ios-simulator",
+        "web"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",
       "name": "startRecording",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
         "ios-simulator"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
       "name": "stopRecording",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
         "ios-simulator"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
       "name": "addMedia",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android",
         "ios-simulator"
       ],
-      "reason": "declared FlowBaton v1 command"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
       "name": "setAirplaneMode",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android"
       ],
-      "reason": "airplane-mode automation is declared for Android v1"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "command",
       "name": "toggleAirplaneMode",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
         "android"
       ],
-      "reason": "airplane-mode automation is declared for Android v1"
+      "reason": "production drivers expose this command only on the listed platforms"
     },
     {
       "kind": "selector-feature",
@@ -1025,12 +1067,12 @@
     {
       "kind": "cli-subcommand",
       "name": "bugreport",
-      "parseStatus": "omitted",
-      "runtimeStatus": "excluded",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "not part of the approved local v1 product surface"
+      "reason": "declared FlowBaton v1 CLI command"
     },
     {
       "kind": "cli-subcommand",
@@ -1085,12 +1127,12 @@
     {
       "kind": "cli-subcommand",
       "name": "chat",
-      "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "post-v1 AI/MCP surface"
+      "reason": "not part of the approved local v1 product surface"
     },
     {
       "kind": "cli-subcommand",
@@ -1116,21 +1158,51 @@
       "kind": "cli-subcommand",
       "name": "mcp",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "post-v1 AI/MCP surface"
+      "reason": "declared FlowBaton v1 CLI command"
     },
     {
-      "kind": "cli-flag",
-      "name": "global.-v",
+      "kind": "cli-subcommand",
+      "name": "serve",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "db",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-subcommand",
+      "name": "auth",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI command"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "global.-v",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
@@ -1145,82 +1217,82 @@
     {
       "kind": "cli-flag",
       "name": "global.-p",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
       "name": "global.--platform",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
       "name": "global.--host",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
       "name": "global.--port",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
       "name": "global.--driver-host-port",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
       "name": "global.--device",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
       "name": "global.--udid",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
       "name": "global.--verbose",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "the top-level parser does not accept this option spelling"
     },
     {
       "kind": "cli-flag",
@@ -1376,51 +1448,41 @@
       "kind": "cli-flag",
       "name": "test.--headless",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "platform-limited",
       "platforms": [
-        "all-hosts"
+        "web"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "browser window options apply only to the Web/CDP driver"
     },
     {
       "kind": "cli-flag",
       "name": "test.--screen-size",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "platform-limited",
       "platforms": [
-        "all-hosts"
+        "web"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
-    },
-    {
-      "kind": "cli-flag",
-      "name": "test.--analyze",
-      "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
-      "platforms": [
-        "all-hosts"
-      ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "browser window options apply only to the Web/CDP driver"
     },
     {
       "kind": "cli-flag",
       "name": "test.--api-url",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "declared FlowBaton v1 CLI flag"
     },
     {
       "kind": "cli-flag",
       "name": "test.--api-key",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "declared FlowBaton v1 CLI flag"
     },
     {
       "kind": "cli-flag",
@@ -1435,16 +1497,6 @@
     {
       "kind": "cli-flag",
       "name": "test.--no-reinstall-driver",
-      "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
-      "platforms": [
-        "all-hosts"
-      ],
-      "reason": "declared FlowBaton v1 CLI flag"
-    },
-    {
-      "kind": "cli-flag",
-      "name": "test.--apple-team-id",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
       "platforms": [
@@ -1484,7 +1536,337 @@
     },
     {
       "kind": "cli-flag",
+      "name": "test.--udid",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
       "name": "record.--local",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--config",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--shard-split",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--shard-all",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.-c",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--continuous",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.-e",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--env",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--format",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--test-suite-name",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--output",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--debug-output",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--test-output-dir",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--flatten-debug-output",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--include-tags",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--exclude-tags",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--headless",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "web"
+      ],
+      "reason": "browser window options apply only to the Web/CDP driver"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--screen-size",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "web"
+      ],
+      "reason": "browser window options apply only to the Web/CDP driver"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--api-url",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--api-key",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--reinstall-driver",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--no-reinstall-driver",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "record.--udid",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "list-devices.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "list-devices.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.--device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.--udid",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "hierarchy.--app-id",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
       "platforms": [
@@ -1496,21 +1878,21 @@
       "kind": "cli-flag",
       "name": "hierarchy.--target",
       "parseStatus": "parseable",
-      "runtimeStatus": "planned-v1",
+      "runtimeStatus": "platform-limited",
       "platforms": [
-        "all-hosts"
+        "android"
       ],
-      "reason": "declared FlowBaton v1 CLI flag"
+      "reason": "Chrome DevTools WebView hierarchy is Android-only"
     },
     {
       "kind": "cli-flag",
       "name": "hierarchy.--target=devtools",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "platform-limited",
       "platforms": [
-        "all-hosts"
+        "android"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "Chrome DevTools WebView hierarchy is Android-only"
     },
     {
       "kind": "cli-flag",
@@ -1524,7 +1906,7 @@
     },
     {
       "kind": "cli-flag",
-      "name": "query.--text",
+      "name": "hierarchy.--compact",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
       "platforms": [
@@ -1534,7 +1916,137 @@
     },
     {
       "kind": "cli-flag",
+      "name": "query.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "query.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "query.--device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "query.--udid",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "query.--app-id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "query.--text",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "query uses one positional expression instead of these option spellings"
+    },
+    {
+      "kind": "cli-flag",
       "name": "query.--id",
+      "parseStatus": "omitted",
+      "runtimeStatus": "excluded",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "query uses one positional expression instead of these option spellings"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "bugreport.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "bugreport.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "bugreport.--device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "bugreport.--udid",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "bugreport.--output",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "bugreport.-o",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.-p",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
       "platforms": [
@@ -1545,6 +2057,26 @@
     {
       "kind": "cli-flag",
       "name": "start-device.--platform",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.--device",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.--udid",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
       "platforms": [
@@ -1574,6 +2106,26 @@
     },
     {
       "kind": "cli-flag",
+      "name": "start-device.--device-model",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "start-device.--system-image",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "android"
+      ],
+      "reason": "Android virtual devices select SDK system image packages"
+    },
+    {
+      "kind": "cli-flag",
       "name": "start-device.--force-create",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
@@ -1584,7 +2136,17 @@
     },
     {
       "kind": "cli-flag",
-      "name": "driver-setup.--apple-team-id",
+      "name": "driver-setup.-p",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "driver-setup.--platform",
       "parseStatus": "parseable",
       "runtimeStatus": "planned-v1",
       "platforms": [
@@ -1596,31 +2158,231 @@
       "kind": "cli-flag",
       "name": "mcp.--base-dir",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "implemented MCP server option"
     },
     {
       "kind": "cli-flag",
       "name": "mcp.--no-viewer",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "implemented MCP server option"
     },
     {
       "kind": "cli-flag",
       "name": "mcp.--viewer-port",
       "parseStatus": "parseable",
-      "runtimeStatus": "deferred",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "all-hosts"
       ],
-      "reason": "flag belongs to a deferred Web, AI, devtools, or MCP surface"
+      "reason": "implemented MCP server option"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--address",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--database-url",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--tls-cert",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--tls-key",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--client-ca",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--signing-key",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--signing-key-id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--node-id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--public-address",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--inventory",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--worker-concurrency",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--worker-poll",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--worker-claim",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--worker-timeout",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "serve.--node-heartbeat",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "db.--database-url",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "auth.keygen.--key-id",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "auth.keygen.--private-key",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "auth.keygen.--public-key",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
+    },
+    {
+      "kind": "cli-flag",
+      "name": "auth.cert-map.--database-url",
+      "parseStatus": "parseable",
+      "runtimeStatus": "planned-v1",
+      "platforms": [
+        "all-hosts"
+      ],
+      "reason": "declared FlowBaton v1 CLI flag"
     },
     {
       "kind": "host-target",

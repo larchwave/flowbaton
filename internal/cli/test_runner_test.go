@@ -142,7 +142,7 @@ func TestRunnerReachesTheDeviceBoundaryForAValidFlow(t *testing.T) {
 func TestRunnerRejectsAPlatformImpossibleFlowBeforeSessionCreation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ios-only.yaml")
-	writeFile(t, path, "appId: com.example.a\n---\n- clearKeychain\n")
+	writeFile(t, path, "appId: com.example.a\n---\n- back\n")
 
 	sessionCreated := false
 	runner := TestRunner{NewSession: func(Shard, TestOptions) (TestSession, error) {
@@ -150,7 +150,7 @@ func TestRunnerRejectsAPlatformImpossibleFlowBeforeSessionCreation(t *testing.T)
 		return DeviceSession{}, nil
 	}}
 	var stdout, stderr bytes.Buffer
-	code := runner.Run(context.Background(), []string{"-p", "android", path}, &stdout, &stderr)
+	code := runner.Run(context.Background(), []string{"-p", "ios", path}, &stdout, &stderr)
 	if code != ExitFailure {
 		t.Fatalf("exit = %d, want %d; stderr = %q", code, ExitFailure, stderr.String())
 	}

@@ -323,7 +323,13 @@ func inspectFlow(flow model.Flow, registry Registry, platform ExecutionPlatform)
 		index := len(stack) - 1
 		command := stack[index]
 		stack = stack[:index]
-		if violation := unsupportedFeature(registry, FeatureCommand, string(command.Kind), command.Source, platform); violation != nil {
+		if conditionExcludesPlatform(command.Condition, platform) {
+			if violation := inspectCondition(command.Condition, registry, command.Source, ""); violation != nil {
+				return violation
+			}
+			continue
+		}
+		if violation := inspectCommand(command, registry, platform); violation != nil {
 			return violation
 		}
 		if violation := inspectCondition(command.Condition, registry, command.Source, platform); violation != nil {
@@ -337,6 +343,110 @@ func inspectFlow(flow model.Flow, registry Registry, platform ExecutionPlatform)
 		}
 	}
 	return nil
+}
+
+func inspectCommand(command model.Command, registry Registry, platform ExecutionPlatform) *Violation {
+	if violation := unsupportedFeature(registry, FeatureCommand, string(command.Kind), command.Source, platform); violation != nil {
+		return violation
+	}
+	if platform == "" {
+		return nil
+	}
+	platforms, constrained, reason := authoredCommandPlatforms(command)
+	if !constrained || containsPlatform(platforms, platform) {
+		return nil
+	}
+	message := reason
+	if message == "" {
+		message = fmt.Sprintf(
+			"command value does not support selected platform %q; supported: %s",
+			platform, strings.Join(platforms, ", "),
+		)
+	}
+	return &Violation{
+		Code: "unsupported_platform", Message: message,
+		FeatureKind: FeatureCommand, FeatureName: string(command.Kind), Source: command.Source,
+	}
+}
+
+func authoredCommandPlatforms(command model.Command) ([]string, bool, string) {
+	switch command.Kind {
+	case model.CommandPressKey:
+		authored, ok := command.Arguments.(string)
+		if !ok {
+			return nil, false, ""
+		}
+		if hasInterpolationExpression(authored) {
+			return nil, true, "dynamic pressKey values cannot be proven safe for a selected platform before device startup"
+		}
+		canonical, ok := model.PressKeyCanonical(authored)
+		if !ok {
+			return nil, false, ""
+		}
+		return driverCommandValuePlatforms(command.Kind, canonical), true, ""
+	case model.CommandAction:
+		authored, ok := command.Arguments.(string)
+		if !ok {
+			return nil, false, ""
+		}
+		if strings.EqualFold(authored, string(model.CommandBack)) {
+			return driverCommandPlatforms(model.CommandBack), true, ""
+		}
+	case model.CommandOpenLink:
+		if object, ok := command.Arguments.(map[string]any); ok {
+			if force, ok := object["browser"].(bool); ok && force {
+				return driverCommandPlatforms(model.CommandOpenBrowser), true, ""
+			}
+		}
+	}
+	return nil, false, ""
+}
+
+// hasInterpolationExpression mirrors the runtime's single-pass dollar
+// grammar without importing the JavaScript execution surface into preflight.
+func hasInterpolationExpression(input string) bool {
+	for index := 0; index < len(input); index++ {
+		if index+2 < len(input) && input[index] == '\\' && input[index+1] == '$' && input[index+2] == '{' {
+			index += 2
+			continue
+		}
+		if index+1 >= len(input) || input[index] != '$' || input[index+1] != '{' {
+			continue
+		}
+		region := index + 2
+		for region < len(input) && input[region] != '$' {
+			region++
+		}
+		if strings.LastIndexByte(input[index+2:region], '}') >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPlatform(platforms []string, selected ExecutionPlatform) bool {
+	for _, platform := range platforms {
+		if platform == string(selected) {
+			return true
+		}
+	}
+	return false
+}
+
+func conditionExcludesPlatform(condition *model.Condition, selected ExecutionPlatform) bool {
+	if condition == nil || condition.Platform == nil || selected == "" {
+		return false
+	}
+	switch *condition.Platform {
+	case model.PlatformAndroid:
+		return selected != ExecutionPlatformAndroid
+	case model.PlatformIOS:
+		return selected != ExecutionPlatformIOSSimulator
+	case model.PlatformWeb:
+		return selected != ExecutionPlatformWeb
+	default:
+		return false
+	}
 }
 
 func inspectCondition(condition *model.Condition, registry Registry, fallback model.SourceInfo, platform ExecutionPlatform) *Violation {

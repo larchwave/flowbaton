@@ -136,24 +136,7 @@ func (driver *Driver) attached() (*connection, error) {
 }
 
 func (driver *Driver) Capabilities() device.Capabilities {
-	return device.Capabilities{
-		Platform: Platform,
-		Features: map[string]bool{
-			// The web surface exists for CSS selection.
-			"cssSelector":   true,
-			"backPress":     true,
-			"browserChoice": false,
-			// A browser has no apps, no soft keyboard, and no device settings.
-			"appLifecycle":          false,
-			"proxy":                 false,
-			"airplaneMode":          false,
-			"androidChromeDevTools": false,
-			"screenRecording":       false,
-			"onDeviceQuery":         true,
-			"deviceLogCapture":      false,
-			"crashArtifacts":        false,
-		},
-	}
+	return DeclaredCapabilities()
 }
 
 func (driver *Driver) DeviceInfo(ctx context.Context) (device.DeviceInfo, error) {

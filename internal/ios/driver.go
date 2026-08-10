@@ -816,20 +816,7 @@ func (driver *Driver) defaultAppIDs(requested []string) []string {
 // matching ErrUnsupported at call time; preflight reads this so a flow is
 // refused before it runs rather than halfway through.
 func (driver *Driver) Capabilities() device.Capabilities {
-	return device.Capabilities{
-		Platform: Platform,
-		Features: map[string]bool{
-			"proxy":                 false,
-			"airplaneMode":          false,
-			"androidChromeDevTools": false,
-			"screenRecording":       true,
-			"onDeviceQuery":         false,
-			"deviceLogCapture":      true,
-			"crashArtifacts":        true,
-			"browserChoice":         false,
-			"backPress":             false,
-		},
-	}
+	return DeclaredCapabilities()
 }
 
 // SetPermissions issues one simctl call per permission. simctl takes a single

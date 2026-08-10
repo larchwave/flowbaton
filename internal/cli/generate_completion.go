@@ -22,6 +22,9 @@ var TopLevelSubcommands = []string{
 	"bugreport",
 	"driver-setup",
 	"mcp",
+	"serve",
+	"db",
+	"auth",
 	"generate-completion",
 }
 
