@@ -18,6 +18,7 @@ var (
 	ErrExpired         = errors.New("binding or lease expired")
 	ErrInvalidState    = errors.New("invalid session state transition")
 	ErrIdentityRevoked = errors.New("identity mapping is revoked")
+	ErrInvalidArgument = errors.New("invalid request argument")
 )
 
 type Identity struct {
@@ -76,6 +77,7 @@ type MutationInput struct {
 	Generation            int64
 	FencingTokenSHA256    string
 	Payload               json.RawMessage
+	CommandPayload        json.RawMessage
 	RequestedExtension    time.Duration
 	LastAcknowledgedEvent int64
 	Now                   time.Time
@@ -85,6 +87,34 @@ type Result struct {
 	Session Session               `json:"session"`
 	Event   devicesessionv1.Event `json:"event"`
 	Replay  bool                  `json:"replay"`
+	Queued  bool                  `json:"queued,omitempty"`
+}
+
+type InputWork struct {
+	SessionID          string
+	TenantID           string
+	ResourceID         string
+	RequestSequence    int64
+	RequestID          string
+	IdempotencyKey     string
+	Generation         int64
+	FencingTokenSHA256 string
+	StreamEpoch        int64
+	FrameSequence      int64
+	Command            string
+	CommandPayload     json.RawMessage
+	ClaimedBy          string
+	StartedAt          time.Time
+}
+
+type FrameWork struct {
+	SessionID          string
+	TenantID           string
+	ResourceID         string
+	Generation         int64
+	FencingTokenSHA256 string
+	StreamEpoch        int64
+	ClaimedBy          string
 }
 
 type Store interface {

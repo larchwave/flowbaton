@@ -21,6 +21,7 @@ type fakeStore struct {
 	identity sessionstore.Identity
 	acquire  sessionstore.AcquireInput
 	apply    sessionstore.MutationInput
+	waits    int
 }
 
 func (store *fakeStore) Ping(context.Context) error { return nil }
@@ -36,10 +37,17 @@ func (store *fakeStore) Acquire(_ context.Context, input sessionstore.AcquireInp
 }
 func (store *fakeStore) Apply(_ context.Context, input sessionstore.MutationInput) (sessionstore.Result, error) {
 	store.apply = input
-	return sessionstore.Result{Session: sessionstore.Session{SessionID: input.SessionID}}, nil
+	return sessionstore.Result{Session: sessionstore.Session{SessionID: input.SessionID}, Queued: input.Type == "input"}, nil
 }
 func (store *fakeStore) Events(context.Context, string, string, string, int64) ([]devicesessionv1.Event, error) {
 	return []devicesessionv1.Event{{Sequence: 2, EventID: "event-0002", Type: "heartbeat"}}, nil
+}
+func (store *fakeStore) WaitEvents(_ context.Context, _, _, _ string, after int64, _ time.Duration) ([]devicesessionv1.Event, bool, error) {
+	store.waits++
+	if after < 2 {
+		return []devicesessionv1.Event{{Sequence: 2, EventID: "event-0002", Type: "heartbeat"}}, false, nil
+	}
+	return []devicesessionv1.Event{{Sequence: 3, EventID: "event-0003", Type: "released"}}, true, nil
 }
 
 func TestHandlerDerivesIdentityAndBindsSessionRequests(t *testing.T) {
@@ -78,6 +86,13 @@ func TestHandlerDerivesIdentityAndBindsSessionRequests(t *testing.T) {
 	if store.acquire.TenantID != "tenant-1" || store.acquire.PrincipalID != "principal-1" || store.acquire.ChannelBindingSHA256 != bindingDigest {
 		t.Fatalf("acquire identity=%#v", store.acquire)
 	}
+	inputRecorder := httptest.NewRecorder()
+	inputRequest := httptest.NewRequest(http.MethodPost, "/v1/device-sessions/session-0001/requests", bytes.NewBufferString(`{"request_id":"request-input-0001","type":"input","idempotency_key":"input-key-0000001","generation":1,"fencing_token_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","payload":{"lease_id":"lease-0001","generation":1,"fencing_token_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","based_on_stream_epoch":1,"based_on_frame_sequence":1,"command":"tap","payload_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"command_payload":{"x":1,"y":2}}`))
+	inputRequest.Header.Set("Authorization", "FlowBaton "+tokenResponse.Token)
+	handler.ServeHTTP(inputRecorder, inputRequest)
+	if inputRecorder.Code != http.StatusAccepted || store.apply.Type != "input" || string(store.apply.CommandPayload) != `{"x":1,"y":2}` {
+		t.Fatalf("input status=%d apply=%#v body=%s", inputRecorder.Code, store.apply, inputRecorder.Body.String())
+	}
 }
 
 func TestHandlerRejectsTokenOnAnotherChannel(t *testing.T) {
@@ -96,5 +111,26 @@ func TestHandlerRejectsTokenOnAnotherChannel(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestEventStreamResumesFlushesAndClosesOnTerminalEvent(t *testing.T) {
+	now := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	integration, _ := integrationv1.NewDocument(integrationv1.Executable{Version: "0.2.0", BinarySHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", License: "Apache-2.0", ProcessID: 1}, []string{"authenticated-remote-ipc"}, integrationv1.Protocols{FlowContract: "v1", DeviceSession: "v1", Report: "v1"}, []integrationv1.AuthProfile{integrationv1.RemoteCloudMacProfile()}, []string{"tap"})
+	certificateDigest := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	bindingDigest := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	store := &fakeStore{identity: sessionstore.Identity{CertificateFingerprint: certificateDigest, TenantID: "tenant-1", PrincipalID: "principal-1"}}
+	handler, err := New(Config{Store: store, Issuer: auth.Issuer{KeyID: "key-1", PrivateKey: privateKey, Now: func() time.Time { return now }}, Verifier: auth.Verifier{Keys: map[string]ed25519.PublicKey{"key-1": publicKey}, Now: func() time.Time { return now }}, Integration: integration, RequestIdentity: func(*http.Request) (string, string, error) { return certificateDigest, bindingDigest, nil }, StreamDuration: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _ := handler.config.Issuer.Issue(auth.Claims{TenantID: "tenant-1", PrincipalID: "principal-1", CertificateFingerprint: certificateDigest, ChannelBindingSHA256: bindingDigest, Nonce: "nonce-1234567890", Scopes: []string{"device-session"}})
+	request := httptest.NewRequest(http.MethodGet, "/v1/device-sessions/session-1/events?after=1", nil)
+	request.Header.Set("Authorization", "FlowBaton "+token)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || store.waits != 2 || !bytes.Contains(recorder.Body.Bytes(), []byte(`"sequence":2`)) || !bytes.Contains(recorder.Body.Bytes(), []byte(`"sequence":3`)) {
+		t.Fatalf("status=%d waits=%d body=%s", recorder.Code, store.waits, recorder.Body.String())
 	}
 }

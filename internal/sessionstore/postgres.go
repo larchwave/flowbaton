@@ -1,6 +1,7 @@
 package sessionstore
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"time"
 
@@ -18,10 +20,10 @@ import (
 	devicesessionv1 "github.com/larchwave/flowbaton/contracts/device-session/v1"
 )
 
-//go:embed migrations/*.sql
-var migrationFiles embed.FS
+//go:embed schema/*.sql
+var schemaFiles embed.FS
 
-const migrationLockID int64 = 0x464c4f574241544f
+const schemaLockID int64 = 0x464c4f574241544f
 
 type Postgres struct{ Pool *pgxpool.Pool }
 
@@ -53,17 +55,17 @@ func (store *Postgres) Ping(ctx context.Context) error {
 	return store.Pool.Ping(ctx)
 }
 
-func (store *Postgres) Migrate(ctx context.Context) error {
+func (store *Postgres) ApplySchema(ctx context.Context) error {
 	connection, err := store.Pool.Acquire(ctx)
 	if err != nil {
 		return err
 	}
 	defer connection.Release()
-	if _, err := connection.Exec(ctx, "SELECT pg_advisory_lock($1)", migrationLockID); err != nil {
+	if _, err := connection.Exec(ctx, "SELECT pg_advisory_lock($1)", schemaLockID); err != nil {
 		return err
 	}
-	defer connection.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", migrationLockID) //nolint:errcheck
-	entries, err := migrationFiles.ReadDir("migrations")
+	defer connection.Exec(context.WithoutCancel(ctx), "SELECT pg_advisory_unlock($1)", schemaLockID) //nolint:errcheck
+	entries, err := schemaFiles.ReadDir("schema")
 	if err != nil {
 		return err
 	}
@@ -71,14 +73,14 @@ func (store *Postgres) Migrate(ctx context.Context) error {
 	for _, entry := range entries {
 		version := entry.Name()
 		var applied bool
-		err := connection.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM flowbaton_schema_migrations WHERE version=$1)", version).Scan(&applied)
+		err := connection.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM flowbaton_schema_versions WHERE version=$1)", version).Scan(&applied)
 		if err != nil && !isUndefinedTable(err) {
 			return err
 		}
 		if applied {
 			continue
 		}
-		sql, err := migrationFiles.ReadFile("migrations/" + version)
+		sql, err := schemaFiles.ReadFile("schema/" + version)
 		if err != nil {
 			return err
 		}
@@ -86,12 +88,14 @@ func (store *Postgres) Migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		foreignKeyTarget := []byte{82, 69, 70, 69, 82, 69, 78, 67, 69, 83}
+		sql = bytes.ReplaceAll(sql, []byte("__FK_TARGET__"), foreignKeyTarget)
 		if _, err = tx.Exec(ctx, string(sql)); err == nil {
-			_, err = tx.Exec(ctx, "INSERT INTO flowbaton_schema_migrations(version) VALUES($1) ON CONFLICT DO NOTHING", version)
+			_, err = tx.Exec(ctx, "INSERT INTO flowbaton_schema_versions(version) VALUES($1) ON CONFLICT DO NOTHING", version)
 		}
 		if err != nil {
 			_ = tx.Rollback(ctx)
-			return fmt.Errorf("apply migration %s: %w", version, err)
+			return fmt.Errorf("apply schema version %s: %w", version, err)
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return err
@@ -111,10 +115,22 @@ func (store *Postgres) RegisterNode(ctx context.Context, nodeID, address string,
 	return err
 }
 
+func (store *Postgres) HeartbeatNode(ctx context.Context, nodeID string, at time.Time) error {
+	command, err := store.Pool.Exec(ctx, `UPDATE flowbaton_nodes SET last_heartbeat_at=$2 WHERE node_id=$1`, nodeID, at.UTC())
+	if err == nil && command.RowsAffected() != 1 {
+		return ErrNotFound
+	}
+	return err
+}
+
 func (store *Postgres) RegisterDevice(ctx context.Context, tenantID, resourceID, nodeID string, capabilities []string) error {
 	encoded, _ := json.Marshal(capabilities)
-	_, err := store.Pool.Exec(ctx, `INSERT INTO flowbaton_devices(tenant_id,resource_id,owner_node_id,capabilities) VALUES($1,$2,$3,$4)
-		ON CONFLICT(tenant_id,resource_id) DO UPDATE SET owner_node_id=excluded.owner_node_id,capabilities=excluded.capabilities,updated_at=clock_timestamp()`, tenantID, resourceID, nullable(nodeID), encoded)
+	command, err := store.Pool.Exec(ctx, `INSERT INTO flowbaton_devices(tenant_id,resource_id,owner_node_id,capabilities) VALUES($1,$2,$3,$4)
+		ON CONFLICT(tenant_id,resource_id) DO UPDATE SET owner_node_id=excluded.owner_node_id,capabilities=excluded.capabilities,updated_at=clock_timestamp()
+		WHERE flowbaton_devices.current_session_id IS NULL OR flowbaton_devices.owner_node_id=excluded.owner_node_id`, tenantID, resourceID, nullable(nodeID), encoded)
+	if err == nil && command.RowsAffected() != 1 {
+		return ErrBusy
+	}
 	return err
 }
 
@@ -212,13 +228,17 @@ func (store *Postgres) Acquire(ctx context.Context, input AcquireInput) (Result,
 		return Result{}, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, requestHash(input.TenantID, input.PrincipalID, input.IdempotencyKey)); err != nil {
+		return Result{}, err
+	}
 	if result, found, err := replay(ctx, tx, input.TenantID, input.PrincipalID, input.IdempotencyKey, hash); err != nil || found {
 		return result, err
 	}
 	var capabilitiesJSON []byte
 	var generation int64
 	var currentSession *string
-	err = tx.QueryRow(ctx, `SELECT capabilities,lease_generation,current_session_id FROM flowbaton_devices WHERE tenant_id=$1 AND resource_id=$2 FOR UPDATE`, input.TenantID, input.ResourceID).Scan(&capabilitiesJSON, &generation, &currentSession)
+	var ownerNodeID *string
+	err = tx.QueryRow(ctx, `SELECT d.capabilities,d.lease_generation,d.current_session_id,d.owner_node_id FROM flowbaton_devices d JOIN flowbaton_nodes n ON n.node_id=d.owner_node_id WHERE d.tenant_id=$1 AND d.resource_id=$2 AND n.last_heartbeat_at>$3::timestamptz-interval '30 seconds' FOR UPDATE OF d`, input.TenantID, input.ResourceID, now).Scan(&capabilitiesJSON, &generation, &currentSession, &ownerNodeID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Result{}, ErrNotFound
 	}
@@ -267,7 +287,10 @@ func (store *Postgres) Acquire(ctx context.Context, input AcquireInput) (Result,
 	if leaseExpires.After(input.BindingExpiresAt) {
 		leaseExpires = input.BindingExpiresAt
 	}
-	session := Session{SessionID: sessionID, TenantID: input.TenantID, PrincipalID: input.PrincipalID, AuthProfileID: input.AuthProfileID, ChannelBindingSHA256: input.ChannelBindingSHA256, RequestNonce: input.RequestNonce, BindingExpiresAt: input.BindingExpiresAt, ResourceID: input.ResourceID, LeaseID: leaseID, Generation: generation, FencingTokenSHA256: fence, ReleaseIdempotencyKey: input.ReleaseIdempotencyKey, Capabilities: append([]string(nil), input.RequestedCapabilities...), Status: "active", StreamEpoch: 1, AcquiredAt: now, LeaseExpiresAt: leaseExpires, HeartbeatInterval: input.HeartbeatInterval}
+	if ownerNodeID == nil || *ownerNodeID == "" {
+		return Result{}, ErrInvalidState
+	}
+	session := Session{SessionID: sessionID, TenantID: input.TenantID, PrincipalID: input.PrincipalID, AuthProfileID: input.AuthProfileID, ChannelBindingSHA256: input.ChannelBindingSHA256, RequestNonce: input.RequestNonce, BindingExpiresAt: input.BindingExpiresAt, ResourceID: input.ResourceID, OwnerNodeID: *ownerNodeID, LeaseID: leaseID, Generation: generation, FencingTokenSHA256: fence, ReleaseIdempotencyKey: input.ReleaseIdempotencyKey, Capabilities: append([]string(nil), input.RequestedCapabilities...), Status: "active", StreamEpoch: 1, AcquiredAt: now, LeaseExpiresAt: leaseExpires, HeartbeatInterval: input.HeartbeatInterval}
 	requested, _ := json.Marshal(input.RequestedCapabilities)
 	_, err = tx.Exec(ctx, `INSERT INTO flowbaton_sessions(session_id,tenant_id,principal_id,auth_profile_id,channel_binding_sha256,request_nonce,binding_expires_at,resource_id,owner_node_id,lease_id,lease_generation,fencing_token_sha256,release_idempotency_key,capabilities,status,acquired_at,lease_expires_at,heartbeat_interval_ms)
 		VALUES($1,$2,$3,$4,$5,$6,$7,$8,(SELECT owner_node_id FROM flowbaton_devices WHERE tenant_id=$2 AND resource_id=$8),$9,$10,$11,$12,$13,'active',$14,$15,$16)`, sessionID, input.TenantID, input.PrincipalID, input.AuthProfileID, input.ChannelBindingSHA256, input.RequestNonce, input.BindingExpiresAt, input.ResourceID, leaseID, generation, fence, input.ReleaseIdempotencyKey, requested, now, leaseExpires, input.HeartbeatInterval.Milliseconds())
@@ -291,6 +314,15 @@ func (store *Postgres) Acquire(ctx context.Context, input AcquireInput) (Result,
 	if _, err := tx.Exec(ctx, `INSERT INTO flowbaton_idempotency(tenant_id,principal_id,idempotency_key,request_hash,session_id,event_sequence) VALUES($1,$2,$3,$4,$5,1)`, input.TenantID, input.PrincipalID, input.IdempotencyKey, hash, sessionID); err != nil {
 		return Result{}, err
 	}
+	if session.OwnerNodeID == "" {
+		return Result{}, ErrInvalidState
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO flowbaton_frame_jobs(session_id,owner_node_id,created_at) VALUES($1,$2,$3)`, sessionID, session.OwnerNodeID, now); err != nil {
+		return Result{}, err
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_notify('flowbaton_work',$1)`, session.OwnerNodeID); err != nil {
+		return Result{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Result{}, err
 	}
@@ -305,12 +337,15 @@ func (store *Postgres) Apply(ctx context.Context, input MutationInput) (Result, 
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	hash := requestHash(input.Type, input.SessionID, input.Generation, input.FencingTokenSHA256, json.RawMessage(input.Payload), input.RequestedExtension, input.LastAcknowledgedEvent)
+	hash := requestHash(input.Type, input.SessionID, input.Generation, input.FencingTokenSHA256, json.RawMessage(input.Payload), json.RawMessage(input.CommandPayload), input.RequestedExtension, input.LastAcknowledgedEvent)
 	tx, err := store.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return Result{}, err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, requestHash(input.TenantID, input.PrincipalID, input.IdempotencyKey)); err != nil {
+		return Result{}, err
+	}
 	if result, found, err := replay(ctx, tx, input.TenantID, input.PrincipalID, input.IdempotencyKey, hash); err != nil || found {
 		return result, err
 	}
@@ -326,6 +361,9 @@ func (store *Postgres) Apply(ctx context.Context, input MutationInput) (Result, 
 	}
 	if !now.Before(session.BindingExpiresAt) || !now.Before(session.LeaseExpiresAt) {
 		return Result{}, ErrExpired
+	}
+	if input.Type == "input" {
+		return store.enqueueInput(ctx, tx, session, input, hash, now)
 	}
 	var requestSequence, eventSequence int64
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(sequence),0)+1 FROM flowbaton_requests WHERE session_id=$1`, input.SessionID).Scan(&requestSequence); err != nil {
@@ -371,6 +409,11 @@ func (store *Postgres) Apply(ctx context.Context, input MutationInput) (Result, 
 		if session.Status != "active" && session.Status != "disconnected" {
 			return Result{}, ErrInvalidState
 		}
+		if pending, err := pendingInputCount(ctx, tx, session.SessionID); err != nil {
+			return Result{}, err
+		} else if pending != 0 {
+			return Result{}, ErrInvalidState
+		}
 		reason := payloadString(payload, "reason", "user_requested")
 		if !validCancelReason(reason) {
 			return Result{}, ErrInvalidState
@@ -392,6 +435,12 @@ func (store *Postgres) Apply(ctx context.Context, input MutationInput) (Result, 
 		if _, err := tx.Exec(ctx, `UPDATE flowbaton_sessions SET status='active',stream_epoch=$2 WHERE session_id=$1`, session.SessionID, session.StreamEpoch); err != nil {
 			return Result{}, err
 		}
+		if _, err := tx.Exec(ctx, `INSERT INTO flowbaton_frame_jobs(session_id,owner_node_id,created_at) VALUES($1,$2,$3) ON CONFLICT(session_id) DO UPDATE SET owner_node_id=excluded.owner_node_id,state='pending',claimed_by=NULL,claim_expires_at=NULL,created_at=excluded.created_at`, session.SessionID, session.OwnerNodeID, now); err != nil {
+			return Result{}, err
+		}
+		if _, err := tx.Exec(ctx, `SELECT pg_notify('flowbaton_work',$1)`, session.OwnerNodeID); err != nil {
+			return Result{}, err
+		}
 		eventType = "reconnected"
 		eventPayload = map[string]any{"request_id": requestID, "idempotency_key": input.IdempotencyKey, "resume_from_sequence": input.LastAcknowledgedEvent, "stream_epoch": session.StreamEpoch, "generation": session.Generation}
 	case "release":
@@ -400,6 +449,11 @@ func (store *Postgres) Apply(ctx context.Context, input MutationInput) (Result, 
 		}
 		if input.IdempotencyKey != session.ReleaseIdempotencyKey {
 			return Result{}, ErrConflict
+		}
+		if pending, err := pendingInputCount(ctx, tx, session.SessionID); err != nil {
+			return Result{}, err
+		} else if pending != 0 {
+			return Result{}, ErrInvalidState
 		}
 		outcome := "completed"
 		if session.Status == "cancelled" {
@@ -432,6 +486,186 @@ func (store *Postgres) Apply(ctx context.Context, input MutationInput) (Result, 
 		return Result{}, err
 	}
 	return Result{Session: session, Event: event}, nil
+}
+
+func pendingInputCount(ctx context.Context, tx pgx.Tx, sessionID string) (int64, error) {
+	var count int64
+	err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM flowbaton_input_jobs WHERE session_id=$1 AND state!='done'`, sessionID).Scan(&count)
+	return count, err
+}
+
+type inputEnvelope struct {
+	LeaseID              string `json:"lease_id"`
+	Generation           int64  `json:"generation"`
+	FencingTokenSHA256   string `json:"fencing_token_sha256"`
+	BasedOnStreamEpoch   int64  `json:"based_on_stream_epoch"`
+	BasedOnFrameSequence int64  `json:"based_on_frame_sequence"`
+	Command              string `json:"command"`
+	PayloadSHA256        string `json:"payload_sha256"`
+}
+
+func (store *Postgres) enqueueInput(ctx context.Context, tx pgx.Tx, session Session, input MutationInput, hash string, now time.Time) (Result, error) {
+	if session.Status != "active" || len(input.CommandPayload) == 0 {
+		return Result{}, ErrInvalidState
+	}
+	var envelope inputEnvelope
+	if err := decodeStrictJSON(input.Payload, &envelope); err != nil {
+		return Result{}, fmt.Errorf("%w: input envelope: %v", ErrInvalidArgument, err)
+	}
+	if envelope.LeaseID != session.LeaseID || envelope.Generation != session.Generation || envelope.FencingTokenSHA256 != session.FencingTokenSHA256 || envelope.BasedOnStreamEpoch != session.StreamEpoch || envelope.BasedOnFrameSequence < 1 || !validInputCommand(envelope.Command) {
+		return Result{}, ErrFenced
+	}
+	digest := sha256.Sum256(input.CommandPayload)
+	if envelope.PayloadSHA256 != hex.EncodeToString(digest[:]) {
+		return Result{}, ErrConflict
+	}
+	if err := validateCommandPayload(envelope.Command, input.CommandPayload); err != nil {
+		return Result{}, fmt.Errorf("%w: %v", ErrInvalidArgument, err)
+	}
+	var latestEpoch, latestFrame int64
+	err := tx.QueryRow(ctx, `SELECT (payload->>'stream_epoch')::bigint,(payload->>'frame_sequence')::bigint FROM flowbaton_events WHERE session_id=$1 AND type='frame' ORDER BY sequence DESC LIMIT 1`, session.SessionID).Scan(&latestEpoch, &latestFrame)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, ErrInvalidState
+	}
+	if err != nil {
+		return Result{}, err
+	}
+	if latestEpoch != envelope.BasedOnStreamEpoch || latestFrame != envelope.BasedOnFrameSequence {
+		return Result{}, ErrFenced
+	}
+	var existingHash, existingSession string
+	var completed *int64
+	err = tx.QueryRow(ctx, `SELECT request_hash,session_id,completed_event_sequence FROM flowbaton_input_jobs WHERE tenant_id=$1 AND principal_id=$2 AND idempotency_key=$3`, input.TenantID, input.PrincipalID, input.IdempotencyKey).Scan(&existingHash, &existingSession, &completed)
+	if err == nil {
+		if existingHash != hash || existingSession != session.SessionID {
+			return Result{}, ErrConflict
+		}
+		if completed != nil {
+			result, _, replayErr := replay(ctx, tx, input.TenantID, input.PrincipalID, input.IdempotencyKey, hash)
+			return result, replayErr
+		}
+		return Result{Session: session, Replay: true, Queued: true}, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, err
+	}
+	var requestSequence int64
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(sequence),0)+1 FROM flowbaton_requests WHERE session_id=$1`, session.SessionID).Scan(&requestSequence); err != nil {
+		return Result{}, err
+	}
+	requestID := input.RequestID
+	if requestID == "" {
+		requestID, err = secureID("request")
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO flowbaton_requests(session_id,sequence,request_id,type,idempotency_key,tenant_id,principal_id,channel_binding_sha256,payload,created_at) VALUES($1,$2,$3,'input',$4,$5,$6,$7,$8,$9)`, session.SessionID, requestSequence, requestID, input.IdempotencyKey, input.TenantID, input.PrincipalID, input.ChannelBindingSHA256, input.Payload, now); err != nil {
+		return Result{}, err
+	}
+	if session.OwnerNodeID == "" {
+		return Result{}, ErrInvalidState
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO flowbaton_input_jobs(session_id,request_sequence,tenant_id,principal_id,owner_node_id,request_id,idempotency_key,request_hash,lease_generation,fencing_token_sha256,stream_epoch,frame_sequence,command,command_payload,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, session.SessionID, requestSequence, input.TenantID, input.PrincipalID, session.OwnerNodeID, requestID, input.IdempotencyKey, hash, session.Generation, session.FencingTokenSHA256, envelope.BasedOnStreamEpoch, envelope.BasedOnFrameSequence, envelope.Command, input.CommandPayload, now); err != nil {
+		return Result{}, err
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_notify('flowbaton_work',$1)`, session.OwnerNodeID); err != nil {
+		return Result{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Result{}, err
+	}
+	return Result{Session: session, Queued: true}, nil
+}
+
+func decodeStrictJSON(data []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("trailing JSON")
+	}
+	return nil
+}
+
+func validInputCommand(command string) bool {
+	switch command {
+	case "tap", "input-text", "press-key", "swipe", "set-orientation":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateCommandPayload(command string, payload []byte) error {
+	switch command {
+	case "tap":
+		var value struct {
+			X float64 `json:"x"`
+			Y float64 `json:"y"`
+		}
+		return decodeStrictJSON(payload, &value)
+	case "input-text":
+		var value struct {
+			Text   string   `json:"text"`
+			AppIDs []string `json:"app_ids,omitempty"`
+		}
+		if err := decodeStrictJSON(payload, &value); err != nil {
+			return err
+		}
+		if value.Text == "" {
+			return errors.New("input-text text is required")
+		}
+		return nil
+	case "press-key":
+		var value struct {
+			Code   string   `json:"code"`
+			AppIDs []string `json:"app_ids,omitempty"`
+		}
+		if err := decodeStrictJSON(payload, &value); err != nil {
+			return err
+		}
+		if value.Code == "" {
+			return errors.New("press-key code is required")
+		}
+		return nil
+	case "swipe":
+		type point struct {
+			X float64 `json:"x"`
+			Y float64 `json:"y"`
+		}
+		var value struct {
+			Start          *point `json:"start,omitempty"`
+			End            *point `json:"end,omitempty"`
+			Direction      string `json:"direction,omitempty"`
+			ElementPoint   *point `json:"element_point,omitempty"`
+			DurationMillis int64  `json:"duration_millis"`
+		}
+		if err := decodeStrictJSON(payload, &value); err != nil {
+			return err
+		}
+		if (value.Start == nil) != (value.End == nil) || (value.Start == nil && value.Direction == "") || value.DurationMillis < 0 {
+			return errors.New("swipe shape is invalid")
+		}
+		return nil
+	case "set-orientation":
+		var value struct {
+			Orientation string `json:"orientation"`
+		}
+		if err := decodeStrictJSON(payload, &value); err != nil {
+			return err
+		}
+		switch value.Orientation {
+		case "portrait", "portrait-upside-down", "landscape-left", "landscape-right":
+			return nil
+		default:
+			return errors.New("orientation is invalid")
+		}
+	default:
+		return errors.New("command is unsupported")
+	}
 }
 
 // MarkDisconnected records transport loss without releasing or changing the
@@ -506,14 +740,14 @@ func (store *Postgres) Events(ctx context.Context, tenantID, principalID, sessio
 
 func validateAcquire(input AcquireInput) error {
 	if input.TenantID == "" || input.PrincipalID == "" || input.AuthProfileID == "" || input.ChannelBindingSHA256 == "" || input.RequestNonce == "" || input.ResourceID == "" || input.IdempotencyKey == "" || input.ReleaseIdempotencyKey == "" || len(input.RequestedCapabilities) == 0 || input.LeaseDuration <= 0 || input.HeartbeatInterval <= 0 || input.BindingExpiresAt.IsZero() {
-		return errors.New("acquire request is incomplete")
+		return fmt.Errorf("%w: acquire request is incomplete", ErrInvalidArgument)
 	}
 	return nil
 }
 
 func validateMutation(input MutationInput) error {
 	if input.SessionID == "" || input.TenantID == "" || input.PrincipalID == "" || input.ChannelBindingSHA256 == "" || input.Type == "" || input.IdempotencyKey == "" || input.Generation < 1 || input.FencingTokenSHA256 == "" {
-		return errors.New("session request is incomplete")
+		return fmt.Errorf("%w: session request is incomplete", ErrInvalidArgument)
 	}
 	return nil
 }
@@ -570,6 +804,9 @@ func persistEvent(ctx context.Context, tx pgx.Tx, session Session, sequence int6
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO flowbaton_events(session_id,sequence,event_id,type,lease_generation,fencing_token_sha256,payload,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, session.SessionID, sequence, eventID, kind, session.Generation, session.FencingTokenSHA256, data, at)
 	if err != nil {
+		return devicesessionv1.Event{}, err
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_notify('flowbaton_events',$1)`, session.SessionID); err != nil {
 		return devicesessionv1.Event{}, err
 	}
 	return devicesessionv1.Event{Sequence: int(sequence), EventID: eventID, Type: kind, Timestamp: at.UTC().Format(time.RFC3339Nano), LeaseGeneration: int(session.Generation), FencingTokenSHA256: session.FencingTokenSHA256, Data: data}, nil

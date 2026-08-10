@@ -3,6 +3,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -23,14 +24,17 @@ const maxRequestBody = 1 << 20
 type RequestIdentity func(*http.Request) (certificateFingerprint, channelBindingSHA256 string, err error)
 
 type Config struct {
-	Store           sessionstore.Store
-	Issuer          auth.Issuer
-	Verifier        auth.Verifier
-	Integration     integrationv1.Document
-	RequestIdentity RequestIdentity
-	LeaseDuration   time.Duration
-	Heartbeat       time.Duration
-	Now             func() time.Time
+	Store              sessionstore.Store
+	Issuer             auth.Issuer
+	Verifier           auth.Verifier
+	Integration        integrationv1.Document
+	RequestIdentity    RequestIdentity
+	LeaseDuration      time.Duration
+	Heartbeat          time.Duration
+	StreamDuration     time.Duration
+	StreamHeartbeat    time.Duration
+	StreamWriteTimeout time.Duration
+	Now                func() time.Time
 }
 
 type Handler struct {
@@ -54,6 +58,15 @@ func New(config Config) (*Handler, error) {
 	}
 	if config.Heartbeat <= 0 {
 		config.Heartbeat = 15 * time.Second
+	}
+	if config.StreamDuration <= 0 {
+		config.StreamDuration = 30 * time.Second
+	}
+	if config.StreamHeartbeat <= 0 {
+		config.StreamHeartbeat = 5 * time.Second
+	}
+	if config.StreamWriteTimeout <= 0 {
+		config.StreamWriteTimeout = 5 * time.Second
 	}
 	handler := &Handler{config: config, mux: http.NewServeMux()}
 	handler.mux.HandleFunc("GET /health/live", handler.live)
@@ -190,18 +203,23 @@ func (handler *Handler) request(writer http.ResponseWriter, request *http.Reques
 		Generation            int64           `json:"generation"`
 		FencingTokenSHA256    string          `json:"fencing_token_sha256"`
 		Payload               json.RawMessage `json:"payload"`
+		CommandPayload        json.RawMessage `json:"command_payload,omitempty"`
 		RequestedExtensionMS  int64           `json:"requested_extension_ms,omitempty"`
 		LastAcknowledgedEvent int64           `json:"last_acknowledged_sequence,omitempty"`
 	}
 	if err := decodeRequest(writer, request, &input); err != nil {
 		return
 	}
-	result, err := handler.config.Store.Apply(request.Context(), sessionstore.MutationInput{SessionID: request.PathValue("sessionID"), TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestID: input.RequestID, Type: input.Type, IdempotencyKey: input.IdempotencyKey, Generation: input.Generation, FencingTokenSHA256: input.FencingTokenSHA256, Payload: input.Payload, RequestedExtension: time.Duration(input.RequestedExtensionMS) * time.Millisecond, LastAcknowledgedEvent: input.LastAcknowledgedEvent, Now: handler.now()})
+	result, err := handler.config.Store.Apply(request.Context(), sessionstore.MutationInput{SessionID: request.PathValue("sessionID"), TenantID: claims.TenantID, PrincipalID: claims.PrincipalID, ChannelBindingSHA256: claims.ChannelBindingSHA256, RequestID: input.RequestID, Type: input.Type, IdempotencyKey: input.IdempotencyKey, Generation: input.Generation, FencingTokenSHA256: input.FencingTokenSHA256, Payload: input.Payload, CommandPayload: input.CommandPayload, RequestedExtension: time.Duration(input.RequestedExtensionMS) * time.Millisecond, LastAcknowledgedEvent: input.LastAcknowledgedEvent, Now: handler.now()})
 	if err != nil {
 		writeStoreError(writer, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, result)
+	status := http.StatusOK
+	if result.Queued && !result.Replay {
+		status = http.StatusAccepted
+	}
+	writeJSON(writer, status, result)
 }
 
 func (handler *Handler) events(writer http.ResponseWriter, request *http.Request, claims auth.Claims) {
@@ -214,16 +232,56 @@ func (handler *Handler) events(writer http.ResponseWriter, request *http.Request
 		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "after must be a non-negative sequence")
 		return
 	}
-	events, err := handler.config.Store.Events(request.Context(), claims.TenantID, claims.PrincipalID, request.PathValue("sessionID"), after)
+	waiter, live := handler.config.Store.(interface {
+		WaitEvents(context.Context, string, string, string, int64, time.Duration) ([]devicesessionv1.Event, bool, error)
+	})
+	var pending []devicesessionv1.Event
+	terminal := false
+	if live {
+		pending, terminal, err = waiter.WaitEvents(request.Context(), claims.TenantID, claims.PrincipalID, request.PathValue("sessionID"), after, 0)
+	} else {
+		pending, err = handler.config.Store.Events(request.Context(), claims.TenantID, claims.PrincipalID, request.PathValue("sessionID"), after)
+		terminal = true
+	}
 	if err != nil {
 		writeStoreError(writer, err)
 		return
 	}
 	writer.Header().Set("Content-Type", "application/x-ndjson")
+	writer.Header().Set("Cache-Control", "no-store")
+	writer.Header().Set("X-Accel-Buffering", "no")
+	writer.Header().Set("Trailer", "X-FlowBaton-Next-Sequence")
 	writer.WriteHeader(http.StatusOK)
 	encoder := json.NewEncoder(writer)
-	for _, event := range events {
-		if err := encoder.Encode(event); err != nil {
+	flusher, canFlush := writer.(http.Flusher)
+	controller := http.NewResponseController(writer)
+	deadline := time.Now().Add(handler.config.StreamDuration)
+	for {
+		events := pending
+		pending = nil
+		if len(events) == 0 && !terminal && live {
+			wait := min(handler.config.StreamHeartbeat, time.Until(deadline))
+			if wait < 0 {
+				wait = 0
+			}
+			events, terminal, err = waiter.WaitEvents(request.Context(), claims.TenantID, claims.PrincipalID, request.PathValue("sessionID"), after, wait)
+		}
+		if err != nil {
+			return
+		}
+		for _, event := range events {
+			_ = controller.SetWriteDeadline(time.Now().Add(handler.config.StreamWriteTimeout))
+			if err := encoder.Encode(event); err != nil {
+				return
+			}
+			after = int64(event.Sequence)
+			writer.Header().Set("X-FlowBaton-Next-Sequence", strconv.FormatInt(after, 10))
+		}
+		if canFlush {
+			_ = controller.SetWriteDeadline(time.Now().Add(handler.config.StreamWriteTimeout))
+			flusher.Flush()
+		}
+		if terminal || time.Now().After(deadline) || request.Context().Err() != nil {
 			return
 		}
 	}
@@ -287,6 +345,8 @@ func writeStoreError(writer http.ResponseWriter, err error) {
 		writeError(writer, http.StatusConflict, "INVALID_TRANSITION", "session transition is invalid")
 	case errors.Is(err, sessionstore.ErrIdentityRevoked):
 		writeError(writer, http.StatusUnauthorized, "AUTHENTICATION_FAILED", "certificate identity is revoked")
+	case errors.Is(err, sessionstore.ErrInvalidArgument):
+		writeError(writer, http.StatusBadRequest, "INVALID_ARGUMENT", "request arguments are invalid")
 	default:
 		writeError(writer, http.StatusInternalServerError, "INTERNAL", "request failed")
 	}

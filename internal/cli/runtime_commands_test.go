@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -59,14 +61,44 @@ func TestAuthRunnerStoresCertificateMappingAndGeneratesKeys(t *testing.T) {
 	}
 }
 
-func TestDBRunnerDelegatesMigration(t *testing.T) {
+func TestDBRunnerDelegatesSchemaApplication(t *testing.T) {
 	called := ""
-	runner := DBRunner{Migrate: func(_ context.Context, url string) error { called = url; return nil }}
+	runner := DBRunner{ApplySchema: func(_ context.Context, url string) error { called = url; return nil }}
 	var stdout, stderr bytes.Buffer
-	if code := runner.Run(context.Background(), []string{"migrate", "--database-url", "postgres://db"}, &stdout, &stderr); code != ExitOK {
+	if code := runner.Run(context.Background(), []string{"apply-schema", "--database-url", "postgres://db"}, &stdout, &stderr); code != ExitOK {
 		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
 	}
 	if called != "postgres://db" {
 		t.Fatalf("URL=%q", called)
+	}
+}
+
+func TestServeBootstrapBuildsExactExecutableIdentityAndStrictInventory(t *testing.T) {
+	directory := t.TempDir()
+	executable := filepath.Join(directory, "flowbaton")
+	if err := os.WriteFile(executable, []byte("exact executable"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bootstrap := ServeBootstrap{Executable: func() (string, error) { return executable, nil }, ProcessID: func() int { return 42 }}
+	document, err := bootstrap.integrationDocument([]string{"tap"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(document)
+	if !bytes.Contains(encoded, []byte(`"process_id":42`)) || !bytes.Contains(encoded, []byte(`"version":"dev"`)) {
+		t.Fatalf("document=%s", encoded)
+	}
+	inventoryPath := filepath.Join(directory, "inventory.json")
+	if err := os.WriteFile(inventoryPath, []byte(`{"devices":[{"tenant_id":"tenant-1","resource_id":"device-1","platform":"android","device":"serial-1","port":7001,"reinstall_driver":false,"capabilities":["tap"]}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if inventory, err := loadServeInventory(inventoryPath); err != nil || len(inventory.Devices) != 1 {
+		t.Fatalf("inventory=%#v err=%v", inventory, err)
+	}
+	if err := os.WriteFile(inventoryPath, []byte(`{"devices":[],"unknown":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadServeInventory(inventoryPath); err == nil {
+		t.Fatal("unknown inventory field was accepted")
 	}
 }

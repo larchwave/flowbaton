@@ -45,12 +45,12 @@ The direct Go modules are declared in `go.mod`; their resolved checksums are in
 - HTTP/2 support for Android transport;
 - MCP server support;
 - multimodal AI provider clients.
-- PostgreSQL transactions, connection pooling, advisory-lock migrations, and
+- PostgreSQL transactions, connection pooling, advisory-lock schema application, and
   `LISTEN/NOTIFY`-ready distributed session coordination through `pgx/v5`.
 
 `github.com/jackc/pgx/v5` v5.10.0 is the minimum supported PostgreSQL driver.
 It is MIT licensed, supports the module's Go floor, and is used instead of a
-database-agnostic abstraction because lease fencing and migrations require
+database-agnostic abstraction because lease fencing and schema changes require
 PostgreSQL-specific transaction and advisory-lock behavior. Its integration
 tests run only against the disposable database named by
 `FLOWBATON_TEST_POSTGRES_URL`; absence of that variable is the sole skip path.
