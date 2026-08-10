@@ -30,6 +30,9 @@ type MCPRunner struct {
 	ListDevices ListDevicesRunner
 	Hierarchy   HierarchyRunner
 	Query       QueryRunner
+	// RunFlow executes run_flow calls through the same pipeline as the test
+	// subcommand. Its zero value builds real device sessions.
+	RunFlow TestRunner
 	// BaseDir confines inline flow links exposed through MCP. Run fills it from
 	// --base-dir (or the current working directory).
 	BaseDir string
@@ -64,6 +67,49 @@ type queryToolInput struct {
 	UDID       string `json:"udid"`
 	AppID      string `json:"appId,omitempty"`
 	Expression string `json:"expression"`
+}
+
+type runFlowToolInput struct {
+	Platform string `json:"platform"`
+	UDID     string `json:"udid"`
+	// Path names a flow file under the base directory. Exactly one of Path and
+	// Yaml must be set.
+	Path string `json:"path,omitempty"`
+	// Yaml is inline flow content. It runs from a private temporary directory,
+	// so links inside it resolve against nothing but that directory.
+	Yaml string `json:"yaml,omitempty"`
+	// OutputDir receives run artifacts and the report, under the base
+	// directory. Empty uses the test subcommand's default location.
+	OutputDir string `json:"outputDir,omitempty"`
+}
+
+// confineToMCPBase resolves a caller-supplied path against the canonical base
+// directory and refuses anything that lands outside it. Relative paths join
+// the base; absolute paths must already be inside it.
+func confineToMCPBase(baseDir, supplied string) (string, error) {
+	cleaned := filepath.Clean(strings.TrimSpace(supplied))
+	if cleaned == "" || cleaned == "." {
+		return "", fmt.Errorf("a path is required")
+	}
+	joined := cleaned
+	if !filepath.IsAbs(joined) {
+		joined = filepath.Join(baseDir, joined)
+	}
+	// The parent is canonicalized rather than the target so a not-yet-created
+	// output directory can still be confined; the final element itself must not
+	// be a symlink pointing out of the base.
+	resolvedParent, err := filepath.EvalSymlinks(filepath.Dir(joined))
+	if err != nil {
+		return "", err
+	}
+	resolved := filepath.Join(resolvedParent, filepath.Base(joined))
+	if target, err := filepath.EvalSymlinks(resolved); err == nil {
+		resolved = target
+	}
+	if resolved != baseDir && !strings.HasPrefix(resolved, baseDir+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s is outside the base directory", supplied)
+	}
+	return resolved, nil
 }
 
 // jsonResult marshals a value to an indented-JSON tool result, or an error
@@ -155,6 +201,65 @@ func (runner MCPRunner) server() *mcp.Server {
 			matches = []device.TreeNode{}
 		}
 		return jsonResult(matches)
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "run_flow",
+		Description: "Run one FlowBaton flow on a device and return the PASS/FAIL report. " +
+			"Requires platform (ios|android|web) and a device udid. Pass either path " +
+			"(a flow file under the base directory) or yaml (inline flow content). " +
+			"This executes the flow for real: it launches apps and drives the device.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in runFlowToolInput) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.Platform) == "" || strings.TrimSpace(in.UDID) == "" {
+			return errorResult(fmt.Errorf("run_flow: platform and udid are required")), nil, nil
+		}
+		baseDir, err := resolveMCPBaseDir(runner.BaseDir)
+		if err != nil {
+			return errorResult(fmt.Errorf("mcp: base directory: %w", err)), nil, nil
+		}
+
+		var target string
+		switch {
+		case in.Path != "" && in.Yaml != "":
+			return errorResult(fmt.Errorf("run_flow: pass path or yaml, not both")), nil, nil
+		case in.Path != "":
+			target, err = confineToMCPBase(baseDir, in.Path)
+			if err != nil {
+				return errorResult(fmt.Errorf("run_flow: %w", err)), nil, nil
+			}
+		case in.Yaml != "":
+			directory, tempErr := os.MkdirTemp("", "flowbaton-mcp-flow")
+			if tempErr != nil {
+				return errorResult(fmt.Errorf("run_flow: %w", tempErr)), nil, nil
+			}
+			defer func() { _ = os.RemoveAll(directory) }()
+			target = filepath.Join(directory, "flow.yaml")
+			if writeErr := os.WriteFile(target, []byte(in.Yaml), 0o600); writeErr != nil {
+				return errorResult(fmt.Errorf("run_flow: %w", writeErr)), nil, nil
+			}
+		default:
+			return errorResult(fmt.Errorf("run_flow: pass path or yaml")), nil, nil
+		}
+
+		args := []string{"-p", in.Platform, "--device", in.UDID}
+		if in.OutputDir != "" {
+			outputDirectory, outErr := confineToMCPBase(baseDir, in.OutputDir)
+			if outErr != nil {
+				return errorResult(fmt.Errorf("run_flow: %w", outErr)), nil, nil
+			}
+			args = append(args, "--test-output-dir", outputDirectory)
+		}
+		args = append(args, target)
+
+		var out bytes.Buffer
+		code := runner.RunFlow.Run(ctx, args, &out, &out)
+		result := &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: strings.TrimRight(out.String(), "\n")}},
+		}
+		if code != ExitOK {
+			result.IsError = true
+		}
+		return result, nil, nil
 	})
 
 	return server

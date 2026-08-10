@@ -75,10 +75,137 @@ func TestMCPServerAdvertisesTheFlowbatonTools(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, want := range []string{"check_syntax", "list_devices", "hierarchy", "query"} {
+	for _, want := range []string{"check_syntax", "list_devices", "hierarchy", "query", "run_flow"} {
 		if !seen[want] {
 			t.Fatalf("tool %q not advertised; saw %v", want, seen)
 		}
+	}
+}
+
+// runFlowMCPRunner builds an MCPRunner whose run_flow tool executes through the
+// real TestRunner pipeline against a fake driver, in a base directory the test
+// owns.
+func runFlowMCPRunner(base string) MCPRunner {
+	return MCPRunner{
+		BaseDir: base,
+		Checker: stubChecker{},
+		RunFlow: TestRunner{
+			Environ: func() []string { return nil },
+			NewSession: func(shard Shard, _ TestOptions) (TestSession, error) {
+				return DeviceSession{
+					Driver:          permissiveDriver(),
+					OutputDirectory: shard.OutputDirectory,
+					BaseDirectory:   base,
+				}, nil
+			},
+		},
+	}
+}
+
+func TestMCPRunFlowToolRunsAFlowFileInsideTheBaseDirectory(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	writeFile(t, filepath.Join(base, "flow.yaml"), "appId: com.example.a\n---\n- launchApp\n")
+	session := connectMCP(t, runFlowMCPRunner(base))
+	text, isError := callMCPText(t, session, "run_flow", map[string]string{
+		"platform": "android", "udid": "emulator-5554",
+		"path": "flow.yaml", "outputDir": "out",
+	})
+	if isError {
+		t.Fatalf("run_flow reported an error: %q", text)
+	}
+	if !strings.Contains(text, "PASS") {
+		t.Fatalf("the run outcome was not returned: %q", text)
+	}
+}
+
+func TestMCPRunFlowToolRunsInlineYaml(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	session := connectMCP(t, runFlowMCPRunner(base))
+	text, isError := callMCPText(t, session, "run_flow", map[string]string{
+		"platform": "android", "udid": "emulator-5554",
+		"yaml": "appId: com.example.a\n---\n- launchApp\n", "outputDir": "out",
+	})
+	if isError {
+		t.Fatalf("run_flow reported an error: %q", text)
+	}
+	if !strings.Contains(text, "PASS") {
+		t.Fatalf("the run outcome was not returned: %q", text)
+	}
+}
+
+func TestMCPRunFlowToolConfinesThePathToTheBaseDirectory(t *testing.T) {
+	t.Parallel()
+
+	parent := t.TempDir()
+	base := filepath.Join(parent, "workspace")
+	if err := os.Mkdir(base, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(parent, "outside.yaml"), "appId: com.example.a\n---\n- launchApp\n")
+	session := connectMCP(t, runFlowMCPRunner(base))
+	text, isError := callMCPText(t, session, "run_flow", map[string]string{
+		"platform": "android", "udid": "emulator-5554",
+		"path": "../outside.yaml", "outputDir": "out",
+	})
+	if !isError {
+		t.Fatalf("a path outside the base directory was accepted: %q", text)
+	}
+	if !strings.Contains(text, "outside") {
+		t.Fatalf("the confinement failure was not named: %q", text)
+	}
+}
+
+func TestMCPRunFlowToolRejectsPathTogetherWithYaml(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	session := connectMCP(t, runFlowMCPRunner(base))
+	text, isError := callMCPText(t, session, "run_flow", map[string]string{
+		"platform": "android", "udid": "emulator-5554",
+		"path": "flow.yaml", "yaml": "appId: com.example.a\n---\n- launchApp\n",
+	})
+	if !isError {
+		t.Fatalf("path and yaml together were accepted: %q", text)
+	}
+}
+
+func TestMCPRunFlowToolRequiresPlatformAndDevice(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	session := connectMCP(t, runFlowMCPRunner(base))
+	for name, args := range map[string]map[string]string{
+		"missing platform": {"udid": "emulator-5554", "yaml": "appId: a\n---\n- launchApp\n"},
+		"missing udid":     {"platform": "android", "yaml": "appId: a\n---\n- launchApp\n"},
+	} {
+		if text, isError := callMCPText(t, session, "run_flow", args); !isError {
+			t.Fatalf("%s was accepted: %q", name, text)
+		}
+	}
+}
+
+func TestMCPRunFlowToolSurfacesASessionFailure(t *testing.T) {
+	t.Parallel()
+
+	base := t.TempDir()
+	runner := runFlowMCPRunner(base)
+	runner.RunFlow.NewSession = func(Shard, TestOptions) (TestSession, error) {
+		return nil, errors.New("no device behind that udid")
+	}
+	session := connectMCP(t, runner)
+	text, isError := callMCPText(t, session, "run_flow", map[string]string{
+		"platform": "android", "udid": "emulator-5554",
+		"yaml": "appId: com.example.a\n---\n- launchApp\n", "outputDir": "out",
+	})
+	if !isError {
+		t.Fatalf("a session failure was not marked as an error: %q", text)
+	}
+	if !strings.Contains(text, "no device behind that udid") {
+		t.Fatalf("the session error was not surfaced: %q", text)
 	}
 }
 
