@@ -3,6 +3,7 @@ package aiengine
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/openai"
@@ -32,6 +33,9 @@ type Config struct {
 	Provider Provider
 	APIKey   string
 	Model    string
+	// Timeout bounds each provider call. Zero uses DefaultProviderTimeout.
+	// Values above MaxProviderTimeout are rejected.
+	Timeout time.Duration
 	// BaseURL points the provider at an endpoint other than the vendor's own.
 	// Blank keeps the vendor default. This is what makes an OpenAI- or
 	// Anthropic-COMPATIBLE endpoint reachable — a self-hosted gateway, a proxy,
@@ -86,6 +90,10 @@ func isVersionSegment(segment string) bool {
 // provider the library refuses to construct (e.g. no API key anywhere) — a
 // misconfiguration should surface, not silently fall back to fail-closed.
 func New(cfg Config) (*Engine, error) {
+	timeout, err := providerTimeout(cfg.Timeout)
+	if err != nil {
+		return nil, err
+	}
 	model := cfg.Model
 	switch cfg.Provider {
 	case ProviderOpenAI:
@@ -103,7 +111,7 @@ func New(cfg Config) (*Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("aiengine: openai: %w", err)
 		}
-		return NewFromModel(llm, ""), nil
+		return &Engine{model: llm, timeout: timeout}, nil
 	case ProviderAnthropic:
 		if model == "" {
 			model = defaultAnthropicModel
@@ -119,10 +127,20 @@ func New(cfg Config) (*Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("aiengine: anthropic: %w", err)
 		}
-		return NewFromModel(llm, ""), nil
+		return &Engine{model: llm, timeout: timeout}, nil
 	default:
 		return nil, fmt.Errorf("aiengine: unknown provider %q (want %q or %q)", cfg.Provider, ProviderOpenAI, ProviderAnthropic)
 	}
+}
+
+func providerTimeout(configured time.Duration) (time.Duration, error) {
+	if configured == 0 {
+		return DefaultProviderTimeout, nil
+	}
+	if configured < 0 || configured > MaxProviderTimeout {
+		return 0, fmt.Errorf("aiengine: provider timeout must be between 1ns and %s", MaxProviderTimeout)
+	}
+	return configured, nil
 }
 
 // FromEnv builds an Engine from environment configuration, or returns a nil
@@ -136,6 +154,7 @@ func New(cfg Config) (*Engine, error) {
 //   - FLOWBATON_AI_MODEL: optional model override
 //   - FLOWBATON_AI_BASE_URL: optional endpoint override, for an
 //     OpenAI/Anthropic-compatible host that is not the vendor's own
+//   - FLOWBATON_AI_TIMEOUT: optional Go duration, default 60s, maximum 5m
 //
 // "Configured" means the selected provider's key var is non-blank. With no key,
 // the return is (nil, nil): unconfigured is not an error, it is fail-closed.
@@ -161,11 +180,24 @@ func FromEnv(getenv func(string) string) (engine.AIPredictionEngine, error) {
 		return nil, nil
 	}
 
+	var timeout time.Duration
+	if authored := strings.TrimSpace(getenv("FLOWBATON_AI_TIMEOUT")); authored != "" {
+		parsed, err := time.ParseDuration(authored)
+		if err != nil {
+			return nil, fmt.Errorf("aiengine: invalid FLOWBATON_AI_TIMEOUT %q: %w", authored, err)
+		}
+		timeout = parsed
+		if _, err := providerTimeout(timeout); err != nil {
+			return nil, fmt.Errorf("aiengine: invalid FLOWBATON_AI_TIMEOUT %q: %w", authored, err)
+		}
+	}
+
 	e, err := New(Config{
 		Provider: provider,
 		APIKey:   apiKey,
 		Model:    strings.TrimSpace(getenv("FLOWBATON_AI_MODEL")),
 		BaseURL:  strings.TrimSpace(getenv("FLOWBATON_AI_BASE_URL")),
+		Timeout:  timeout,
 	})
 	if err != nil {
 		return nil, err

@@ -10,7 +10,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -24,13 +26,19 @@ import (
 type Engine struct {
 	model     llms.Model
 	modelName string
+	timeout   time.Duration
 }
+
+const (
+	DefaultProviderTimeout = 60 * time.Second
+	MaxProviderTimeout     = 5 * time.Minute
+)
 
 // NewFromModel wraps an already-constructed langchaingo model. modelName is an
 // optional per-call override (e.g. "gpt-4o"); pass "" to use the model's own
 // default. Used directly by tests; production goes through New/FromEnv.
 func NewFromModel(model llms.Model, modelName string) *Engine {
-	return &Engine{model: model, modelName: modelName}
+	return &Engine{model: model, modelName: modelName, timeout: DefaultProviderTimeout}
 }
 
 // Compile-time proof this satisfies the engine boundary.
@@ -42,13 +50,16 @@ func (e *Engine) PerformAssertion(ctx context.Context, screenshotPNG []byte, ass
 		"assertion about the screen is true: \"" + assertion + "\". " +
 		`Reply ONLY with a JSON object: {"pass": <true|false>, "reasoning": "<short explanation>"}.`
 	var out struct {
-		Pass      bool   `json:"pass"`
-		Reasoning string `json:"reasoning"`
+		Pass      *bool   `json:"pass"`
+		Reasoning *string `json:"reasoning"`
 	}
 	if err := e.generateJSON(ctx, prompt, screenshotPNG, &out); err != nil {
 		return engine.AIResult{}, err
 	}
-	return engine.AIResult{Pass: out.Pass, Reasoning: out.Reasoning}, nil
+	if out.Pass == nil || out.Reasoning == nil {
+		return engine.AIResult{}, errors.New("aiengine: model reply requires non-null pass and reasoning fields")
+	}
+	return engine.AIResult{Pass: *out.Pass, Reasoning: *out.Reasoning}, nil
 }
 
 // FindDefects lists user-visible defects on the screenshot. Pass is true when
@@ -59,13 +70,16 @@ func (e *Engine) FindDefects(ctx context.Context, screenshotPNG []byte) (engine.
 		`Reply ONLY with a JSON object: {"defects": ["<defect>", ...], "reasoning": "<short summary>"}. ` +
 		"Use an empty array when there are none."
 	var out struct {
-		Defects   []string `json:"defects"`
-		Reasoning string   `json:"reasoning"`
+		Defects   *[]string `json:"defects"`
+		Reasoning *string   `json:"reasoning"`
 	}
 	if err := e.generateJSON(ctx, prompt, screenshotPNG, &out); err != nil {
 		return engine.AIResult{}, err
 	}
-	return engine.AIResult{Pass: len(out.Defects) == 0, Reasoning: out.Reasoning, Defects: out.Defects}, nil
+	if out.Defects == nil || out.Reasoning == nil {
+		return engine.AIResult{}, errors.New("aiengine: model reply requires non-null defects and reasoning fields")
+	}
+	return engine.AIResult{Pass: len(*out.Defects) == 0, Reasoning: *out.Reasoning, Defects: *out.Defects}, nil
 }
 
 // ExtractText pulls the text answering query out of the screenshot.
@@ -74,19 +88,23 @@ func (e *Engine) ExtractText(ctx context.Context, screenshotPNG []byte, query st
 		`Reply ONLY with a JSON object: {"text": "<the extracted text, or empty string if not present>", ` +
 		`"reasoning": "<short note>"}.`
 	var out struct {
-		Text      string `json:"text"`
-		Reasoning string `json:"reasoning"`
+		Text      *string `json:"text"`
+		Reasoning *string `json:"reasoning"`
 	}
 	if err := e.generateJSON(ctx, prompt, screenshotPNG, &out); err != nil {
 		return engine.AIResult{}, err
 	}
-	return engine.AIResult{Text: out.Text, Reasoning: out.Reasoning}, nil
+	if out.Text == nil || out.Reasoning == nil {
+		return engine.AIResult{}, errors.New("aiengine: model reply requires non-null text and reasoning fields")
+	}
+	return engine.AIResult{Text: *out.Text, Reasoning: *out.Reasoning}, nil
 }
 
 // generateJSON runs one multimodal completion and decodes its JSON object into
 // dst. Temperature is pinned to 0 for the most deterministic answer a model can
 // give; the reply is instructed to be a bare JSON object but real models still
-// wrap it in prose or fences, so the first {...} span is what gets decoded.
+// return malformed output. Decoding is deliberately strict because a missing
+// field must never become a zero-value success verdict.
 func (e *Engine) generateJSON(ctx context.Context, prompt string, screenshotPNG []byte, dst any) error {
 	if len(screenshotPNG) == 0 {
 		return errors.New("aiengine: a screenshot is required")
@@ -102,40 +120,30 @@ func (e *Engine) generateJSON(ctx context.Context, prompt string, screenshotPNG 
 	if e.modelName != "" {
 		options = append(options, llms.WithModel(e.modelName))
 	}
-	response, err := e.model.GenerateContent(ctx, []llms.MessageContent{message}, options...)
+	timeout := e.timeout
+	if timeout <= 0 || timeout > MaxProviderTimeout {
+		timeout = DefaultProviderTimeout
+	}
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	response, err := e.model.GenerateContent(callCtx, []llms.MessageContent{message}, options...)
 	if err != nil {
 		return fmt.Errorf("aiengine: model call failed: %w", err)
 	}
 	if response == nil || len(response.Choices) == 0 {
 		return errors.New("aiengine: model returned no choices")
 	}
-	object, ok := firstJSONObject(response.Choices[0].Content)
-	if !ok {
-		return fmt.Errorf("aiengine: model reply had no JSON object: %q", truncate(response.Choices[0].Content, 200))
-	}
-	if err := json.Unmarshal([]byte(object), dst); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(response.Choices[0].Content))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
 		return fmt.Errorf("aiengine: decoding model reply: %w", err)
 	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("aiengine: model reply contains trailing JSON content")
+		}
+		return fmt.Errorf("aiengine: model reply contains trailing content: %w", err)
+	}
 	return nil
-}
-
-// firstJSONObject returns the first '{' … last '}' span of s. This peels away
-// markdown fences and any prose a model adds around the object it was asked for.
-// ponytail: brace-span heuristic, not a streaming JSON scanner — fine for a
-// temperature-0 reply instructed to be a single object; upgrade to a real
-// tokenizer only if models start emitting multiple/nested stray braces.
-func firstJSONObject(s string) (string, bool) {
-	start := strings.IndexByte(s, '{')
-	end := strings.LastIndexByte(s, '}')
-	if start < 0 || end <= start {
-		return "", false
-	}
-	return s[start : end+1], true
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max] + "…"
 }

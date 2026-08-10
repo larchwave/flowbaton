@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tmc/langchaingo/llms"
 
@@ -15,17 +16,22 @@ import (
 // called with and returns a canned reply (or error), so the prompt-build and
 // JSON-parse logic is exercised with no network.
 type fakeModel struct {
-	reply    string
-	err      error
-	response *llms.ContentResponse // when set, overrides reply
+	reply          string
+	err            error
+	response       *llms.ContentResponse // when set, overrides reply
+	waitForContext bool
 
 	lastMessages []llms.MessageContent
 	callCount    int
 }
 
-func (f *fakeModel) GenerateContent(_ context.Context, messages []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
+func (f *fakeModel) GenerateContent(ctx context.Context, messages []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
 	f.callCount++
 	f.lastMessages = messages
+	if f.waitForContext {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -88,10 +94,7 @@ func TestFindDefects(t *testing.T) {
 
 func TestExtractText(t *testing.T) {
 	t.Parallel()
-	// Reply wrapped in a markdown fence + prose — the brace-span extractor must
-	// still find the object.
-	fenced := "Here you go:\n```json\n{\"text\": \"$42.00\", \"reasoning\": \"top-right balance\"}\n```\n"
-	e := NewFromModel(&fakeModel{reply: fenced}, "")
+	e := NewFromModel(&fakeModel{reply: `{"text": "$42.00", "reasoning": "top-right balance"}`}, "")
 	got, err := e.ExtractText(context.Background(), pngFixture, "the balance")
 	if err != nil {
 		t.Fatalf("ExtractText: %v", err)
@@ -141,6 +144,49 @@ func TestGenerateJSONErrors(t *testing.T) {
 			t.Fatal("want decode error for malformed JSON")
 		}
 	})
+
+	t.Run("missing defects cannot pass", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"reasoning":"looks fine"}`}, "")
+		if result, err := e.FindDefects(context.Background(), pngFixture); err == nil || result.Pass {
+			t.Fatalf("FindDefects() = %#v, %v; want fail-closed schema error", result, err)
+		}
+	})
+
+	t.Run("null defects cannot pass", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"defects":null,"reasoning":"looks fine"}`}, "")
+		if result, err := e.FindDefects(context.Background(), pngFixture); err == nil || result.Pass {
+			t.Fatalf("FindDefects() = %#v, %v; want fail-closed schema error", result, err)
+		}
+	})
+
+	t.Run("unknown fields are rejected", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"pass":true,"reasoning":"ok","override":true}`}, "")
+		if _, err := e.PerformAssertion(context.Background(), pngFixture, "x"); err == nil || !strings.Contains(err.Error(), "unknown field") {
+			t.Fatalf("PerformAssertion() error = %v, want unknown field error", err)
+		}
+	})
+
+	t.Run("trailing content is rejected", func(t *testing.T) {
+		e := NewFromModel(&fakeModel{reply: `{"text":"value","reasoning":"ok"} trailing`}, "")
+		if _, err := e.ExtractText(context.Background(), pngFixture, "x"); err == nil || !strings.Contains(err.Error(), "trailing") {
+			t.Fatalf("ExtractText() error = %v, want trailing content error", err)
+		}
+	})
+}
+
+func TestProviderCallUsesConfiguredBoundedTimeout(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeModel{waitForContext: true}
+	e := &Engine{model: fake, timeout: 20 * time.Millisecond}
+	started := time.Now()
+	_, err := e.FindDefects(context.Background(), pngFixture)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("FindDefects() error = %v, want context deadline exceeded", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("provider timeout took %s, want bounded completion", elapsed)
+	}
 }
 
 func assertScreenshotAndPromptSent(t *testing.T, fake *fakeModel, wantPromptSubstr string) {

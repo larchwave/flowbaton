@@ -3,6 +3,7 @@ package js
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -20,6 +21,10 @@ import (
 
 // DefaultHTTPTimeout matches the product runtime's read, write, and call limit.
 const DefaultHTTPTimeout = 5 * time.Minute
+
+// MaxMultipartFileSize bounds each file buffered into a JavaScript-authored
+// multipart request. The full body is assembled in memory before transport.
+const MaxMultipartFileSize int64 = 16 << 20
 
 func newHTTPClient(configured *http.Client) *http.Client {
 	if configured != nil {
@@ -168,12 +173,25 @@ func (r *runtime) writeMultipartPart(writer *multipart.Writer, name string, valu
 		return writer.WriteField(name, fmt.Sprint(value))
 	}
 
-	resolvedPath := resolveMultipartFile(filePath, r.scriptDir)
+	resolvedPath, err := resolveMultipartFile(filePath, r.scriptDir)
+	if err != nil {
+		return err
+	}
 	file, err := os.Open(resolvedPath)
 	if err != nil {
 		return fmt.Errorf("open multipart file %q: %w", resolvedPath, err)
 	}
 	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("stat multipart file %q: %w", resolvedPath, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("multipart file %q is not a regular file", filePath)
+	}
+	if info.Size() > MaxMultipartFileSize {
+		return fmt.Errorf("multipart file %q size %d exceeds %d bytes", filePath, info.Size(), MaxMultipartFileSize)
+	}
 
 	header := make(textproto.MIMEHeader)
 	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, escapeMultipartQuotes(name), escapeMultipartQuotes(filepath.Base(resolvedPath))))
@@ -184,25 +202,51 @@ func (r *runtime) writeMultipartPart(writer *multipart.Writer, name string, valu
 	if err != nil {
 		return fmt.Errorf("create multipart file part %q: %w", name, err)
 	}
-	if _, err := io.Copy(part, file); err != nil {
+	written, err := io.Copy(part, io.LimitReader(file, MaxMultipartFileSize+1))
+	if err != nil {
 		return fmt.Errorf("write multipart file part %q: %w", name, err)
+	}
+	if written > MaxMultipartFileSize {
+		return fmt.Errorf("multipart file %q exceeds %d bytes", filePath, MaxMultipartFileSize)
 	}
 	return nil
 }
 
-func resolveMultipartFile(filePath, scriptDir string) string {
-	if filepath.IsAbs(filePath) {
-		if _, err := os.Stat(filePath); err == nil {
-			return filePath
-		}
+func resolveMultipartFile(filePath, scriptDir string) (string, error) {
+	if strings.TrimSpace(filePath) == "" {
+		return "", errors.New("multipart file path is required")
 	}
-	if scriptDir != "" {
-		candidate := filepath.Join(scriptDir, filePath)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
+	if scriptDir == "" {
+		return "", errors.New("multipart file requires a script directory")
 	}
-	return filePath
+	if filepath.IsAbs(filePath) || filepath.VolumeName(filePath) != "" {
+		return "", fmt.Errorf("multipart file path %q must be relative to the script directory", filePath)
+	}
+	cleanPath := filepath.Clean(filePath)
+	if cleanPath == "." || cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("multipart file path %q escapes the script directory", filePath)
+	}
+
+	root, err := filepath.Abs(scriptDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve multipart script directory %q: %w", scriptDir, err)
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve multipart script directory %q: %w", scriptDir, err)
+	}
+	candidate, err := filepath.EvalSymlinks(filepath.Join(root, cleanPath))
+	if err != nil {
+		return "", fmt.Errorf("resolve multipart file %q: %w", filePath, err)
+	}
+	relative, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return "", fmt.Errorf("check multipart file %q: %w", filePath, err)
+	}
+	if relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return "", fmt.Errorf("multipart file path %q escapes the script directory", filePath)
+	}
+	return candidate, nil
 }
 
 func escapeMultipartQuotes(value string) string {

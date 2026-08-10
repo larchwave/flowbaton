@@ -3,6 +3,7 @@ package aiengine
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // The provider could only ever reach the vendor's own host, which rules out
@@ -92,5 +93,38 @@ func TestAnUnknownProviderSaysWhatIsAvailable(t *testing.T) {
 		if !strings.Contains(err.Error(), fragment) {
 			t.Fatalf("error = %q, want it to name %s", err.Error(), fragment)
 		}
+	}
+}
+
+func TestFromEnvCarriesAValidatedProviderTimeout(t *testing.T) {
+	t.Parallel()
+
+	engineContract, err := FromEnv(envFrom(map[string]string{
+		"OPENAI_API_KEY":       "test-key",
+		"FLOWBATON_AI_TIMEOUT": "45s",
+	}))
+	if err != nil {
+		t.Fatalf("FromEnv() error = %v", err)
+	}
+	engine, ok := engineContract.(*Engine)
+	if !ok {
+		t.Fatalf("FromEnv() = %T, want *Engine", engineContract)
+	}
+	if engine.timeout != 45*time.Second {
+		t.Fatalf("timeout = %s, want 45s", engine.timeout)
+	}
+
+	for _, value := range []string{"not-a-duration", "-1s", "6m"} {
+		value := value
+		t.Run(value, func(t *testing.T) {
+			t.Parallel()
+			_, err := FromEnv(envFrom(map[string]string{
+				"OPENAI_API_KEY":       "test-key",
+				"FLOWBATON_AI_TIMEOUT": value,
+			}))
+			if err == nil || !strings.Contains(err.Error(), "FLOWBATON_AI_TIMEOUT") {
+				t.Fatalf("FromEnv(timeout %q) error = %v, want validation error", value, err)
+			}
+		})
 	}
 }

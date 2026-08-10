@@ -141,7 +141,7 @@ func TestHTTPMultipartResolvesFilesRelativeToScriptDirectory(t *testing.T) {
 
 	root := t.TempDir()
 	scriptDir := filepath.Join(root, "scripts")
-	mediaDir := filepath.Join(root, "media")
+	mediaDir := filepath.Join(scriptDir, "media")
 	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(scriptDir) error = %v", err)
 	}
@@ -204,7 +204,7 @@ func TestHTTPMultipartResolvesFilesRelativeToScriptDirectory(t *testing.T) {
 		ScriptDir: scriptDir,
 		Script: `http.post("http://example.test/upload", {multipartForm: {
 			uploadType: "import",
-			data: {filePath: "../media/payload.txt", mediaType: "text/plain"}
+			data: {filePath: "media/payload.txt", mediaType: "text/plain"}
 		}}).body`,
 	})
 	if err != nil {
@@ -225,6 +225,104 @@ func TestHTTPMultipartResolvesFilesRelativeToScriptDirectory(t *testing.T) {
 		if gotParts[index] != wantParts[index] {
 			t.Fatalf("multipart part %d = %#v, want %#v", index, gotParts[index], wantParts[index])
 		}
+	}
+}
+
+func TestHTTPMultipartRejectsFilesOutsideScriptDirectory(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	scriptDir := filepath.Join(root, "scripts")
+	outsideDir := filepath.Join(root, "outside")
+	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(scriptDir) error = %v", err)
+	}
+	if err := os.MkdirAll(outsideDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(outsideDir) error = %v", err)
+	}
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0o644); err != nil {
+		t.Fatalf("WriteFile(outside) error = %v", err)
+	}
+	symlinkPath := filepath.Join(scriptDir, "escape.txt")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Fatalf("Symlink() error = %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		scriptDir string
+		filePath  string
+	}{
+		{name: "absolute path", scriptDir: scriptDir, filePath: outsideFile},
+		{name: "lexical traversal", scriptDir: scriptDir, filePath: "../outside/secret.txt"},
+		{name: "symlink escape", scriptDir: scriptDir, filePath: "escape.txt"},
+		{name: "missing script directory", filePath: "secret.txt"},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			transportCalled := false
+			runtime := newRuntimeWithConfig(t, Config{
+				Random: rand.New(rand.NewSource(43)),
+				HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+					transportCalled = true
+					return nil, errors.New("transport must not be called")
+				})},
+			})
+			_, err := runtime.Evaluate(context.Background(), EvalRequest{
+				ScriptDir: test.scriptDir,
+				Script: `http.post("http://example.test/upload", {multipartForm: {
+					data: {filePath: ` + strconv.Quote(test.filePath) + `}
+				}})`,
+			})
+			if err == nil || !strings.Contains(err.Error(), "multipart file") {
+				t.Fatalf("Evaluate() error = %v, want multipart file confinement error", err)
+			}
+			if transportCalled {
+				t.Fatal("HTTP transport was called after multipart confinement failure")
+			}
+		})
+	}
+}
+
+func TestHTTPMultipartRejectsOversizedFile(t *testing.T) {
+	t.Parallel()
+
+	scriptDir := t.TempDir()
+	filePath := filepath.Join(scriptDir, "too-large.bin")
+	file, err := os.Create(filePath)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := file.Truncate(MaxMultipartFileSize + 1); err != nil {
+		_ = file.Close()
+		t.Fatalf("Truncate() error = %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	transportCalled := false
+	runtime := newRuntimeWithConfig(t, Config{
+		Random: rand.New(rand.NewSource(47)),
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			transportCalled = true
+			return nil, errors.New("transport must not be called")
+		})},
+	})
+	_, err = runtime.Evaluate(context.Background(), EvalRequest{
+		ScriptDir: scriptDir,
+		Script: `http.post("http://example.test/upload", {multipartForm: {
+			data: {filePath: "too-large.bin"}
+		}})`,
+	})
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("Evaluate() error = %v, want file size error", err)
+	}
+	if transportCalled {
+		t.Fatal("HTTP transport was called after multipart size failure")
 	}
 }
 
