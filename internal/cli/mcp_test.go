@@ -75,9 +75,96 @@ func TestMCPServerAdvertisesTheFlowbatonTools(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, want := range []string{"check_syntax", "list_devices", "hierarchy", "query", "run_flow"} {
+	for _, want := range []string{"check_syntax", "list_devices", "hierarchy", "query", "run_flow", "screenshot"} {
 		if !seen[want] {
 			t.Fatalf("tool %q not advertised; saw %v", want, seen)
+		}
+	}
+}
+
+func callMCPRaw(t *testing.T, session *mcp.ClientSession, name string, args any) *mcp.CallToolResult {
+	t.Helper()
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
+		t.Fatalf("call %s: %v", name, err)
+	}
+	return result
+}
+
+func TestMCPScreenshotToolReturnsThePNG(t *testing.T) {
+	t.Parallel()
+
+	png := []byte("\x89PNG\r\n\x1a\nfake-pixels")
+	var seenPlatform, seenUDID string
+	runner := MCPRunner{
+		Checker: stubChecker{},
+		Screenshot: ScreenshotRunner{
+			Fetch: func(_ context.Context, platform, udid string) ([]byte, error) {
+				seenPlatform, seenUDID = platform, udid
+				return png, nil
+			},
+		},
+	}
+	session := connectMCP(t, runner)
+	result := callMCPRaw(t, session, "screenshot",
+		map[string]string{"platform": "android", "udid": "emulator-5554"})
+	if result.IsError {
+		t.Fatalf("screenshot reported an error: %+v", result.Content)
+	}
+	if seenPlatform != "android" || seenUDID != "emulator-5554" {
+		t.Fatalf("fetch saw platform %q udid %q", seenPlatform, seenUDID)
+	}
+	var image *mcp.ImageContent
+	for _, content := range result.Content {
+		if imageContent, ok := content.(*mcp.ImageContent); ok {
+			image = imageContent
+		}
+	}
+	if image == nil {
+		t.Fatalf("no image content returned: %+v", result.Content)
+	}
+	if image.MIMEType != "image/png" {
+		t.Fatalf("mime type = %q, want image/png", image.MIMEType)
+	}
+	if !strings.HasPrefix(string(image.Data), "\x89PNG") {
+		t.Fatalf("image bytes were not returned intact")
+	}
+}
+
+func TestMCPScreenshotToolSurfacesAFetchError(t *testing.T) {
+	t.Parallel()
+
+	runner := MCPRunner{
+		Checker: stubChecker{},
+		Screenshot: ScreenshotRunner{
+			Fetch: func(context.Context, string, string) ([]byte, error) {
+				return nil, errors.New("runner not reachable")
+			},
+		},
+	}
+	session := connectMCP(t, runner)
+	text, isError := callMCPText(t, session, "screenshot",
+		map[string]string{"platform": "ios", "udid": "AAAA"})
+	if !isError {
+		t.Fatalf("a fetch failure was not marked as an error: %q", text)
+	}
+	if !strings.Contains(text, "runner not reachable") {
+		t.Fatalf("the driver error was not surfaced: %q", text)
+	}
+}
+
+func TestMCPScreenshotToolRequiresPlatformAndDevice(t *testing.T) {
+	t.Parallel()
+
+	session := connectMCP(t, MCPRunner{Checker: stubChecker{}, Screenshot: ScreenshotRunner{
+		Fetch: func(context.Context, string, string) ([]byte, error) { return []byte("x"), nil },
+	}})
+	for name, args := range map[string]map[string]string{
+		"missing platform": {"udid": "AAAA"},
+		"missing udid":     {"platform": "ios"},
+	} {
+		if text, isError := callMCPText(t, session, "screenshot", args); !isError {
+			t.Fatalf("%s was accepted: %q", name, text)
 		}
 	}
 }

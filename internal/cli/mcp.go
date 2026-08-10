@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -33,6 +34,9 @@ type MCPRunner struct {
 	// RunFlow executes run_flow calls through the same pipeline as the test
 	// subcommand. Its zero value builds real device sessions.
 	RunFlow TestRunner
+	// Screenshot captures one frame from a device. Its zero value opens the
+	// real driver, in the same way the hierarchy diagnostic does.
+	Screenshot ScreenshotRunner
 	// BaseDir confines inline flow links exposed through MCP. Run fills it from
 	// --base-dir (or the current working directory).
 	BaseDir string
@@ -81,6 +85,45 @@ type runFlowToolInput struct {
 	// OutputDir receives run artifacts and the report, under the base
 	// directory. Empty uses the test subcommand's default location.
 	OutputDir string `json:"outputDir,omitempty"`
+}
+
+// ScreenshotRunner holds the frame capture behind a field so a test can stand
+// in known bytes without a device. The default opens the real driver,
+// captures one uncompressed frame, and closes it.
+type ScreenshotRunner struct {
+	Fetch func(ctx context.Context, platform, udid string) ([]byte, error)
+}
+
+func (runner ScreenshotRunner) fetch() func(context.Context, string, string) ([]byte, error) {
+	if runner.Fetch != nil {
+		return runner.Fetch
+	}
+	return realScreenshotFetch
+}
+
+// realScreenshotFetch mirrors realHierarchyFetch: assign a diagnostic port,
+// open the platform driver, capture, close. Uncompressed keeps the format PNG
+// on both platforms; compressed capture is JPEG on iOS but PNG on Android,
+// and one declared MIME type beats a smaller payload here.
+func realScreenshotFetch(ctx context.Context, platform, udid string) (data []byte, resultErr error) {
+	port, err := diagnosticPort(platform, os.Environ())
+	if err != nil {
+		return nil, err
+	}
+	driver, err := newDriver(TestOptions{Platform: platform}, udid, port, 1)
+	if err != nil {
+		return nil, err
+	}
+	if err := driver.Open(ctx); err != nil {
+		return nil, err
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), deviceSessionCleanupTimeout)
+		defer cancel()
+		resultErr = errors.Join(resultErr, driver.Close(cleanupCtx))
+	}()
+	return driver.TakeScreenshot(ctx, device.ScreenshotRequest{Compressed: false})
 }
 
 // confineToMCPBase resolves a caller-supplied path against the canonical base
@@ -201,6 +244,24 @@ func (runner MCPRunner) server() *mcp.Server {
 			matches = []device.TreeNode{}
 		}
 		return jsonResult(matches)
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "screenshot",
+		Description: "Capture the device's current screen as a PNG image. " +
+			"Requires platform (ios|android) and a device udid. Prefer hierarchy " +
+			"or query for reading the screen; the image costs far more tokens.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in deviceToolInput) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.Platform) == "" || strings.TrimSpace(in.UDID) == "" {
+			return errorResult(fmt.Errorf("screenshot: platform and udid are required")), nil, nil
+		}
+		data, err := runner.Screenshot.fetch()(ctx, in.Platform, in.UDID)
+		if err != nil {
+			return errorResult(err), nil, nil
+		}
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.ImageContent{Data: data, MIMEType: "image/png"}},
+		}, nil, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

@@ -17,8 +17,8 @@ flowbaton                              # print the command summary
 ```
 
 Prefer `flowbaton mcp` when you can register MCP servers: it exposes
-`check_syntax`, `list_devices`, `hierarchy`, `query`, and `run_flow` without
-shelling out. `run_flow` executes a flow on a device for real — pass
+`check_syntax`, `list_devices`, `hierarchy`, `query`, `run_flow`, and
+`screenshot` without shelling out. `run_flow` executes a flow on a device for real — pass
 `platform`, `udid`, and either `path` (confined to the base directory) or
 inline `yaml`.
 
