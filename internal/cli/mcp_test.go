@@ -75,7 +75,7 @@ func TestMCPServerAdvertisesTheFlowbatonTools(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	for _, want := range []string{"check_syntax", "list_devices", "hierarchy", "query", "run_flow", "screenshot"} {
+	for _, want := range []string{"check_syntax", "list_devices", "hierarchy", "query", "run_flow", "screenshot", "start_device"} {
 		if !seen[want] {
 			t.Fatalf("tool %q not advertised; saw %v", want, seen)
 		}
@@ -293,6 +293,94 @@ func TestMCPRunFlowToolSurfacesASessionFailure(t *testing.T) {
 	}
 	if !strings.Contains(text, "no device behind that udid") {
 		t.Fatalf("the session error was not surfaced: %q", text)
+	}
+}
+
+func TestMCPStartDeviceToolBootsAnIOSSimulator(t *testing.T) {
+	t.Parallel()
+
+	var booted []string
+	session := connectMCP(t, MCPRunner{StartDevice: StartDeviceRunner{
+		Boot: func(_ context.Context, platform, udid string) error {
+			booted = append(booted, platform+" "+udid)
+			return nil
+		},
+		WaitReady: func(context.Context, string, string) error { return nil },
+	}})
+	text, isError := callMCPText(t, session, "start_device",
+		map[string]any{"platform": "ios", "udid": "AAAA"})
+	if isError {
+		t.Fatalf("start_device failed: %q", text)
+	}
+	if text != "booted AAAA" {
+		t.Fatalf("unexpected output: %q", text)
+	}
+	if len(booted) != 1 || booted[0] != "ios AAAA" {
+		t.Fatalf("boot calls: %v", booted)
+	}
+}
+
+func TestMCPStartDeviceToolCreatesAnAndroidDeviceWithOptions(t *testing.T) {
+	t.Parallel()
+
+	var created deviceCreateOptions
+	session := connectMCP(t, MCPRunner{StartDevice: StartDeviceRunner{
+		CreateAVD: func(_ context.Context, options deviceCreateOptions) (string, error) {
+			created = options
+			return "fresh-avd", nil
+		},
+		LaunchAVD: func(context.Context, string, string) error { return nil },
+		WaitReady: func(context.Context, string, string) error { return nil },
+		ConfigureLocale: func(context.Context, string, string, string) error {
+			return nil
+		},
+	}})
+	text, isError := callMCPText(t, session, "start_device", map[string]any{
+		"platform": "android", "forceCreate": true,
+		"osVersion": "34", "deviceLocale": "de_DE", "deviceModel": "pixel_7",
+		"systemImage": "system-images;android-34;google_apis;arm64-v8a",
+	})
+	if isError {
+		t.Fatalf("start_device failed: %q", text)
+	}
+	if text != "launched fresh-avd" {
+		t.Fatalf("unexpected output: %q", text)
+	}
+	if created.OSVersion != "34" || created.Locale != "de_DE" ||
+		created.Model != "pixel_7" ||
+		created.SystemImage != "system-images;android-34;google_apis;arm64-v8a" {
+		t.Fatalf("creation options were not passed through: %+v", created)
+	}
+}
+
+func TestMCPStartDeviceToolSurfacesABootFailure(t *testing.T) {
+	t.Parallel()
+
+	session := connectMCP(t, MCPRunner{StartDevice: StartDeviceRunner{
+		Boot: func(context.Context, string, string) error {
+			return errors.New("no simulator behind that udid")
+		},
+	}})
+	text, isError := callMCPText(t, session, "start_device",
+		map[string]any{"platform": "ios", "udid": "AAAA"})
+	if !isError {
+		t.Fatalf("a boot failure was not marked as an error: %q", text)
+	}
+	if !strings.Contains(text, "no simulator behind that udid") {
+		t.Fatalf("the boot error was not surfaced: %q", text)
+	}
+}
+
+func TestMCPStartDeviceToolRequiresAPlatform(t *testing.T) {
+	t.Parallel()
+
+	session := connectMCP(t, MCPRunner{})
+	text, isError := callMCPText(t, session, "start_device", map[string]any{})
+	if !isError {
+		t.Fatalf("a missing platform was not marked as an error: %q", text)
+	}
+	if !strings.Contains(text, "platform") {
+		t.Fatalf("the platform requirement was not surfaced: %q", text)
 	}
 }
 

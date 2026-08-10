@@ -37,6 +37,10 @@ type MCPRunner struct {
 	// Screenshot captures one frame from a device. Its zero value opens the
 	// real driver, in the same way the hierarchy diagnostic does.
 	Screenshot ScreenshotRunner
+	// StartDevice boots simulators and launches emulators through the same
+	// orchestration as the start-device subcommand. Its zero value reaches
+	// simctl and the Android tooling.
+	StartDevice StartDeviceRunner
 	// BaseDir confines inline flow links exposed through MCP. Run fills it from
 	// --base-dir (or the current working directory).
 	BaseDir string
@@ -85,6 +89,21 @@ type runFlowToolInput struct {
 	// OutputDir receives run artifacts and the report, under the base
 	// directory. Empty uses the test subcommand's default location.
 	OutputDir string `json:"outputDir,omitempty"`
+}
+
+type startDeviceToolInput struct {
+	Platform string `json:"platform"`
+	// UDID names the target: an existing simulator udid on iOS, an installed
+	// AVD name on Android. Android may leave it empty to launch the first
+	// installed AVD.
+	UDID string `json:"udid,omitempty"`
+	// ForceCreate builds a fresh device before starting it. The four fields
+	// below only apply together with it.
+	ForceCreate  bool   `json:"forceCreate,omitempty"`
+	OSVersion    string `json:"osVersion,omitempty"`
+	DeviceLocale string `json:"deviceLocale,omitempty"`
+	DeviceModel  string `json:"deviceModel,omitempty"`
+	SystemImage  string `json:"systemImage,omitempty"`
 }
 
 // ScreenshotRunner holds the frame capture behind a field so a test can stand
@@ -314,6 +333,42 @@ func (runner MCPRunner) server() *mcp.Server {
 
 		var out bytes.Buffer
 		code := runner.RunFlow.Run(ctx, args, &out, &out)
+		result := &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: strings.TrimRight(out.String(), "\n")}},
+		}
+		if code != ExitOK {
+			result.IsError = true
+		}
+		return result, nil, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "start_device",
+		Description: "Boot a simulator or launch an emulator and wait until it is ready. " +
+			"Requires platform (ios|android). iOS boots the simulator named by udid; " +
+			"Android launches the AVD named by udid, or the first installed one when " +
+			"udid is empty. Set forceCreate to build a fresh device first; osVersion, " +
+			"deviceLocale, deviceModel, and systemImage (Android-only) apply then.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in startDeviceToolInput) (*mcp.CallToolResult, any, error) {
+		args := []string{"-p", in.Platform}
+		if in.UDID != "" {
+			args = append(args, "--device", in.UDID)
+		}
+		if in.ForceCreate {
+			args = append(args, "--force-create")
+		}
+		for flag, value := range map[string]string{
+			"--os-version":    in.OSVersion,
+			"--device-locale": in.DeviceLocale,
+			"--device-model":  in.DeviceModel,
+			"--system-image":  in.SystemImage,
+		} {
+			if value != "" {
+				args = append(args, flag, value)
+			}
+		}
+		var out bytes.Buffer
+		code := runner.StartDevice.Run(ctx, args, &out, &out)
 		result := &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: strings.TrimRight(out.String(), "\n")}},
 		}
