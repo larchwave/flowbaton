@@ -3,7 +3,7 @@
 **Mobile UI tests that fail only when your app breaks.**
 
 One Go binary drives Android devices and iOS Simulators from plain YAML flows.
-No server process, no JVM, no device cloud required.
+Local runs need no server process, JVM, or device cloud.
 
 [![CI](https://github.com/larchwave/flowbaton/actions/workflows/ci.yml/badge.svg)](https://github.com/larchwave/flowbaton/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/larchwave/flowbaton)](https://github.com/larchwave/flowbaton/releases)
@@ -69,6 +69,10 @@ Simulator runtime. Record a run to a video with
 `flowbaton record path/to/flow.yaml`. Run `flowbaton` with no arguments to
 print the command summary.
 
+Ready-made flows that run against the stock Android Settings app (no app to
+build) live in
+[flowbaton-samples](https://github.com/larchwave/flowbaton-samples).
+
 ## Use it from a coding agent
 
 FlowBaton ships an MCP server inside the same binary:
@@ -99,7 +103,7 @@ a short tour of the CLI and the flow shape.
 
 ## Status
 
-Pre-alpha. Android devices and emulators plus iOS Simulators work today.
+FlowBaton is pre-alpha. Android devices and emulators plus iOS Simulators work today.
 Command surface and contracts are versioned; expect breaking changes between
 pre-1.0 releases.
 
@@ -109,6 +113,7 @@ pre-1.0 releases.
 - [Support matrix](docs/support-matrix.md)
 - [Release policy](docs/release-policy.md)
 - [Dependency policy](docs/dependency-policy.md)
+- [Remote DeviceSession runtime](docs/remote-runtime.md)
 - [Security policy](SECURITY.md)
 
 The machine-readable API contracts live in `contracts/`. Product behavior is
