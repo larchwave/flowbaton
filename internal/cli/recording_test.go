@@ -134,6 +134,79 @@ func TestAFailedStopStillEndsTheRecordingForTheRun(t *testing.T) {
 	}
 }
 
+func TestStopAllFinalizesAnAuthoredRecordingExactlyOnce(t *testing.T) {
+	t.Parallel()
+
+	spy := &recordingSpy{}
+	controller := NewDriverRecordingController(spy, ".")
+	if err := controller.Start(
+		context.Background(), engine.RecordingStartRequest{Name: "authored"}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	artifacts, err := controller.StopAll(context.Background())
+	if err != nil {
+		t.Fatalf("first StopAll() error = %v", err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Path != filepath.Join(".", "authored.mp4") {
+		t.Fatalf("first StopAll() artifacts = %#v, want the authored recording", artifacts)
+	}
+	artifacts, err = controller.StopAll(context.Background())
+	if err != nil {
+		t.Fatalf("second StopAll() error = %v", err)
+	}
+	if len(artifacts) != 0 {
+		t.Fatalf("second StopAll() artifacts = %#v, want none", artifacts)
+	}
+	if len(spy.stopped) != 1 {
+		t.Fatalf("driver stops = %v, want exactly one", spy.stopped)
+	}
+}
+
+func TestRecordingControllerCloseIsIdempotent(t *testing.T) {
+	t.Parallel()
+
+	spy := &recordingSpy{}
+	controller := NewDriverRecordingController(spy, ".")
+	if err := controller.Start(
+		context.Background(), engine.RecordingStartRequest{Name: "authored"}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if err := controller.Close(context.Background()); err != nil {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	if err := controller.Close(context.Background()); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	if len(spy.stopped) != 1 {
+		t.Fatalf("driver stops = %v, want exactly one", spy.stopped)
+	}
+	if err := controller.Start(
+		context.Background(), engine.RecordingStartRequest{Name: "too-late"}); err == nil {
+		t.Fatal("Start() succeeded after Close()")
+	}
+}
+
+func TestRecordingControllerCloseReturnsTheSameFinalizationFailure(t *testing.T) {
+	t.Parallel()
+
+	stopErr := errors.New("recorder did not stop")
+	spy := &recordingSpy{stopErr: stopErr}
+	controller := NewDriverRecordingController(spy, ".")
+	if err := controller.Start(
+		context.Background(), engine.RecordingStartRequest{Name: "authored"}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if err := controller.Close(context.Background()); !errors.Is(err, stopErr) {
+		t.Fatalf("first Close() error = %v, want %v", err, stopErr)
+	}
+	if err := controller.Close(context.Background()); !errors.Is(err, stopErr) {
+		t.Fatalf("second Close() error = %v, want cached %v", err, stopErr)
+	}
+	if len(spy.stopped) != 1 {
+		t.Fatalf("driver stops = %v, want exactly one", spy.stopped)
+	}
+}
+
 func TestADriverThatCanRecordGetsARealController(t *testing.T) {
 	t.Parallel()
 

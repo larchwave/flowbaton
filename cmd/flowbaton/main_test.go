@@ -107,6 +107,34 @@ func TestRunDispatchesCheckSyntaxWithExactSuccessContract(t *testing.T) {
 	}
 }
 
+func TestRunDispatchesCommandsWithTheSuppliedProcessContext(t *testing.T) {
+	type contextKey string
+	const key contextKey = "process-context"
+	ctx := context.WithValue(context.Background(), key, "shared")
+	checker := commandCheckerFunc(func(got context.Context, _ flowcli.Source) error {
+		if value := got.Value(key); value != "shared" {
+			t.Fatalf("checker context value = %v, want shared process context", value)
+		}
+		return nil
+	})
+	flowPath := filepath.Join(t.TempDir(), "valid.yaml")
+	writeCLIFlow(t, flowPath, "- launchApp\n")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if code := runWithCheckerContext(
+		ctx,
+		[]string{"check-syntax", flowPath},
+		bytes.NewReader(nil),
+		&stdout,
+		&stderr,
+		checker,
+		func() (string, error) { return "/workspace", nil },
+	); code != flowcli.ExitOK {
+		t.Fatalf("exit = %d, want %d; stderr: %s", code, flowcli.ExitOK, stderr.String())
+	}
+}
+
 func TestCheckSyntaxSubprocessReportsExactParserDiagnostic(t *testing.T) {
 	flowPath := filepath.Join(t.TempDir(), "invalid.yaml")
 	if err := os.WriteFile(flowPath, []byte("appId: com.example.app\n---\n- tapn: Continue\n"), 0o600); err != nil {

@@ -2,9 +2,11 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/larchwave/flowbaton/internal/aiengine"
@@ -49,41 +51,87 @@ func (session DeviceSession) Execute(
 	if err := session.Driver.Open(ctx); err != nil {
 		return nil, fmt.Errorf("device session: opening %s: %w", session.Driver.Name(), err)
 	}
-	// Closing is deferred rather than conditional: a flow that fails halfway
-	// still leaves a device open, and leaking it costs the next run.
-	defer func() { _ = session.Driver.Close(ctx) }()
+
+	var recordingFinalizer func(context.Context) error
+	var recordingController engine.RecordingController
+	var results []engine.FlowResult
+	var executeErr error
 
 	dependencies, err := session.dependencies(options)
 	if err != nil {
-		return nil, err
+		executeErr = err
+	} else {
+		recordingController = dependencies.RecordingController
+		recordingFinalizer, executeErr = startSessionRecording(
+			ctx, recordingController, options.RecordTo)
+		if executeErr == nil {
+			results, executeErr = engine.Execute(ctx, program, dependencies)
+		}
 	}
-	stop, err := startSessionRecording(ctx, dependencies.RecordingController, options.RecordTo)
-	if err != nil {
-		return nil, err
-	}
-	// Stopped before the results are returned but AFTER the run, and on the
-	// failing path too: the recording of a run that failed is the recording
-	// most worth having, because it is what goes into the bug report.
-	defer stop()
 
-	return engine.Execute(ctx, program, dependencies)
+	recordingCleanupCtx, cancelRecordingCleanup := context.WithTimeout(
+		context.WithoutCancel(ctx), deviceSessionCleanupTimeout)
+
+	var recordingErr error
+	if recordingFinalizer != nil {
+		recordingErr = recordingFinalizer(recordingCleanupCtx)
+	}
+	// An authored startRecording can remain active when a later command fails or
+	// the execution context is cancelled. StopAll is idempotent, so it is also
+	// safe after whole-run recording finalization.
+	if finalizer, ok := recordingController.(interface {
+		StopAll(context.Context) ([]device.Artifact, error)
+	}); ok {
+		_, stopAllErr := finalizer.StopAll(recordingCleanupCtx)
+		if stopAllErr != nil {
+			stopAllErr = fmt.Errorf("device session: finalizing active recording: %w", stopAllErr)
+		}
+		recordingErr = errors.Join(recordingErr, stopAllErr)
+	}
+	cancelRecordingCleanup()
+
+	// Driver cleanup gets its own bounded context so a recording timeout cannot
+	// prevent the driver from removing ports, processes, or installed helpers.
+	driverCleanupCtx, cancelDriverCleanup := context.WithTimeout(
+		context.WithoutCancel(ctx), deviceSessionCleanupTimeout)
+	closeErr := session.Driver.Close(driverCleanupCtx)
+	cancelDriverCleanup()
+	if closeErr != nil {
+		closeErr = fmt.Errorf("device session: closing driver: %w", closeErr)
+	}
+
+	return results, errors.Join(executeErr, recordingErr, closeErr)
 }
 
+const deviceSessionCleanupTimeout = 15 * time.Second
+
 // startSessionRecording brackets a whole run with one recording, which is what
-// `record` asks for. It returns a no-op stop when nothing was asked for.
+// `record` asks for. It returns no finalizer when nothing was asked for.
 func startSessionRecording(
 	ctx context.Context, controller engine.RecordingController, output string,
-) (func(), error) {
+) (func(context.Context) error, error) {
 	if output == "" {
-		return func() {}, nil
+		return nil, nil
 	}
 	if err := controller.Start(ctx, engine.RecordingStartRequest{Name: output}); err != nil {
 		return nil, fmt.Errorf("device session: recording %s: %w", output, err)
 	}
-	return func() {
-		// context.WithoutCancel: a run cut short by ctrl-C is exactly when the
-		// operator wants the video that has been recording all along.
-		_, _ = controller.Stop(context.WithoutCancel(ctx))
+	return func(cleanupCtx context.Context) error {
+		artifacts, stopErr := controller.Stop(cleanupCtx)
+		if stopErr != nil {
+			return fmt.Errorf("device session: finalizing recording %s: %w", output, stopErr)
+		}
+		finalized := false
+		for _, artifact := range artifacts {
+			if strings.TrimSpace(artifact.Path) != "" {
+				finalized = true
+				break
+			}
+		}
+		if !finalized {
+			return fmt.Errorf("device session: recording %s produced no finalized artifact", output)
+		}
+		return nil
 	}, nil
 }
 

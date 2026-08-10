@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/engine"
@@ -31,12 +32,15 @@ type screenRecordingDriver interface {
 
 // DriverRecordingController holds the capture id between the two commands.
 type DriverRecordingController struct {
+	mu     sync.Mutex
 	driver screenRecordingDriver
 	// directory is where the finished file lands.
 	directory string
 	// capture is the id of the recording in flight, blank when none is; it is
 	// also how a second startRecording is caught.
-	capture device.CaptureID
+	capture  device.CaptureID
+	closed   bool
+	closeErr error
 }
 
 func NewDriverRecordingController(
@@ -51,6 +55,12 @@ func NewDriverRecordingController(
 func (controller *DriverRecordingController) Start(
 	ctx context.Context, request engine.RecordingStartRequest,
 ) error {
+	controller.mu.Lock()
+	defer controller.mu.Unlock()
+
+	if controller.closed {
+		return errors.New("recording controller is closed")
+	}
 	if controller.capture != "" {
 		return fmt.Errorf("a recording is already running (%s)", controller.capture)
 	}
@@ -68,8 +78,47 @@ func (controller *DriverRecordingController) Start(
 }
 
 func (controller *DriverRecordingController) Stop(ctx context.Context) ([]device.Artifact, error) {
+	return controller.stop(ctx, true)
+}
+
+// StopAll finalizes the in-flight recording, if any. Unlike authored Stop it
+// is idempotent, so session and driver cleanup can both call it safely.
+func (controller *DriverRecordingController) StopAll(
+	ctx context.Context,
+) ([]device.Artifact, error) {
+	return controller.stop(ctx, false)
+}
+
+// Close makes DriverRecordingController usable as a cleanup resource while
+// retaining StopAll's artifact-returning form for callers that need evidence.
+func (controller *DriverRecordingController) Close(ctx context.Context) error {
+	controller.mu.Lock()
+	defer controller.mu.Unlock()
+
+	if controller.closed {
+		return controller.closeErr
+	}
+	controller.closed = true
+	_, controller.closeErr = controller.stopLocked(ctx, false)
+	return controller.closeErr
+}
+
+func (controller *DriverRecordingController) stop(
+	ctx context.Context, requireActive bool,
+) ([]device.Artifact, error) {
+	controller.mu.Lock()
+	defer controller.mu.Unlock()
+	return controller.stopLocked(ctx, requireActive)
+}
+
+func (controller *DriverRecordingController) stopLocked(
+	ctx context.Context, requireActive bool,
+) ([]device.Artifact, error) {
 	if controller.capture == "" {
-		return nil, errors.New("no recording is running")
+		if requireActive {
+			return nil, errors.New("no recording is running")
+		}
+		return nil, nil
 	}
 	capture := controller.capture
 	// Cleared before the call, not after: a stop that fails has still ended

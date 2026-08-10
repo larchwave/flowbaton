@@ -210,6 +210,109 @@ func TestSessionRefusesToRunWithoutADriver(t *testing.T) {
 	}
 }
 
+func TestDeviceSessionCleanupUsesABoundedContextAfterExecutionCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	driver := &cleanupObservingDriver{
+		FakeDriver: enginetest.NewFakeDriver(),
+		cancel:     cancel,
+	}
+	_, err := (DeviceSession{Driver: driver}).Execute(ctx, nil, TestOptions{})
+	if err == nil {
+		t.Fatal("Execute() error = nil, want the invalid program to fail")
+	}
+	if ctx.Err() != context.Canceled {
+		t.Fatalf("execution context error = %v, want cancellation", ctx.Err())
+	}
+	if driver.closeContextErr != nil {
+		t.Fatalf("Close() context error = %v, want non-cancelled cleanup context", driver.closeContextErr)
+	}
+	if !driver.closeHadDeadline {
+		t.Fatal("Close() context had no cleanup deadline")
+	}
+}
+
+func TestDeviceSessionJoinsExecutionRecordingAndCloseFailures(t *testing.T) {
+	t.Parallel()
+
+	recordingErr := errors.New("recording finalization failed")
+	closeErr := errors.New("driver close failed")
+	driver := &failingLifecycleRecordingDriver{
+		FakeDriver: enginetest.NewFakeDriver(),
+		stopErr:    recordingErr,
+		closeErr:   closeErr,
+	}
+	_, err := (DeviceSession{Driver: driver}).Execute(
+		context.Background(), nil, TestOptions{RecordTo: "whole-run.mp4"})
+	if err == nil {
+		t.Fatal("Execute() error = nil")
+	}
+	if !strings.Contains(err.Error(), "prepared Program must not be nil") {
+		t.Fatalf("Execute() error = %v, want execution failure", err)
+	}
+	if !errors.Is(err, recordingErr) {
+		t.Fatalf("Execute() error = %v, want joined recording failure", err)
+	}
+	if !errors.Is(err, closeErr) {
+		t.Fatalf("Execute() error = %v, want joined close failure", err)
+	}
+}
+
+func TestDeviceSessionRejectsAWholeRunRecordingWithoutAFinalizedArtifact(t *testing.T) {
+	t.Parallel()
+
+	driver := &failingLifecycleRecordingDriver{FakeDriver: enginetest.NewFakeDriver()}
+	_, err := (DeviceSession{Driver: driver}).Execute(
+		context.Background(), nil, TestOptions{RecordTo: "whole-run.mp4"})
+	if err == nil || !strings.Contains(err.Error(), "no finalized artifact") {
+		t.Fatalf("Execute() error = %v, want missing recording artifact failure", err)
+	}
+}
+
+type cleanupObservingDriver struct {
+	*enginetest.FakeDriver
+	cancel           context.CancelFunc
+	closeContextErr  error
+	closeHadDeadline bool
+}
+
+func (driver *cleanupObservingDriver) Open(ctx context.Context) error {
+	if err := driver.FakeDriver.Open(ctx); err != nil {
+		return err
+	}
+	driver.cancel()
+	return nil
+}
+
+func (driver *cleanupObservingDriver) Close(ctx context.Context) error {
+	driver.closeContextErr = ctx.Err()
+	_, driver.closeHadDeadline = ctx.Deadline()
+	return nil
+}
+
+type failingLifecycleRecordingDriver struct {
+	*enginetest.FakeDriver
+	stopErr  error
+	closeErr error
+}
+
+func (driver *failingLifecycleRecordingDriver) StartScreenRecording(
+	context.Context, device.ScreenRecordingRequest,
+) (device.CaptureID, error) {
+	return "capture-1", nil
+}
+
+func (driver *failingLifecycleRecordingDriver) StopScreenRecording(
+	context.Context, device.CaptureID,
+) ([]device.Artifact, error) {
+	return nil, driver.stopErr
+}
+
+func (driver *failingLifecycleRecordingDriver) Close(context.Context) error {
+	return driver.closeErr
+}
+
 func runSession(t *testing.T, driver *enginetest.FakeDriver, path string) (string, string, int) {
 	t.Helper()
 	return runSessionWithArgs(t, driver, []string{path})
