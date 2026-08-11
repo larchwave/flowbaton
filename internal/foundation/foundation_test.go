@@ -389,15 +389,15 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 	// These exact objects predate the Lore requirement. Keeping the list exact
 	// avoids rewriting published objects and makes any policy widening visible.
 	grandfathered := map[string]bool{
-		"338d5849a01fcc07269bedc3ec36878f042b7efe": false,
-		"001c30f27cf5c4aaac0106a7fd636b6eca579f1f": false,
-		"f17cacf47d12a41721e06774c0f8051c984b73a1": false,
-		"ec7a530693df4dc75762f68aec64eac379c6a5e8": false,
-		"539e92006c2dd2d4566f40008942978045d97c9f": false,
-		"d1992e9d2b3e38f45fa7794df6eee27b1dedc6dc": false,
-		"1b4c640a2e342d32d7ad1317fdedf600c215f182": false,
-		"55caed91902bf3d7968655f2b55f43182692c91b": false,
-		"cf9445c192cbb3866e510782aa692c50793be10a": false,
+		"9acd46adfc5889a46ddc029f78e1b389f25c66ac": false,
+		"3b3b22b886a27112eac6e2e712b8f86ee7d2d155": false,
+		"61cf4b2603d7e407819ca5f18500e6f1223c1cfa": false,
+		"433b8b065737afaa0eec019992877ce1c46cfa0b": false,
+		"57695eff1cc4c8657f759d7beeb4515fe8dc32a1": false,
+		"ed8f151475811148ecfb2e672468fd998c4a2561": false,
+		"9a53db626da6c84af05e57a9500d0ccf8e93746c": false,
+		"ba1a3b6004f7b5c1b28dc83f616b3649bd453e7e": false,
+		"153e578a81cd0ab23b343054ebfc5082bfc4324e": false,
 	}
 	if len(grandfathered) != 9 {
 		t.Fatalf("Lore grandfather set has %d entries, want exactly 9", len(grandfathered))
