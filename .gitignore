@@ -40,11 +40,8 @@ secrets.json
 service-account*.json
 .op/
 op-session*
-.claude/settings.local.json
-.claude/.cache/
-.claude/worktrees/
+.claude/
 dev/active/*-context.local.md
-.claude/.context-watermark
 dev/active/context-review.md
 dev/active/HANDOFF.md
 # The probe binary the live sweeps run. Built from the tree it sits in; a
