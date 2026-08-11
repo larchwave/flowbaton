@@ -194,7 +194,8 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
         heightPoints: points.height,
         widthPixels: screenshot.size.width * screenshot.scale,
         heightPixels: screenshot.size.height * screenshot.scale,
-        orientation: try Self.wireOrientation(XCUIDevice.shared.orientation))
+        orientation: Self.wireOrientation(
+          XCUIDevice.shared.orientation, screenPoints: points.size))
     }
   }
 
@@ -397,7 +398,9 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     "UPSIDE_DOWN": .portraitUpsideDown,
   ]
 
-  private static func wireOrientation(_ orientation: UIDeviceOrientation) throws -> String {
+  private static func wireOrientation(
+    _ orientation: UIDeviceOrientation, screenPoints: CGSize
+  ) -> String {
     switch orientation {
     case .portrait:
       return "portrait"
@@ -408,7 +411,11 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     case .landscapeRight:
       return "landscape-right"
     default:
-      throw AutomationError.precondition("the device orientation is not screen-aligned")
+      // A freshly created simulator reports .unknown until its first rotation,
+      // and hardware lying flat reports faceUp/faceDown. The screen itself
+      // still renders one way, so answer from its geometry instead of
+      // refusing the whole session before any command ran.
+      return screenPoints.width > screenPoints.height ? "landscape-left" : "portrait"
     }
   }
 }
