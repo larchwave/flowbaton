@@ -12,7 +12,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/version"
 )
 
-const topLevelUsage = "usage: flowbaton --version | check-syntax FILE|- | test [options] FILE|DIR... | record [--local] [options] FLOW [OUTPUT] | list-devices [-p ios|android|web] | start-device -p ios|android --device ID | hierarchy -p ios|android [--device ID] [--app-id ID] [--csv|--compact] [--target devtools] | query -p ios|android [--device ID] [--app-id ID] EXPRESSION | bugreport -p ios|android [--device ID] [--output PATH] | driver-setup [-p ios|android] | mcp [--base-dir DIR] [--no-viewer] [--viewer-port PORT] | serve [options] | db apply-schema --database-url URL | auth keygen|cert-map [options] | generate-completion [bash|zsh]\n"
+const topLevelUsage = "usage: flowbaton --version | check-syntax FILE|- | test [options] FILE|DIR... | record [--local] [options] FLOW [OUTPUT] | explore --app ID -p ios|android|web [options] | list-devices [-p ios|android|web] | start-device -p ios|android --device ID | hierarchy -p ios|android [--device ID] [--app-id ID] [--csv|--compact] [--target devtools] | query -p ios|android [--device ID] [--app-id ID] EXPRESSION | bugreport -p ios|android [--device ID] [--output PATH] | driver-setup [-p ios|android] | mcp [--base-dir DIR] [--no-viewer] [--viewer-port PORT] | serve [options] | db apply-schema --database-url URL | auth keygen|cert-map [options] | generate-completion [bash|zsh]\n"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -74,6 +74,12 @@ func runWithCheckerContext(
 	}
 	if len(args) > 0 && args[0] == "record" {
 		return flowcli.RecordRunner{}.Run(ctx, args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "explore" {
+		// The zero ExploreRunner refuses with a typed error until the model
+		// and crew constructors are wired; flags are still validated first,
+		// so the command line surface is stable ahead of the assembly.
+		return flowcli.ExploreRunner{}.Run(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "list-devices" {
 		return flowcli.ListDevicesRunner{}.Run(ctx, args[1:], stdout, stderr)

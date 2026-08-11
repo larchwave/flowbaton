@@ -15,6 +15,7 @@ var TopLevelSubcommands = []string{
 	"check-syntax",
 	"test",
 	"record",
+	"explore",
 	"list-devices",
 	"start-device",
 	"hierarchy",

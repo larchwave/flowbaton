@@ -41,9 +41,45 @@ type MCPRunner struct {
 	// orchestration as the start-device subcommand. Its zero value reaches
 	// simctl and the Android tooling.
 	StartDevice StartDeviceRunner
+	// Explore serves the explore tool. Nil adapts the real ExploreRunner,
+	// which refuses until its crew wiring is assembled.
+	Explore ExploreInvoker
 	// BaseDir confines inline flow links exposed through MCP. Run fills it from
 	// --base-dir (or the current working directory).
 	BaseDir string
+}
+
+// ExploreToolOptions is one resolved explore invocation. OutputDir, when
+// set, has already been confined to the MCP base directory.
+type ExploreToolOptions struct {
+	AppID      string
+	Platform   string
+	Device     string
+	DriverPort int
+	MaxTests   int
+	MaxSteps   int
+	OutputDir  string
+}
+
+// ExploreToolResult carries the session report markdown and the exported
+// flow paths.
+type ExploreToolResult struct {
+	Report string   `json:"report"`
+	Flows  []string `json:"flows"`
+}
+
+// ExploreInvoker runs one exploration session for the explore tool. An
+// interface rather than a struct-of-funcs so a test injects one fake with
+// the whole behavior.
+type ExploreInvoker interface {
+	Explore(ctx context.Context, options ExploreToolOptions) (ExploreToolResult, error)
+}
+
+func (runner MCPRunner) exploreInvoker() ExploreInvoker {
+	if runner.Explore != nil {
+		return runner.Explore
+	}
+	return exploreRunnerInvoker{}
 }
 
 func (runner MCPRunner) checker() Checker {
@@ -104,6 +140,20 @@ type startDeviceToolInput struct {
 	DeviceLocale string `json:"deviceLocale,omitempty"`
 	DeviceModel  string `json:"deviceModel,omitempty"`
 	SystemImage  string `json:"systemImage,omitempty"`
+}
+
+type exploreToolInput struct {
+	AppID    string `json:"app_id"`
+	Platform string `json:"platform"`
+	Device   string `json:"device,omitempty"`
+	// DriverPort is optional; zero lets the host pick the diagnostic port
+	// the hierarchy tool would use.
+	DriverPort int `json:"driver_port,omitempty"`
+	MaxTests   int `json:"max_tests,omitempty"`
+	MaxSteps   int `json:"max_steps,omitempty"`
+	// OutputDir receives the report and exported flows, under the base
+	// directory. Empty uses the explore subcommand's default location.
+	OutputDir string `json:"output_dir,omitempty"`
 }
 
 // ScreenshotRunner holds the frame capture behind a field so a test can stand
@@ -379,6 +429,45 @@ func (runner MCPRunner) server() *mcp.Server {
 			result.IsError = true
 		}
 		return result, nil, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "explore",
+		Description: "Run an autonomous AI exploration session against one app on a device " +
+			"and return the session report plus exported flow paths. Requires app_id and " +
+			"platform (ios|android|web). This drives the device for real and needs a " +
+			"configured AI provider on the host.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in exploreToolInput) (*mcp.CallToolResult, any, error) {
+		if strings.TrimSpace(in.AppID) == "" || strings.TrimSpace(in.Platform) == "" {
+			return errorResult(fmt.Errorf("explore: app_id and platform are required")), nil, nil
+		}
+		outputDir := ""
+		if in.OutputDir != "" {
+			baseDir, err := resolveMCPBaseDir(runner.BaseDir)
+			if err != nil {
+				return errorResult(fmt.Errorf("mcp: base directory: %w", err)), nil, nil
+			}
+			outputDir, err = confineToMCPBase(baseDir, in.OutputDir)
+			if err != nil {
+				return errorResult(fmt.Errorf("explore: %w", err)), nil, nil
+			}
+		}
+		result, err := runner.exploreInvoker().Explore(ctx, ExploreToolOptions{
+			AppID:      in.AppID,
+			Platform:   in.Platform,
+			Device:     in.Device,
+			DriverPort: in.DriverPort,
+			MaxTests:   in.MaxTests,
+			MaxSteps:   in.MaxSteps,
+			OutputDir:  outputDir,
+		})
+		if err != nil {
+			return errorResult(err), nil, nil
+		}
+		if result.Flows == nil {
+			result.Flows = []string{}
+		}
+		return jsonResult(result)
 	})
 
 	return server
