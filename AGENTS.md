@@ -17,6 +17,7 @@ flowbaton start-device -p <platform> --device <id>   # boot a simulator or launc
 flowbaton hierarchy -p <platform>      # dump the current UI tree
 flowbaton query -p <platform> <expr>   # find on-device elements
 flowbaton bugreport -p <platform>      # capture device diagnostics
+flowbaton explore --app <id> -p <platform>   # autonomous AI exploration of one app
 flowbaton mcp                          # serve these as MCP tools over stdio
 flowbaton serve                        # multi-node DeviceSession runtime (PostgreSQL)
 flowbaton db apply-schema --database-url <url>
@@ -26,10 +27,12 @@ flowbaton                              # print the command summary
 
 Prefer `flowbaton mcp` when you can register MCP servers: it exposes
 `check_syntax`, `list_devices`, `start_device`, `hierarchy`, `query`,
-`run_flow`, and `screenshot` without shelling out. `run_flow` executes a flow
-on a device for real — pass `platform`, `udid`, and either `path` (confined to
-the base directory) or inline `yaml`. `start_device` boots a simulator or
-launches an emulator and waits for readiness.
+`run_flow`, `screenshot`, and `explore` without shelling out. `run_flow`
+executes a flow on a device for real — pass `platform`, `udid`, and either
+`path` (confined to the base directory) or inline `yaml`. `start_device`
+boots a simulator or launches an emulator and waits for readiness. `explore`
+runs an autonomous AI exploration session against one app (`app_id` +
+`platform`) and needs a configured AI provider on the host.
 
 ## Flow shape
 
