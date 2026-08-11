@@ -28,5 +28,4 @@ UI flows on supported Android devices and iOS Simulators.
 ## Current work
 
 The current milestone hardens cross-platform driver packaging, expands device
-smoke coverage, and closes the release requirements above. The live product
-state is recorded in `dev/active/STATE.md`.
+smoke coverage, and closes the release requirements above.
