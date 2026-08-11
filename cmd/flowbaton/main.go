@@ -76,10 +76,7 @@ func runWithCheckerContext(
 		return flowcli.RecordRunner{}.Run(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "explore" {
-		// The zero ExploreRunner refuses with a typed error until the model
-		// and crew constructors are wired; flags are still validated first,
-		// so the command line surface is stable ahead of the assembly.
-		return flowcli.ExploreRunner{}.Run(ctx, args[1:], stdout, stderr)
+		return flowcli.ProductionExploreRunner().Run(ctx, args[1:], stdout, stderr)
 	}
 	if len(args) > 0 && args[0] == "list-devices" {
 		return flowcli.ListDevicesRunner{}.Run(ctx, args[1:], stdout, stderr)
