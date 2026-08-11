@@ -1,10 +1,12 @@
 package aiengine
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/openai"
 
@@ -24,6 +26,18 @@ const (
 	defaultOpenAIModel    = "gpt-4o"
 	defaultAnthropicModel = "claude-3-5-sonnet-latest"
 )
+
+// imagePart returns the inline-PNG content part the provider's API accepts.
+// langchaingo maps BinaryContent to a "binary" part that OpenAI's API rejects
+// with a 400, while the Anthropic adapter reads images only from
+// BinaryContent — so the shape has to follow the provider.
+func imagePart(provider Provider, png []byte) llms.ContentPart {
+	if provider == ProviderOpenAI {
+		return llms.ImageURLPart(
+			"data:image/png;base64," + base64.StdEncoding.EncodeToString(png))
+	}
+	return llms.BinaryPart("image/png", png)
+}
 
 // Config selects and authenticates a provider. APIKey is optional: when blank,
 // the provider library reads its own standard env var (OPENAI_API_KEY /
@@ -111,7 +125,7 @@ func New(cfg Config) (*Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("aiengine: openai: %w", err)
 		}
-		return &Engine{model: llm, timeout: timeout}, nil
+		return &Engine{model: llm, provider: ProviderOpenAI, timeout: timeout}, nil
 	case ProviderAnthropic:
 		if model == "" {
 			model = defaultAnthropicModel
@@ -127,7 +141,7 @@ func New(cfg Config) (*Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("aiengine: anthropic: %w", err)
 		}
-		return &Engine{model: llm, timeout: timeout}, nil
+		return &Engine{model: llm, provider: ProviderAnthropic, timeout: timeout}, nil
 	default:
 		return nil, fmt.Errorf("aiengine: unknown provider %q (want %q or %q)", cfg.Provider, ProviderOpenAI, ProviderAnthropic)
 	}

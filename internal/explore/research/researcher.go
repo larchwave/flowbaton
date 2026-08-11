@@ -110,7 +110,7 @@ func (r *Researcher) proposeSections(ctx context.Context, state *explore.ScreenS
 		return sectionsReply{}, fmt.Errorf("research: section proposal: %w", err)
 	}
 	reply := sectionsReply{}
-	if err := strictjson.Decode([]byte(extractJSON(response.Message.Text)), &reply); err != nil {
+	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &reply); err != nil {
 		return sectionsReply{}, fmt.Errorf("research: decode section proposal: %w", err)
 	}
 	unknown := unknownIndexes(reply, known)
@@ -125,7 +125,7 @@ func (r *Researcher) proposeSections(ctx context.Context, state *explore.ScreenS
 	if err != nil {
 		return sectionsReply{}, fmt.Errorf("research: section correction: %w", err)
 	}
-	if err := strictjson.Decode([]byte(extractJSON(response.Message.Text)), &reply); err != nil {
+	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &reply); err != nil {
 		return sectionsReply{}, fmt.Errorf("research: decode section correction: %w", err)
 	}
 	return dropUnknown(reply, known), nil
@@ -147,7 +147,7 @@ func (r *Researcher) mergeVisualNotes(ctx context.Context, state *explore.Screen
 		return fmt.Errorf("research: visual pass: %w", err)
 	}
 	reply := visionReply{}
-	if err := strictjson.Decode([]byte(extractJSON(response.Message.Text)), &reply); err != nil {
+	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &reply); err != nil {
 		return fmt.Errorf("research: decode visual pass: %w", err)
 	}
 	byIndex := map[int]visionElement{}
@@ -261,21 +261,6 @@ func dropUnknown(reply sectionsReply, known map[int]bool) sectionsReply {
 		out.Sections = append(out.Sections, kept)
 	}
 	return out
-}
-
-// extractJSON strips a wrapping markdown code fence when the model added
-// one around its JSON object.
-func extractJSON(text string) string {
-	trimmed := strings.TrimSpace(text)
-	if !strings.HasPrefix(trimmed, "```") {
-		return trimmed
-	}
-	trimmed = strings.TrimPrefix(trimmed, "```json")
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	if end := strings.LastIndex(trimmed, "```"); end >= 0 {
-		trimmed = trimmed[:end]
-	}
-	return strings.TrimSpace(trimmed)
 }
 
 func copyUIMap(source *explore.UIMap) *explore.UIMap {

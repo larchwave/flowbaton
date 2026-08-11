@@ -252,8 +252,9 @@ func TestExploreRunExecutesASessionAndWritesArtifacts(t *testing.T) {
 	runner := assembledExploreRunner(fake, driver)
 	var seenUDID string
 	var seenPort int
-	runner.NewDriver = func(_ context.Context, _ TestOptions, udid string, port int) (device.Driver, error) {
-		seenUDID, seenPort = udid, port
+	var seenOptions TestOptions
+	runner.NewDriver = func(_ context.Context, options TestOptions, udid string, port int) (device.Driver, error) {
+		seenOptions, seenUDID, seenPort = options, udid, port
 		return driver, nil
 	}
 
@@ -264,6 +265,9 @@ func TestExploreRunExecutesASessionAndWritesArtifacts(t *testing.T) {
 	}
 	if seenUDID != "emulator-5554" || seenPort != 7001 {
 		t.Fatalf("driver built for %q:%d, want emulator-5554:7001", seenUDID, seenPort)
+	}
+	if !seenOptions.ReinstallDriver {
+		t.Fatal("explore built its driver without ReinstallDriver; a plain device has no operator-managed runner to connect to")
 	}
 	if !strings.Contains(stdout.String(), "# session report") {
 		t.Fatalf("the report markdown was not written to stdout: %q", stdout.String())

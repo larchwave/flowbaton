@@ -69,7 +69,7 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fin
 		return check
 	}
 	verdict := workerVerdict{}
-	if err := strictjson.Decode([]byte(strings.TrimSpace(response.Message.Text)), &verdict); err != nil {
+	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &verdict); err != nil {
 		check.Evidence = "unreadable outcome reply: " + err.Error()
 		return check
 	}

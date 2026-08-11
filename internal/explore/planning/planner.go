@@ -99,12 +99,8 @@ func (p *Planner) converse(ctx context.Context, messages []explore.Message) (pla
 }
 
 func decodeReply(text string) (planReply, error) {
-	trimmed := strings.TrimSpace(text)
-	trimmed = strings.TrimPrefix(trimmed, "```json")
-	trimmed = strings.TrimPrefix(trimmed, "```")
-	trimmed = strings.TrimSuffix(strings.TrimSpace(trimmed), "```")
 	var reply planReply
-	if err := strictjson.Decode([]byte(strings.TrimSpace(trimmed)), &reply); err != nil {
+	if err := strictjson.Decode([]byte(explore.UnfencedJSON(text)), &reply); err != nil {
 		return planReply{}, err
 	}
 	if len(reply.Scenarios) == 0 {

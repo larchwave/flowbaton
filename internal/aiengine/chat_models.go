@@ -31,13 +31,13 @@ func ChatModelsFromEnv(getenv func(string) string) (explore.ModelSet, error) {
 	if !ok {
 		return explore.ModelSet{}, fmt.Errorf("aiengine: unexpected engine type %T", built)
 	}
-	manager := NewChatClient(base.model, "", base.timeout)
+	manager := NewChatClient(base.model, base.provider, "", base.timeout)
 	set := explore.ModelSet{Manager: manager, Worker: manager, Vision: manager}
 	if worker := strings.TrimSpace(getenv("FLOWBATON_AI_WORKER_MODEL")); worker != "" {
-		set.Worker = NewChatClient(base.model, worker, base.timeout)
+		set.Worker = NewChatClient(base.model, base.provider, worker, base.timeout)
 	}
 	if vision := strings.TrimSpace(getenv("FLOWBATON_AI_VISION_MODEL")); vision != "" {
-		set.Vision = NewChatClient(base.model, vision, base.timeout)
+		set.Vision = NewChatClient(base.model, base.provider, vision, base.timeout)
 	}
 	return set, nil
 }

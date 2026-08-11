@@ -54,7 +54,7 @@ func textResponse(text string) *llms.ContentResponse {
 func TestChatMapsRolesAndParts(t *testing.T) {
 	t.Parallel()
 	fake := &scriptedChatModel{response: textResponse("ok")}
-	client := NewChatClient(fake, "", 0)
+	client := NewChatClient(fake, "", "", 0)
 
 	request := explore.ChatRequest{Messages: []explore.Message{
 		{Role: explore.RoleSystem, Text: "be brief"},
@@ -125,7 +125,7 @@ func TestChatMessageValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			fake := &scriptedChatModel{response: textResponse("ok")}
-			client := NewChatClient(fake, "", 0)
+			client := NewChatClient(fake, "", "", 0)
 			_, err := client.Chat(context.Background(), explore.ChatRequest{Messages: tc.messages})
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("err = %v, want substring %q", err, tc.wantErr)
@@ -140,7 +140,7 @@ func TestChatMessageValidation(t *testing.T) {
 func TestChatDeclaresToolsAndOptions(t *testing.T) {
 	t.Parallel()
 	fake := &scriptedChatModel{response: textResponse("ok")}
-	client := NewChatClient(fake, "worker-mini", 0)
+	client := NewChatClient(fake, "", "worker-mini", 0)
 
 	schema := json.RawMessage(`{"type":"object","properties":{"index":{"type":"integer"}}}`)
 	request := explore.ChatRequest{
@@ -186,7 +186,7 @@ func TestChatDeclaresToolsAndOptions(t *testing.T) {
 func TestChatWithoutForceToolLeavesChoiceUnset(t *testing.T) {
 	t.Parallel()
 	fake := &scriptedChatModel{response: textResponse("ok")}
-	client := NewChatClient(fake, "", 0)
+	client := NewChatClient(fake, "", "", 0)
 	request := explore.ChatRequest{
 		Messages: []explore.Message{{Role: explore.RoleUser, Text: "look"}},
 		Tools:    []explore.ToolSpec{{Name: "tap", Description: "tap"}},
@@ -205,7 +205,7 @@ func TestChatWithoutForceToolLeavesChoiceUnset(t *testing.T) {
 func TestChatForceToolWithoutToolsFails(t *testing.T) {
 	t.Parallel()
 	fake := &scriptedChatModel{response: textResponse("ok")}
-	client := NewChatClient(fake, "", 0)
+	client := NewChatClient(fake, "", "", 0)
 	request := explore.ChatRequest{
 		Messages:  []explore.Message{{Role: explore.RoleUser, Text: "act"}},
 		ForceTool: true,
@@ -288,7 +288,7 @@ func TestChatExtractsReply(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			client := NewChatClient(&scriptedChatModel{response: tc.response}, "", 0)
+			client := NewChatClient(&scriptedChatModel{response: tc.response}, "", "", 0)
 			got, err := client.Chat(context.Background(), explore.ChatRequest{
 				Messages: []explore.Message{{Role: explore.RoleUser, Text: "go"}},
 			})
@@ -332,7 +332,7 @@ func TestChatRejectsUnusableReplies(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			client := NewChatClient(&scriptedChatModel{response: tc.response, err: tc.err}, "", 0)
+			client := NewChatClient(&scriptedChatModel{response: tc.response, err: tc.err}, "", "", 0)
 			_, err := client.Chat(context.Background(), explore.ChatRequest{
 				Messages: []explore.Message{{Role: explore.RoleUser, Text: "go"}},
 			})
@@ -345,7 +345,7 @@ func TestChatRejectsUnusableReplies(t *testing.T) {
 
 func TestChatAppliesTimeout(t *testing.T) {
 	t.Parallel()
-	client := NewChatClient(&scriptedChatModel{waitForContext: true}, "", 20*time.Millisecond)
+	client := NewChatClient(&scriptedChatModel{waitForContext: true}, "", "", 20*time.Millisecond)
 	start := time.Now()
 	_, err := client.Chat(context.Background(), explore.ChatRequest{
 		Messages: []explore.Message{{Role: explore.RoleUser, Text: "go"}},
@@ -360,7 +360,7 @@ func TestChatAppliesTimeout(t *testing.T) {
 
 func TestChatWithoutModelFails(t *testing.T) {
 	t.Parallel()
-	client := NewChatClient(nil, "", 0)
+	client := NewChatClient(nil, "", "", 0)
 	if _, err := client.Chat(context.Background(), explore.ChatRequest{
 		Messages: []explore.Message{{Role: explore.RoleUser, Text: "go"}},
 	}); err == nil {

@@ -23,6 +23,7 @@ import (
 // model the provider was constructed with.
 type Engine struct {
 	model     llms.Model
+	provider  Provider
 	modelName string
 	timeout   time.Duration
 }
@@ -111,7 +112,7 @@ func (e *Engine) generateJSON(ctx context.Context, prompt string, screenshotPNG 
 		Role: llms.ChatMessageTypeHuman,
 		Parts: []llms.ContentPart{
 			llms.TextPart(prompt),
-			llms.BinaryPart("image/png", screenshotPNG),
+			imagePart(e.provider, screenshotPNG),
 		},
 	}
 	options := []llms.CallOption{llms.WithTemperature(0)}

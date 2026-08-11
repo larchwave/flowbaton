@@ -144,7 +144,10 @@ func (runner ExploreRunner) executeSession(
 			return "", nil, err
 		}
 	}
-	driver, err := runner.newDriver()(ctx, TestOptions{Platform: options.Platform}, options.Device, port)
+	// ReinstallDriver mirrors the `test` default: a plain device has no
+	// operator-managed runner listening, so explore must provision one.
+	driver, err := runner.newDriver()(
+		ctx, TestOptions{Platform: options.Platform, ReinstallDriver: true}, options.Device, port)
 	if err != nil {
 		return "", nil, err
 	}

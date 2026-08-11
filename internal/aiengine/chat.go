@@ -18,15 +18,18 @@ import (
 // is how the explore tiers share one provider client.
 type ChatClient struct {
 	model     llms.Model
+	provider  Provider
 	modelName string
 	timeout   time.Duration
 }
 
-// NewChatClient wraps an already-constructed langchaingo model. Pass "" as
-// modelName to use the client's own model; timeout zero (or out of range)
-// falls back to DefaultProviderTimeout at call time.
-func NewChatClient(model llms.Model, modelName string, timeout time.Duration) *ChatClient {
-	return &ChatClient{model: model, modelName: modelName, timeout: timeout}
+// NewChatClient wraps an already-constructed langchaingo model. The provider
+// names the API dialect the model speaks, which decides how an image turn is
+// encoded (see imagePart); blank keeps the Anthropic-shaped BinaryContent.
+// Pass "" as modelName to use the client's own model; timeout zero (or out of
+// range) falls back to DefaultProviderTimeout at call time.
+func NewChatClient(model llms.Model, provider Provider, modelName string, timeout time.Duration) *ChatClient {
+	return &ChatClient{model: model, provider: provider, modelName: modelName, timeout: timeout}
 }
 
 // Compile-time proof this satisfies the explore chat seam.
@@ -44,7 +47,7 @@ func (c *ChatClient) Chat(ctx context.Context, request explore.ChatRequest) (exp
 	if request.ForceTool && len(request.Tools) == 0 {
 		return explore.ChatResponse{}, errors.New("aiengine: forcing a tool call requires at least one declared tool")
 	}
-	messages, err := chatMessages(request.Messages)
+	messages, err := chatMessages(c.provider, request.Messages)
 	if err != nil {
 		return explore.ChatResponse{}, err
 	}
@@ -79,7 +82,7 @@ func (c *ChatClient) Chat(ctx context.Context, request explore.ChatRequest) (exp
 
 // chatMessages converts explore turns to langchaingo message contents. The
 // input is only read, never mutated.
-func chatMessages(messages []explore.Message) ([]llms.MessageContent, error) {
+func chatMessages(provider Provider, messages []explore.Message) ([]llms.MessageContent, error) {
 	converted := make([]llms.MessageContent, 0, len(messages))
 	for i, message := range messages {
 		role, err := chatRole(message.Role)
@@ -100,7 +103,7 @@ func chatMessages(messages []explore.Message) ([]llms.MessageContent, error) {
 				parts = append(parts, llms.TextPart(message.Text))
 			}
 			if len(message.ImagePNG) > 0 {
-				parts = append(parts, llms.BinaryPart("image/png", message.ImagePNG))
+				parts = append(parts, imagePart(provider, message.ImagePNG))
 			}
 			for _, call := range message.ToolCalls {
 				parts = append(parts, llms.ToolCall{

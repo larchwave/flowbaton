@@ -3,6 +3,7 @@ package explore
 import (
 	"context"
 	"encoding/json"
+	"strings"
 )
 
 // Role identifies the author of a chat message.
@@ -78,4 +79,21 @@ type ModelSet struct {
 	Worker  LLM
 	Manager LLM
 	Vision  LLM
+}
+
+// UnfencedJSON strips the markdown code fence real models wrap around a
+// JSON-only reply even when told not to (proven live with gpt-4o on
+// 2026-08-11). Bare replies pass through untouched; the decode after it
+// stays strict, so tolerance stops at the wrapper.
+func UnfencedJSON(text string) string {
+	trimmed := strings.TrimSpace(text)
+	if !strings.HasPrefix(trimmed, "```") {
+		return trimmed
+	}
+	trimmed = strings.TrimPrefix(trimmed, "```json")
+	trimmed = strings.TrimPrefix(trimmed, "```")
+	if end := strings.LastIndex(trimmed, "```"); end >= 0 {
+		trimmed = trimmed[:end]
+	}
+	return strings.TrimSpace(trimmed)
 }
