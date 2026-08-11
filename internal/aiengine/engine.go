@@ -1,8 +1,7 @@
 // Package aiengine implements engine.AIPredictionEngine on top of langchaingo's
 // provider-agnostic llms.Model. It lives outside internal/engine on purpose: the
-// engine core stays stdlib-first (project CLAUDE.md hard rule 6), so the
-// langchaingo dependency is confined to this peripheral package and wired in at
-// the CLI composition layer.
+// engine core stays stdlib-first, so the langchaingo dependency is confined to
+// this peripheral package and wired in at the CLI composition layer.
 package aiengine
 
 import (

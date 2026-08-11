@@ -30,7 +30,6 @@ drivers/ios/FlowBatonIOSRunner.xcodeproj/
 # Local credentials and assistant runtime
 .env
 .env.*
-!.env.template
 *.key
 *.pem
 *.p12
@@ -38,24 +37,14 @@ drivers/ios/FlowBatonIOSRunner.xcodeproj/
 credentials.json
 secrets.json
 service-account*.json
-.op/
-op-session*
 .claude/
-dev/active/*-context.local.md
-dev/active/context-review.md
-dev/active/HANDOFF.md
-# The probe binary the live sweeps run. Built from the tree it sits in; a
-# compiled copy in git would go stale the moment anyone commits.
-dev/active/flowbaton-probe
+CLAUDE.md
+.worktreeinclude
+
+# Local working notes, probes, and their outputs
+dev/
 
 # Generated device artifacts from bugreport/recording runs — never source, may
 # carry device data. Keep them out of the tree.
 internal/cli/*.zip
 *.bugreport.zip
-dev/active/ai-probe-out/
-dev/active/runtime-out/
-dev/active/selectorsem-out/
-dev/active/readback-out/
-dev/active/travel-out/
-dev/active/shard-out/
-dev/active/readback-ios-out/
