@@ -1,0 +1,214 @@
+package research
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/larchwave/flowbaton/internal/device"
+)
+
+type fakeDriver struct {
+	device.Driver
+	static    bool
+	staticErr error
+	tree      device.TreeNode
+	treeErr   error
+	shot      []byte
+	shotErr   error
+
+	staticReq device.ScreenStaticRequest
+	descReq   device.ContentDescriptorRequest
+	shotReq   device.ScreenshotRequest
+}
+
+func (f *fakeDriver) WaitUntilScreenIsStatic(_ context.Context, req device.ScreenStaticRequest) (bool, error) {
+	f.staticReq = req
+	return f.static, f.staticErr
+}
+
+func (f *fakeDriver) ContentDescriptor(_ context.Context, req device.ContentDescriptorRequest) (device.TreeNode, error) {
+	f.descReq = req
+	return f.tree, f.treeErr
+}
+
+func (f *fakeDriver) TakeScreenshot(_ context.Context, req device.ScreenshotRequest) ([]byte, error) {
+	f.shotReq = req
+	return f.shot, f.shotErr
+}
+
+func testNode(attrs map[string]string, children ...device.TreeNode) device.TreeNode {
+	return device.TreeNode{Attributes: attrs, Children: children}
+}
+
+func clickableNode(attrs map[string]string) device.TreeNode {
+	yes := true
+	return device.TreeNode{Attributes: attrs, Clickable: &yes}
+}
+
+func testTree() device.TreeNode {
+	return testNode(map[string]string{},
+		clickableNode(map[string]string{
+			"class":       "android.widget.Button",
+			"text":        "Save",
+			"resource-id": "com.example:id/save",
+			"bounds":      "[10,20][110,60]",
+		}),
+		clickableNode(map[string]string{
+			"class":  "android.widget.Button",
+			"text":   "Cancel",
+			"bounds": "[120,20][220,60]",
+		}),
+	)
+}
+
+func TestObserveCapturesScreenState(t *testing.T) {
+	driver := &fakeDriver{static: true, tree: testTree(), shot: []byte("png-bytes")}
+	captured := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+	observer := &Observer{
+		Driver:        driver,
+		AppID:         "com.example.app",
+		SettleTimeout: 2 * time.Second,
+		Clock:         func() time.Time { return captured },
+	}
+	state, err := observer.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := driver.staticReq.TimeoutMillis; got != 2000 {
+		t.Fatalf("settle timeout %d, want 2000", got)
+	}
+	if len(driver.descReq.AppIDs) != 1 || driver.descReq.AppIDs[0] != "com.example.app" {
+		t.Fatalf("hierarchy request not scoped to app: %+v", driver.descReq)
+	}
+	if driver.shotReq.Compressed {
+		t.Fatal("screenshot request must be uncompressed")
+	}
+	if len(state.Elements) != 2 {
+		t.Fatalf("elements %d, want 2", len(state.Elements))
+	}
+	if state.Signature.AppID != "com.example.app" || state.Signature.TreeDigest == "" {
+		t.Fatalf("bad signature %+v", state.Signature)
+	}
+	if string(state.ScreenshotPNG) != "png-bytes" {
+		t.Fatalf("screenshot %q", state.ScreenshotPNG)
+	}
+	if !state.CapturedAt.Equal(captured) {
+		t.Fatalf("captured at %v", state.CapturedAt)
+	}
+	if state.DialogActive {
+		t.Fatal("no modal surface on this screen")
+	}
+}
+
+func TestObserveContinuesWhenScreenNotStatic(t *testing.T) {
+	driver := &fakeDriver{static: false, tree: testTree(), shot: []byte("p")}
+	notes := []string{}
+	observer := &Observer{
+		Driver: driver,
+		AppID:  "com.example.app",
+		Logf:   func(format string, args ...any) { notes = append(notes, format) },
+	}
+	state, err := observer.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil {
+		t.Fatal("state must be captured anyway")
+	}
+	if len(notes) != 1 || !strings.Contains(notes[0], "still moving") {
+		t.Fatalf("expected an unsettled note, got %v", notes)
+	}
+}
+
+func TestObserveContinuesWhenSettleUnsupported(t *testing.T) {
+	driver := &fakeDriver{staticErr: device.ErrUnsupported, tree: testTree(), shot: []byte("p")}
+	observer := &Observer{Driver: driver, AppID: "com.example.app"}
+	if _, err := observer.Observe(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestObserveFailsOnErrors(t *testing.T) {
+	boom := errors.New("boom")
+	tests := []struct {
+		name   string
+		driver *fakeDriver
+	}{
+		{"settle error", &fakeDriver{staticErr: boom}},
+		{"hierarchy error", &fakeDriver{static: true, treeErr: boom}},
+		{"screenshot error", &fakeDriver{static: true, tree: testTree(), shotErr: boom}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			observer := &Observer{Driver: tt.driver, AppID: "com.example.app"}
+			if _, err := observer.Observe(context.Background()); !errors.Is(err, boom) {
+				t.Fatalf("err = %v, want wrapped boom", err)
+			}
+		})
+	}
+}
+
+func TestObserveValidatesInputs(t *testing.T) {
+	if _, err := (&Observer{AppID: "a"}).Observe(context.Background()); err == nil {
+		t.Fatal("nil driver must fail")
+	}
+	if _, err := (&Observer{Driver: &fakeDriver{}}).Observe(context.Background()); err == nil {
+		t.Fatal("blank app id must fail")
+	}
+}
+
+func TestObserveRespectsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	observer := &Observer{Driver: &fakeDriver{static: true, tree: testTree()}, AppID: "a"}
+	if _, err := observer.Observe(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+func TestDialogActiveHeuristic(t *testing.T) {
+	content := testNode(map[string]string{"class": "android.widget.FrameLayout"},
+		clickableNode(map[string]string{"class": "android.widget.Button", "text": "Go"}))
+	tests := []struct {
+		name string
+		root device.TreeNode
+		want bool
+	}{
+		{
+			"late alert subtree",
+			testNode(nil, content, testNode(map[string]string{"class": "android.app.AlertDialogLayout"})),
+			true,
+		},
+		{
+			"nested dialog in late subtree",
+			testNode(nil, content, testNode(map[string]string{"class": "android.widget.FrameLayout"},
+				testNode(map[string]string{"type": "SheetPresentation"}))),
+			true,
+		},
+		{
+			"first subtree named dialog does not count",
+			testNode(nil, testNode(map[string]string{"class": "DialogHost"}), content),
+			false,
+		},
+		{
+			"no modal surface",
+			testNode(nil, content, testNode(map[string]string{"class": "android.widget.LinearLayout"})),
+			false,
+		},
+		{
+			"single subtree",
+			testNode(nil, content),
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := dialogActive(tt.root); got != tt.want {
+				t.Fatalf("dialogActive = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
