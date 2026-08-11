@@ -44,10 +44,13 @@ const (
 	// the same knob on both platforms (specs/04-wire-protocols.md line 93).
 	startupTimeoutEnv = "FLOWBATON_DRIVER_STARTUP_TIMEOUT"
 	// agentStartupPoll and agentStartupTimeout pace Open's reachability wait
-	// when it owns the agent lifecycle (specs/02-device-drivers.md §2.2:
-	// poll 100ms, startup timeout 15000ms).
+	// when it owns the agent lifecycle (specs/02-device-drivers.md §2.2 asks
+	// for a finite deadline). The first session on a freshly booted device
+	// covers install plus dexopt plus instrumentation start under boot load,
+	// which regularly needs more than 15s, so the default budget is 60s; the
+	// env knob still narrows or widens it.
 	agentStartupPoll    = 100 * time.Millisecond
-	agentStartupTimeout = 15000 * time.Millisecond
+	agentStartupTimeout = 60000 * time.Millisecond
 )
 
 const (
@@ -323,7 +326,7 @@ func (driver *Driver) rollbackManagedOpen(ctx context.Context, state managedOpen
 	return errors.Join(cleanupErrs...)
 }
 
-// agentStartupBudget is the reachability wait: 15000ms unless the
+// agentStartupBudget is the reachability wait: 60000ms unless the
 // milliseconds env override says otherwise (specs/02 §2.2, specs/04 line 93).
 func (driver *Driver) agentStartupBudget() (time.Duration, error) {
 	raw := os.Getenv(startupTimeoutEnv)

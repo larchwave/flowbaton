@@ -244,7 +244,7 @@ func TestCloseRemovesTheForward(t *testing.T) {
 
 // The managed-agent lifecycle (specs/02-device-drivers.md §2.2): when Open
 // is handed the two APKs it owns delivery — reinstall, `am instrument`, and
-// the 100ms reachability poll bounded by the 15000ms startup timeout.
+// the 100ms reachability poll bounded by the 60000ms startup timeout.
 
 // newManagedDriver builds (but does not open) a driver that owns the agent
 // lifecycle, with the waits compressed to test scale.
