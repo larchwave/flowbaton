@@ -13,8 +13,14 @@ flowbaton driver-setup -p <platform>   # prepare the android or ios driver
 flowbaton test -p <platform> --device <id> <flow.yaml>
 flowbaton record <flow.yaml> [out]     # run a flow and capture a video
 flowbaton list-devices [-p platform]   # connected devices and simulators
+flowbaton start-device -p <platform> --device <id>   # boot a simulator or launch an AVD
 flowbaton hierarchy -p <platform>      # dump the current UI tree
+flowbaton query -p <platform> <expr>   # find on-device elements
+flowbaton bugreport -p <platform>      # capture device diagnostics
 flowbaton mcp                          # serve these as MCP tools over stdio
+flowbaton serve                        # multi-node DeviceSession runtime (PostgreSQL)
+flowbaton db apply-schema --database-url <url>
+flowbaton auth keygen|cert-map        # serve-runtime credentials
 flowbaton                              # print the command summary
 ```
 
