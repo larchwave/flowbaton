@@ -477,6 +477,9 @@ func TestAndroidConnectedRunnerBoundsEmulatorStartup(t *testing.T) {
 	script := readFile(t, "scripts/ci/android-connected.sh")
 	for _, required := range []string{
 		`emulator_bin="${android_sdk}/emulator/emulator"`,
+		`avd_home="${RUNNER_TEMP:-${HOME:?}}/flowbaton-avd"`,
+		`export ANDROID_AVD_HOME="$avd_home"`,
+		`mkdir -p "$avd_home"`,
 		`"$emulator_bin" -version`,
 		`"$emulator_bin" -avd`,
 		`-port "$port"`,

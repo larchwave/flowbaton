@@ -47,11 +47,19 @@ func TestAndroidConnectedRunnerHandlesEmulatorLifecycle(t *testing.T) {
 				t.Fatal(err)
 			}
 			writeExecutable(t, filepath.Join(bin, "sdkmanager"), "#!/usr/bin/env bash\nexit 0\n")
-			writeExecutable(t, filepath.Join(bin, "avdmanager"), "#!/usr/bin/env bash\nexit 0\n")
+			writeExecutable(t, filepath.Join(bin, "avdmanager"), `#!/usr/bin/env bash
+: "${ANDROID_AVD_HOME:?}"
+[[ -d "$ANDROID_AVD_HOME" ]]
+printf '%s\n' 'avd-marker' >"$ANDROID_AVD_HOME/flowbaton-ci-api-34.ini"
+`)
 			writeExecutable(t, filepath.Join(androidSDK, "emulator", "emulator"), `#!/usr/bin/env bash
 if [[ "${1:-}" == "-version" ]]; then
   printf '%s\n' 'Android emulator harness'
   exit 0
+fi
+if [[ "$(cat "${ANDROID_AVD_HOME:?}/flowbaton-ci-api-34.ini")" != "avd-marker" ]]; then
+  printf '%s\n' 'emulator-avd-home-mismatch' >&2
+  exit 24
 fi
 case "${HARNESS_EMULATOR_MODE:?}" in
   exit)

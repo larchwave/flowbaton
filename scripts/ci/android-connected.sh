@@ -14,6 +14,9 @@ if [[ -z "$android_sdk" ]]; then
   exit 1
 fi
 emulator_bin="${android_sdk}/emulator/emulator"
+avd_home="${RUNNER_TEMP:-${HOME:?}}/flowbaton-avd"
+export ANDROID_AVD_HOME="$avd_home"
+mkdir -p "$avd_home"
 
 sdkmanager 'platform-tools' 'emulator' "$image"
 printf 'no\n' | avdmanager create avd --force --name "$avd" --package "$image" --device 'pixel_6'
