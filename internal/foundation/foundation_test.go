@@ -501,6 +501,24 @@ func TestAndroidConnectedRunnerBoundsEmulatorStartup(t *testing.T) {
 	}
 }
 
+func TestAndroidConnectedWorkflowsInstallEmulatorHostLibrary(t *testing.T) {
+	const install = "sudo apt-get install --yes --no-install-recommends libpulse0"
+	for _, path := range []string{".github/workflows/ci.yml", ".github/workflows/release-publish.yml"} {
+		workflow := readFile(t, path)
+		installAt := strings.Index(workflow, install)
+		if installAt < 0 {
+			t.Errorf("%s does not install the Android emulator host library", path)
+			continue
+		}
+		runnerAt := strings.Index(workflow, "scripts/ci/android-connected.sh")
+		if runnerAt < 0 {
+			t.Errorf("%s does not invoke the Android connected runner", path)
+		} else if installAt > runnerAt {
+			t.Errorf("%s installs the Android emulator host library after invoking the runner", path)
+		}
+	}
+}
+
 func TestGoRaceWorkflowsExercisePostgres(t *testing.T) {
 	const postgresImage = "postgres:17.6-alpine3.22@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
 	for _, path := range []string{

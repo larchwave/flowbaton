@@ -111,8 +111,11 @@ jobs:
           java-version: '17'
       - name: Install Android command-line tools
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
-      - name: Enable emulator acceleration
-        run: sudo chmod 666 /dev/kvm
+      - name: Prepare emulator host
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libpulse0
+          sudo chmod 666 /dev/kvm
       - name: Build and execute connected Android tests
         working-directory: drivers/android
         run: ../../scripts/ci/android-connected.sh
