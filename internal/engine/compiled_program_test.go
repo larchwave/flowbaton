@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -176,30 +177,34 @@ func TestCompileProgramRejectsMissingAndAmbiguousFlowLinks(t *testing.T) {
 			Links: []model.FileLink{{Kind: model.FileLinkFlow, Path: "missing.yaml"}},
 		}},
 	})
+	directory := t.TempDir()
+	rootPath := filepath.Join(directory, "root.yaml")
+	leftPath := filepath.Join(directory, "left.yaml")
+	rightPath := filepath.Join(directory, "right.yaml")
 	ambiguousLink := model.FileLink{
-		Kind: model.FileLinkFlow, Path: "left.yaml", ResolvedPath: "/workspace/right.yaml",
+		Kind: model.FileLinkFlow, Path: "left.yaml", ResolvedPath: rightPath,
 	}
 	ambiguous := &Program{
-		roots: []string{"/workspace/root.yaml"},
-		paths: []string{"/workspace/root.yaml", "/workspace/left.yaml", "/workspace/right.yaml"},
+		roots: []string{rootPath},
+		paths: []string{rootPath, leftPath, rightPath},
 		flows: map[string]model.Flow{
-			"/workspace/root.yaml": {
-				SchemaVersion: model.ASTVersionV0, Path: "/workspace/root.yaml",
+			rootPath: {
+				SchemaVersion: model.ASTVersionV0, Path: rootPath,
 				Commands: []model.Command{{Kind: model.CommandRunFlow, Links: []model.FileLink{ambiguousLink}}},
 			},
-			"/workspace/left.yaml":  {SchemaVersion: model.ASTVersionV0, Path: "/workspace/left.yaml"},
-			"/workspace/right.yaml": {SchemaVersion: model.ASTVersionV0, Path: "/workspace/right.yaml"},
+			leftPath:  {SchemaVersion: model.ASTVersionV0, Path: leftPath},
+			rightPath: {SchemaVersion: model.ASTVersionV0, Path: rightPath},
 		},
 		aliases: map[string]string{
-			"/workspace/left.yaml":  "/workspace/left.yaml",
-			"/workspace/right.yaml": "/workspace/right.yaml",
+			leftPath:  leftPath,
+			rightPath: rightPath,
 		},
 		graph: capability.Report{
-			Roots: []string{"/workspace/root.yaml"},
-			Nodes: []capability.GraphNode{{Path: "/workspace/root.yaml"}, {Path: "/workspace/left.yaml"}, {Path: "/workspace/right.yaml"}},
+			Roots: []string{rootPath},
+			Nodes: []capability.GraphNode{{Path: rootPath}, {Path: leftPath}, {Path: rightPath}},
 			Edges: []capability.GraphEdge{
-				{From: "/workspace/root.yaml", To: "/workspace/left.yaml", Kind: model.FileLinkFlow},
-				{From: "/workspace/root.yaml", To: "/workspace/right.yaml", Kind: model.FileLinkFlow},
+				{From: rootPath, To: leftPath, Kind: model.FileLinkFlow},
+				{From: rootPath, To: rightPath, Kind: model.FileLinkFlow},
 			},
 		},
 	}

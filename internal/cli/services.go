@@ -115,16 +115,8 @@ func safeArtifactName(suggested string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("artifact sink: an artifact name is required")
 	}
-	if filepath.IsAbs(name) {
-		return "", fmt.Errorf(
-			"artifact sink: artifact name %q must be relative, not an absolute path", suggested)
-	}
-	// Clean first, so `shots/../../escaped` is judged by where it lands rather
-	// than by how it is spelled.
 	cleaned := filepath.Clean(name)
-	if cleaned == "." || cleaned == ".." ||
-		cleaned == string(filepath.Separator) ||
-		strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+	if cleaned == "." || !filepath.IsLocal(cleaned) {
 		return "", fmt.Errorf(
 			"artifact sink: artifact name %q must stay inside the output directory", suggested)
 	}

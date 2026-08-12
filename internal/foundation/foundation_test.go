@@ -451,6 +451,28 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 	}
 }
 
+func TestHistoryPolicyWorkflowsFetchCompleteHistory(t *testing.T) {
+	for _, test := range []struct {
+		path string
+		job  string
+	}{
+		{path: ".github/workflows/ci.yml", job: "audit"},
+		{path: ".github/workflows/ci.yml", job: "portable-tests"},
+		{path: ".github/workflows/release-publish.yml", job: "go-contract-policy"},
+	} {
+		workflow := readFile(t, test.path)
+		pattern := regexp.MustCompile(`(?ms)^  ` + regexp.QuoteMeta(test.job) + `:\n.*?(?:^  [a-zA-Z0-9_-]+:\n|\z)`)
+		job := pattern.FindString(workflow)
+		if job == "" {
+			t.Errorf("%s does not contain job %q", test.path, test.job)
+			continue
+		}
+		if !strings.Contains(job, "fetch-depth: 0") {
+			t.Errorf("%s job %q runs history policy without a complete checkout", test.path, test.job)
+		}
+	}
+}
+
 func TestGoRaceWorkflowsExercisePostgres(t *testing.T) {
 	const postgresImage = "postgres:17.6-alpine3.22@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
 	for _, path := range []string{

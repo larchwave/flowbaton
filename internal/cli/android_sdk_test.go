@@ -13,7 +13,7 @@ import (
 
 func TestTheSDKIsFoundWhereItNormallyLives(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	t.Setenv("ANDROID_HOME", "")
 	t.Setenv("ANDROID_SDK_ROOT", "")
 	conventional := filepath.Join(home, filepath.FromSlash(conventionalAndroidSDK()))
@@ -32,7 +32,7 @@ func TestTheSDKIsFoundWhereItNormallyLives(t *testing.T) {
 
 func TestAnExportedSDKPathWins(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	exported := t.TempDir()
 	t.Setenv("ANDROID_HOME", exported)
 
@@ -47,7 +47,7 @@ func TestAnExportedSDKPathWins(t *testing.T) {
 
 func TestANDROIDSDKROOTIsHonoredToo(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	t.Setenv("ANDROID_HOME", "")
 	exported := t.TempDir()
 	t.Setenv("ANDROID_SDK_ROOT", exported)
@@ -64,7 +64,7 @@ func TestANDROIDSDKROOTIsHonoredToo(t *testing.T) {
 // No SDK anywhere is the case that has to explain itself, because Gradle's
 // explanation is the one we scroll away.
 func TestAMissingSDKNamesTheVariableToSet(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	t.Setenv("ANDROID_HOME", "")
 	t.Setenv("ANDROID_SDK_ROOT", "")
 

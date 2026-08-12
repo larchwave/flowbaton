@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -1446,6 +1447,9 @@ func TestRecorderStartupWaitIsCancellableAndBounded(t *testing.T) {
 // The interrupt finishes a recording, so the resulting process exit is not a
 // failure.
 func TestStoppingARecorderDoesNotReportTheInterruptAsAnError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX SIGINT recorder shutdown contract")
+	}
 	t.Parallel()
 
 	cmd := exec.Command("sleep", "30")

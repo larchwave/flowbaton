@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -251,10 +252,10 @@ func walkDirectory(root string, config model.WorkspaceConfig, configPath string)
 // the contract does. It also keeps the default: `*` does not cross a
 // separator, so `["*"]` still selects the top level and nothing below it.
 func matchesAnyGlob(name string, globs []string) (bool, error) {
-	stem := name[:len(name)-len(filepath.Ext(name))]
+	stem := name[:len(name)-len(path.Ext(name))]
 	for _, glob := range globs {
 		for _, subject := range []string{name, stem} {
-			matched, err := filepath.Match(glob, subject)
+			matched, err := path.Match(glob, subject)
 			if err != nil {
 				return false, fmt.Errorf("workspace: invalid inclusion glob %q: %w", glob, err)
 			}

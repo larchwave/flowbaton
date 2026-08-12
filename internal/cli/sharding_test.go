@@ -226,7 +226,8 @@ func TestEachShardRunsItsOwnFlowsOnItsOwnDevice(t *testing.T) {
 // /var/... and comes back resolved as /private/var/....
 func hasResultLine(output, status, name string) bool {
 	for _, line := range strings.Split(output, "\n") {
-		if strings.HasPrefix(line, status+" ") && strings.Contains(line, "/"+name+" (") {
+		if strings.HasPrefix(line, status+" ") &&
+			strings.Contains(line, string(filepath.Separator)+name+" (") {
 			return true
 		}
 	}

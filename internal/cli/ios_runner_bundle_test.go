@@ -29,7 +29,7 @@ func TestTheRunnerBundleComesFromTheOverrideWhenSet(t *testing.T) {
 // With no built runner, the operator may manage the runner externally.
 func TestNoBuiltRunnerLeavesTheOperatorInCharge(t *testing.T) {
 	t.Setenv(iosXCTestRunVariable, "")
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 
 	bundle, err := iosRunnerBundle(context.Background(), iosRunnerFlavorSimulator)
 	if err != nil {
@@ -43,7 +43,7 @@ func TestNoBuiltRunnerLeavesTheOperatorInCharge(t *testing.T) {
 func TestTheRunnerBundleIsFoundWhereDriverSetupPutIt(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(iosXCTestRunVariable, "")
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	built := writeXCTestRun(t, home, "FlowBatonIOSRunnerUITests_iphonesimulator26.2-arm64.xctestrun")
 
 	bundle, err := iosRunnerBundle(context.Background(), iosRunnerFlavorSimulator)
@@ -60,7 +60,7 @@ func TestTheRunnerBundleIsFoundWhereDriverSetupPutIt(t *testing.T) {
 func TestEachFlavorPicksItsOwnBuiltRunner(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(iosXCTestRunVariable, "")
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	simulator := writeXCTestRun(t, home, "one_iphonesimulator26.2-arm64.xctestrun")
 	device := writeXCTestRun(t, home, "two_iphoneos26.2-arm64.xctestrun")
 
@@ -86,7 +86,7 @@ func TestEachFlavorPicksItsOwnBuiltRunner(t *testing.T) {
 func TestTwoBuiltRunnersOfOneFlavorAskWhichOne(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv(iosXCTestRunVariable, "")
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	writeXCTestRun(t, home, "one_iphonesimulator26.2-arm64.xctestrun")
 	writeXCTestRun(t, home, "two_iphonesimulator26.2-arm64.xctestrun")
 

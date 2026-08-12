@@ -15,7 +15,7 @@ import (
 func agentHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	setTestHome(t, home)
 	directory := filepath.Join(home, filepath.FromSlash(androidAgentDirectory))
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		t.Fatal(err)

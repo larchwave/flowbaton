@@ -177,6 +177,53 @@ func TestPostgresAcquireUsesDatabaseClock(t *testing.T) {
 	}
 }
 
+func TestPostgresBindingExpiryUsesDatabasePrecision(t *testing.T) {
+	ctx, store := newRuntimeTestStore(t)
+	node, err := store.RegisterNode(ctx, "node-precision", "https://node-precision", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RegisterDevice(ctx, "tenant-precision", "device-precision", node, []string{"tap"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ActivateNode(ctx, node); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Now().UTC().Add(5 * time.Minute)
+	bindingExpiresAt := time.Unix(base.Unix(), 123456789).UTC()
+	acquire := AcquireInput{
+		TenantID: "tenant-precision", PrincipalID: "principal-precision", AuthProfileID: "profile-precision",
+		ChannelBindingSHA256: "binding-precision", RequestNonce: "nonce-precision-0001",
+		BindingExpiresAt: bindingExpiresAt, ResourceID: "device-precision",
+		RequestedCapabilities: []string{"tap"}, IdempotencyKey: "acquire-precision-0001",
+		ReleaseIdempotencyKey: "release-precision-0001", LeaseDuration: time.Minute,
+		HeartbeatInterval: 10 * time.Second,
+	}
+	result, err := store.Acquire(ctx, acquire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := postgresTimestamp(bindingExpiresAt)
+	if !result.Session.BindingExpiresAt.Equal(want) {
+		t.Fatalf("binding expiry=%s, want PostgreSQL precision %s", result.Session.BindingExpiresAt, want)
+	}
+	heartbeat := MutationInput{
+		SessionID: result.Session.SessionID, TenantID: acquire.TenantID, PrincipalID: acquire.PrincipalID,
+		ChannelBindingSHA256: acquire.ChannelBindingSHA256, RequestNonce: acquire.RequestNonce,
+		BindingExpiresAt: bindingExpiresAt, RequestID: "request-precision-0001", Type: "heartbeat",
+		IdempotencyKey: "heartbeat-precision-0001", Generation: result.Session.Generation,
+		FencingTokenSHA256: result.Session.FencingTokenSHA256, RequestedExtension: time.Second,
+	}
+	if _, err := store.Apply(ctx, heartbeat); err != nil {
+		t.Fatalf("heartbeat with caller precision: %v", err)
+	}
+	if err := store.ValidateSessionAccess(ctx, acquire.TenantID, acquire.PrincipalID,
+		result.Session.SessionID, acquire.ChannelBindingSHA256, acquire.RequestNonce,
+		bindingExpiresAt, result.Session.Generation, result.Session.FencingTokenSHA256); err != nil {
+		t.Fatalf("session access with caller precision: %v", err)
+	}
+}
+
 func TestPostgresRebindKeepsUnlistedDeviceOnOldEpoch(t *testing.T) {
 	ctx, store := newRuntimeTestStore(t)
 	oldLease, err := store.RegisterNode(ctx, "node-1", "https://node-old", 30*time.Second)

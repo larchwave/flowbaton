@@ -3,6 +3,7 @@ package android
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -178,8 +179,9 @@ func TestAdbBuildsTheExactCommandLine(t *testing.T) {
 }
 
 func TestAdbExecutableFollowsAndroidHome(t *testing.T) {
-	t.Setenv("ANDROID_HOME", "/opt/android")
-	if got := adbExecutable(); got != "/opt/android/platform-tools/adb" {
+	home := t.TempDir()
+	t.Setenv("ANDROID_HOME", home)
+	if got, want := adbExecutable(), filepath.Join(home, "platform-tools", "adb"); got != want {
 		t.Fatalf("adbExecutable() = %q with ANDROID_HOME set", got)
 	}
 	t.Setenv("ANDROID_HOME", "")

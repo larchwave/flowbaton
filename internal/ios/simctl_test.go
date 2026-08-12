@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -22,6 +23,7 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 	t.Parallel()
 
 	const udid = "UDID-1"
+	appPath := filepath.Join(t.TempDir(), "Probe.app")
 	for _, test := range []struct {
 		name string
 		call func(context.Context, *Simctl) error
@@ -83,8 +85,8 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 		},
 		{
 			name: "install",
-			call: func(ctx context.Context, simctl *Simctl) error { return simctl.Install(ctx, "/tmp/Probe.app") },
-			want: []string{"simctl", "install", udid, "/tmp/Probe.app"},
+			call: func(ctx context.Context, simctl *Simctl) error { return simctl.Install(ctx, appPath) },
+			want: []string{"simctl", "install", udid, appPath},
 		},
 		{
 			name: "diagnose",
@@ -142,7 +144,7 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			runner := &recordingRunner{output: []byte("/tmp/Probe.app\n")}
+			runner := &recordingRunner{output: []byte(appPath + "\n")}
 			if err := test.call(context.Background(), NewSimctl(udid, runner)); err != nil {
 				t.Fatalf("%s error = %v", test.name, err)
 			}

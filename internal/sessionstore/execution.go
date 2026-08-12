@@ -573,6 +573,7 @@ func (store *Postgres) FrameContent(ctx context.Context, input FrameContentReque
 		input.StreamEpoch < 1 || input.FrameSequence < 1 || len(input.ContentSHA256) != 64 {
 		return FrameContent{}, ErrInvalidArgument
 	}
+	input.BindingExpiresAt = postgresTimestamp(input.BindingExpiresAt)
 	var result FrameContent
 	err := store.Pool.QueryRow(ctx, `SELECT f.content,f.content_type,f.content_sha256
 		FROM flowbaton_frame_content f JOIN flowbaton_sessions s USING(session_id)

@@ -151,7 +151,7 @@ func TestFailureEvidencePublicExecuteAndReportAgree(t *testing.T) {
 func TestFailureEvidencePublicDiagnosticFailureHasNoProductSurface(t *testing.T) {
 	t.Parallel()
 
-	path := "/workspace/batch4-diagnostic-failure.yaml"
+	path := filepath.Join(t.TempDir(), "batch4-diagnostic-failure.yaml")
 	program, source := prepareFailureEvidenceProgram(t, path, false)
 	driver := enginetest.NewFakeDriver()
 	driver.Enqueue(enginetest.DriverScript{
@@ -213,7 +213,7 @@ func TestFailureEvidencePublicDiagnosticFailureHasNoProductSurface(t *testing.T)
 func TestFailureEvidencePreparedProgramRepeatedConcurrentOwnership(t *testing.T) {
 	t.Parallel()
 
-	path := "/workspace/batch4-concurrent.yaml"
+	path := filepath.Join(t.TempDir(), "batch4-concurrent.yaml")
 	program, source := prepareFailureEvidenceProgram(t, path, true)
 	before, exists := program.Flow(path)
 	if !exists {

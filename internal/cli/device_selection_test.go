@@ -386,7 +386,7 @@ func TestAndroidAgentAPKsComeFromTheEnvironmentTogether(t *testing.T) {
 	// by driver-setup (android_agent_apks_test.go).
 	// The home is redirected here so this test cannot read — or depend on — the
 	// developer's real installed agent.
-	t.Setenv("HOME", t.TempDir())
+	setTestHome(t, t.TempDir())
 	t.Setenv("FLOWBATON_ANDROID_APP_APK", "")
 	t.Setenv("FLOWBATON_ANDROID_TEST_APK", "")
 	apks, err := androidAgentAPKs(context.Background())

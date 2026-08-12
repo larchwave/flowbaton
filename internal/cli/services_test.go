@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -89,12 +90,16 @@ func TestArtifactSinkRefusesANameThatEscapesItsDirectory(t *testing.T) {
 	// write anywhere the process can reach.
 	dir := t.TempDir()
 	sink := NewArtifactSink(dir, dir)
-	for _, name := range []string{
+	unsafeNames := []string{
 		"../escape.png",
 		"a/../../escape.png",
 		"/etc/escape.png",
 		"",
-	} {
+	}
+	if runtime.GOOS == "windows" {
+		unsafeNames = append(unsafeNames, `\escape.png`, `C:\escape.png`, `C:escape.png`)
+	}
+	for _, name := range unsafeNames {
 		_, err := sink.Write(context.Background(), engine.ArtifactWriteRequest{
 			SuggestedName: name, Data: []byte("x")})
 		if err == nil {

@@ -409,6 +409,7 @@ func (store *Postgres) Acquire(ctx context.Context, input AcquireInput) (Result,
 	if err := validateAcquire(input); err != nil {
 		return Result{}, err
 	}
+	input.BindingExpiresAt = postgresTimestamp(input.BindingExpiresAt)
 	hash := requestHash("acquire", input.ResourceID, input.RequestedCapabilities, input.ReleaseIdempotencyKey, input.ChannelBindingSHA256, input.RequestNonce, input.BindingExpiresAt)
 	tx, err := store.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
@@ -544,6 +545,7 @@ func (store *Postgres) Apply(ctx context.Context, input MutationInput) (Result, 
 	if err := validateMutation(input); err != nil {
 		return Result{}, err
 	}
+	input.BindingExpiresAt = postgresTimestamp(input.BindingExpiresAt)
 	hash := mutationRequestHash(input)
 	tx, err := store.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
@@ -1037,7 +1039,7 @@ func (store *Postgres) ValidateSessionAccess(ctx context.Context, tenantID, prin
 func matchesSessionBinding(session Session, channelBinding, requestNonce string, bindingExpiresAt time.Time) bool {
 	return session.ChannelBindingSHA256 == channelBinding &&
 		session.RequestNonce == requestNonce &&
-		session.BindingExpiresAt.Equal(bindingExpiresAt)
+		session.BindingExpiresAt.Equal(postgresTimestamp(bindingExpiresAt))
 }
 
 func (store *Postgres) Events(ctx context.Context, tenantID, principalID, sessionID string, after int64) ([]devicesessionv1.Event, error) {
@@ -1169,6 +1171,13 @@ func databaseNowTx(ctx context.Context, tx pgx.Tx) (time.Time, error) {
 	var now time.Time
 	err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now)
 	return now.UTC(), err
+}
+
+// PostgreSQL timestamps have microsecond precision. Normalize caller-provided
+// token times before hashing, storing, or comparing them so the value returned
+// from Acquire remains usable on hosts whose clocks expose nanoseconds.
+func postgresTimestamp(value time.Time) time.Time {
+	return value.UTC().Truncate(time.Microsecond)
 }
 
 func cancelQueuedInputsTx(ctx context.Context, tx pgx.Tx, session Session, at time.Time) error {
@@ -1392,9 +1401,8 @@ func requestHash(values ...any) string {
 
 func mutationRequestHash(input MutationInput) string {
 	payload := json.RawMessage(input.Payload)
-	bindingExpiresAt := input.BindingExpiresAt
+	bindingExpiresAt := postgresTimestamp(input.BindingExpiresAt)
 	if input.Type == "release" {
-		bindingExpiresAt = bindingExpiresAt.UTC()
 		if len(payload) != 0 {
 			var value any
 			if err := json.Unmarshal(payload, &value); err == nil {

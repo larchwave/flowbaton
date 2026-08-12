@@ -155,7 +155,7 @@ func (target xctestrunTarget) plan(root string) (runnerPlan, error) {
 			"the .xctestrun target lacks TestHostPath, TestHostBundleIdentifier, or TestBundlePath")
 	}
 	resolve := func(path string) string {
-		return strings.ReplaceAll(path, "__TESTROOT__", root)
+		return filepath.Clean(strings.ReplaceAll(path, "__TESTROOT__", root))
 	}
 	return runnerPlan{
 		TestHostPath:     resolve(target.TestHostPath),

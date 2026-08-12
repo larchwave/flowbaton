@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -498,6 +499,9 @@ func TestDiagnosticDirectoryMustBeARealDirectory(t *testing.T) {
 
 func TestDiagnosticDirectoryCreationIsPrivate(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ACLs are not represented by POSIX mode bits")
+	}
 
 	directory := filepath.Join(t.TempDir(), "private")
 	resolved, err := prepareDiagnosticDirectory(directory)
