@@ -1174,7 +1174,7 @@ func databaseNowTx(ctx context.Context, tx pgx.Tx) (time.Time, error) {
 }
 
 // PostgreSQL timestamps have microsecond precision. Normalize caller-provided
-// token times before hashing, storing, or comparing them so the value returned
+// token times before hashing, storing, or checking them so the value returned
 // from Acquire remains usable on hosts whose clocks expose nanoseconds.
 func postgresTimestamp(value time.Time) time.Time {
 	return value.UTC().Truncate(time.Microsecond)
