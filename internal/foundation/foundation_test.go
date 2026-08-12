@@ -473,6 +473,31 @@ func TestHistoryPolicyWorkflowsFetchCompleteHistory(t *testing.T) {
 	}
 }
 
+func TestAndroidConnectedRunnerBoundsEmulatorStartup(t *testing.T) {
+	script := readFile(t, "scripts/ci/android-connected.sh")
+	for _, required := range []string{
+		`-port "$port"`,
+		`-gpu swiftshader`,
+		`kill -0 "$emulator_pid"`,
+		`kill -KILL "$emulator_pid"`,
+		`SECONDS >= deadline`,
+		`tail -200 "$log"`,
+		`ANDROID_SERIAL="$serial"`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("Android connected runner is missing bounded startup control %q", required)
+		}
+	}
+	if got := strings.Count(script, `timeout --kill-after=2s 5s adb`); got != 4 {
+		t.Errorf("Android connected runner has %d hard-bounded ADB calls, want 4", got)
+	}
+	for _, forbidden := range []string{"adb wait-for-device", "swiftshader_indirect", "timeout 5s adb"} {
+		if strings.Contains(script, forbidden) {
+			t.Errorf("Android connected runner still contains obsolete startup command %q", forbidden)
+		}
+	}
+}
+
 func TestGoRaceWorkflowsExercisePostgres(t *testing.T) {
 	const postgresImage = "postgres:17.6-alpine3.22@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94"
 	for _, path := range []string{
