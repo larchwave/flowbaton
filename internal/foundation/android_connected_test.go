@@ -42,9 +42,13 @@ func TestAndroidConnectedRunnerHandlesEmulatorLifecycle(t *testing.T) {
 			if err := os.Mkdir(bin, 0o700); err != nil {
 				t.Fatal(err)
 			}
+			androidSDK := filepath.Join(directory, "android-sdk")
+			if err := os.MkdirAll(filepath.Join(androidSDK, "emulator"), 0o700); err != nil {
+				t.Fatal(err)
+			}
 			writeExecutable(t, filepath.Join(bin, "sdkmanager"), "#!/usr/bin/env bash\nexit 0\n")
 			writeExecutable(t, filepath.Join(bin, "avdmanager"), "#!/usr/bin/env bash\nexit 0\n")
-			writeExecutable(t, filepath.Join(bin, "emulator"), `#!/usr/bin/env bash
+			writeExecutable(t, filepath.Join(androidSDK, "emulator", "emulator"), `#!/usr/bin/env bash
 if [[ "${1:-}" == "-version" ]]; then
   printf '%s\n' 'Android emulator harness'
   exit 0
@@ -85,6 +89,8 @@ printf '%s|%s\n' "${ANDROID_SERIAL:-}" "$*" >"${HARNESS_RESULT:?}"
 			command.Dir = directory
 			command.Env = append(os.Environ(),
 				"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"),
+				"ANDROID_SDK_ROOT="+androidSDK,
+				"ANDROID_HOME="+androidSDK,
 				"RUNNER_TEMP="+directory,
 				"ANDROID_EMULATOR_READY_TIMEOUT_SECONDS="+test.readyLimit,
 				"HARNESS_EMULATOR_MODE="+test.mode,

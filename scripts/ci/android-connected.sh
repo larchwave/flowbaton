@@ -8,12 +8,22 @@ port=5554
 serial="emulator-${port}"
 log="${RUNNER_TEMP:-/tmp}/flowbaton-emulator.log"
 readiness_timeout="${ANDROID_EMULATOR_READY_TIMEOUT_SECONDS:-300}"
+android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+if [[ -z "$android_sdk" ]]; then
+  printf 'ANDROID_SDK_ROOT or ANDROID_HOME must identify the Android SDK\n' >&2
+  exit 1
+fi
+emulator_bin="${android_sdk}/emulator/emulator"
 
 sdkmanager 'platform-tools' 'emulator' "$image"
 printf 'no\n' | avdmanager create avd --force --name "$avd" --package "$image" --device 'pixel_6'
 
-emulator -version
-emulator -avd "$avd" -port "$port" -no-window -no-audio -no-boot-anim -gpu swiftshader -no-snapshot -wipe-data >"$log" 2>&1 &
+if [[ ! -x "$emulator_bin" ]]; then
+  printf 'Android emulator executable not found at %s\n' "$emulator_bin" >&2
+  exit 1
+fi
+"$emulator_bin" -version
+"$emulator_bin" -avd "$avd" -port "$port" -no-window -no-audio -no-boot-anim -gpu swiftshader -no-snapshot -wipe-data >"$log" 2>&1 &
 emulator_pid=$!
 cleanup() {
   watchdog_pid=""

@@ -476,6 +476,9 @@ func TestHistoryPolicyWorkflowsFetchCompleteHistory(t *testing.T) {
 func TestAndroidConnectedRunnerBoundsEmulatorStartup(t *testing.T) {
 	script := readFile(t, "scripts/ci/android-connected.sh")
 	for _, required := range []string{
+		`emulator_bin="${android_sdk}/emulator/emulator"`,
+		`"$emulator_bin" -version`,
+		`"$emulator_bin" -avd`,
 		`-port "$port"`,
 		`-gpu swiftshader`,
 		`kill -0 "$emulator_pid"`,
@@ -491,7 +494,7 @@ func TestAndroidConnectedRunnerBoundsEmulatorStartup(t *testing.T) {
 	if got := strings.Count(script, `timeout --kill-after=2s 5s adb`); got != 4 {
 		t.Errorf("Android connected runner has %d hard-bounded ADB calls, want 4", got)
 	}
-	for _, forbidden := range []string{"adb wait-for-device", "swiftshader_indirect", "timeout 5s adb"} {
+	for _, forbidden := range []string{"adb wait-for-device", "swiftshader_indirect", "timeout 5s adb", "\nemulator -"} {
 		if strings.Contains(script, forbidden) {
 			t.Errorf("Android connected runner still contains obsolete startup command %q", forbidden)
 		}
