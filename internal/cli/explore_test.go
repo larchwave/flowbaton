@@ -527,3 +527,34 @@ func TestExploreRunReplacesAStepLogFromAnEarlierRun(t *testing.T) {
 		t.Fatalf("step log = %q, want it to say that nothing ran", logBytes)
 	}
 }
+
+func TestExploreRunReplacesAStepLogWhenTheDriverNeverOpens(t *testing.T) {
+	// The run can die before any scenario: no device, no runner, no driver.
+	// A log from an earlier run under the same name must not survive that
+	// either, or it is read as this run's evidence.
+	outputDir := filepath.Join(t.TempDir(), "run-output")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(outputDir, "steps-night-shift.md")
+	if err := os.WriteFile(stale, []byte("# session step log\n\n## old run (passed)\n- step 1: tap \"Ghost\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runner := assembledExploreRunner(newExploreCrewFake(), permissiveDriver())
+	runner.NewDriver = func(context.Context, TestOptions, string, int) (device.Driver, error) {
+		return nil, errors.New("no device answered")
+	}
+
+	var stdout, stderr bytes.Buffer
+	args := exploreArgs(outputDir, t.TempDir(), "--session-name", "night-shift")
+	if got := runner.Run(context.Background(), args, &stdout, &stderr); got != ExitFailure {
+		t.Fatalf("exit = %d, want %d; stderr: %s", got, ExitFailure, stderr.String())
+	}
+	logBytes, err := os.ReadFile(stale)
+	if err != nil {
+		t.Fatalf("read step log: %v", err)
+	}
+	if strings.Contains(string(logBytes), "Ghost") {
+		t.Fatalf("the earlier run's log survived a run that never started:\n%s", logBytes)
+	}
+}

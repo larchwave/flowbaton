@@ -136,6 +136,13 @@ func (runner ExploreRunner) executeSession(
 	if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
 		return "", nil, fmt.Errorf("explore: output directory: %w", err)
 	}
+	// Claim the step log before anything can fail. Session names repeat, and
+	// a run that dies before its first step -- no device, no runner, no
+	// driver -- would otherwise leave an earlier run's log in place to be
+	// read as this one's. Every later write replaces this placeholder.
+	if _, err := writeStepLog(nil, options); err != nil {
+		return "", nil, err
+	}
 
 	port := options.DriverPort
 	if port == 0 {
