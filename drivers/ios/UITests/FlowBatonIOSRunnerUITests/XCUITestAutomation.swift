@@ -113,7 +113,7 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   /// focused the field, and typing into the gap types nowhere.
   static let keyboardWaitSeconds: TimeInterval = 1
 
-  /// typingTarget is the app to type into, once something is actually focused.
+  /// typingTarget is the app to type into, once typed text has somewhere to land.
   ///
   /// Typing with nothing focused makes XCUITest record "Neither element nor any
   /// descendant has keyboard focus" — an XCTIssue, not a Swift error, so it
@@ -124,10 +124,10 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   static func typingTarget(among appIDs: [String]) throws -> XCUIApplication {
     let app = try foregroundApp(among: appIDs)
     _ = app.keyboards.firstMatch.waitForExistence(timeout: keyboardWaitSeconds)
-    guard hasKeyboardFocus(in: SnapshotAdapter(try app.snapshot())) else {
+    guard canReceiveTyping(in: SnapshotAdapter(try app.snapshot())) else {
       throw AutomationError.precondition(
-        "nothing on screen has keyboard focus, so there is nowhere to type; "
-          + "tap a text field first")
+        "nothing on screen accepts typed text and no keyboard is open, so there "
+          + "is nowhere to type; tap a text field first")
     }
     return app
   }

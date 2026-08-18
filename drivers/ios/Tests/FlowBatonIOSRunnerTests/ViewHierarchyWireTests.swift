@@ -174,7 +174,22 @@ extension ViewHierarchyWireTests {
     let tree = TestSnapshot(
       identifier: "app", label: "Settings",
       children: [TestSnapshot(identifier: "table", label: "", children: [focused])])
-    XCTAssertTrue(hasKeyboardFocus(in: tree))
+    XCTAssertTrue(canReceiveTyping(in: tree))
+  }
+
+  func testAnOpenKeyboardCountsWhileNothingReportsFocus() {
+    // An iOS text field with the keyboard open reports hasFocus false, and the
+    // public attributes carry no per-node keyboard focus. Reading the flag
+    // alone refuses every typing command on the platform.
+    let tree = TestSnapshot(
+      identifier: "app", label: "Reminders",
+      children: [
+        TestSnapshot(identifier: "field", label: "Search", elementTypeCode: 45),
+        TestSnapshot(
+          label: "keyboard", elementTypeCode: 19, isKeyboard: true,
+          children: [TestSnapshot(label: "Q")]),
+      ])
+    XCTAssertTrue(canReceiveTyping(in: tree))
   }
 
   func testNoFocusAnywhereIsReportedAsNoFocus() {
@@ -187,11 +202,11 @@ extension ViewHierarchyWireTests {
             TestSnapshot(identifier: "cell", label: "General")
           ])
       ])
-    XCTAssertFalse(hasKeyboardFocus(in: tree))
+    XCTAssertFalse(canReceiveTyping(in: tree))
   }
 
   func testAFocusedRootCountsWithoutAnyChildren() {
-    XCTAssertTrue(hasKeyboardFocus(in: TestSnapshot(identifier: "a", label: "", focused: true)))
+    XCTAssertTrue(canReceiveTyping(in: TestSnapshot(identifier: "a", label: "", focused: true)))
   }
 }
 

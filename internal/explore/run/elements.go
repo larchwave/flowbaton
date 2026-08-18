@@ -77,6 +77,8 @@ func elementTable(state *explore.ScreenState) string {
 		}
 		// Typing goes to whatever holds keyboard focus, so both marks are
 		// load-bearing: which rows accept text, and whether a tap took focus.
+		// The focus mark is Android-only in practice: iOS publishes UI focus,
+		// which a text field with the keyboard open reports as false.
 		if explore.IsTextInput(element.Node) {
 			builder.WriteString(" text-field")
 		}

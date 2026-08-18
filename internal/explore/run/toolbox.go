@@ -132,8 +132,8 @@ func (s *toolSession) box() explore.ToolBox {
 	specs := []explore.ToolSpec{
 		{Name: "tap", Description: "Tap one element addressed by eidx, text, or id.", Schema: targetSchema()},
 		{Name: "long_press", Description: "Press and hold one element addressed by eidx, text, or id.", Schema: targetSchema()},
-		{Name: "input_text", Description: "Type text into the field that holds keyboard focus. Tap a text-field row first; this fails while no row is marked focused.", Schema: json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}`)},
-		{Name: "erase_text", Description: "Erase characters from the field that holds keyboard focus. Tap a text-field row first; this fails while no row is marked focused.", Schema: json.RawMessage(`{"type":"object","properties":{"characters":{"type":"integer"}},"additionalProperties":false}`)},
+		{Name: "input_text", Description: "Type text into the field that holds keyboard focus. Tap a text-field row first; this fails while nothing on screen takes typed text.", Schema: json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}`)},
+		{Name: "erase_text", Description: "Erase characters from the field that holds keyboard focus. Tap a text-field row first; this fails while nothing on screen takes typed text.", Schema: json.RawMessage(`{"type":"object","properties":{"characters":{"type":"integer"}},"additionalProperties":false}`)},
 		{Name: "press_key", Description: "Press a named key, such as ENTER or HOME.", Schema: json.RawMessage(`{"type":"object","properties":{"key":{"type":"string"}},"required":["key"],"additionalProperties":false}`)},
 		{Name: "swipe", Description: "Swipe the screen in one direction.", Schema: directionSchema()},
 		{Name: "scroll", Description: "Scroll the screen up or down.", Schema: directionSchema()},

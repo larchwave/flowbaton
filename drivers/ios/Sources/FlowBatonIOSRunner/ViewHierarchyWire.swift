@@ -183,7 +183,8 @@ func hierarchyDepth(of element: WireAXElement) -> Int {
   return 1 + (children.map(hierarchyDepth(of:)).max() ?? 0)
 }
 
-/// hasKeyboardFocus reports whether anything in this subtree holds keyboard focus.
+/// canReceiveTyping reports whether this subtree has somewhere for typed text
+/// to land: a focused node, or an open keyboard.
 ///
 /// Typing into a screen where nothing has focus makes XCUITest record "Neither
 /// element nor any descendant has keyboard focus". That is an XCTIssue, not a
@@ -192,12 +193,17 @@ func hierarchyDepth(of element: WireAXElement) -> Int {
 /// serving test. Returning the issue as a command error keeps the server alive
 /// for later commands.
 ///
+/// The `focused` flag alone is not enough: it carries XCUITest's `hasFocus`,
+/// which is UI focus, and an iOS text field with the keyboard open reports it
+/// as false. The public element attributes expose no per-node keyboard focus,
+/// so the open keyboard is the signal that typing has a destination.
+///
 /// So the check happens first, here, where it is a value a request handler can
 /// refuse on. It lives in the framework rather than beside the XCUITest code
 /// because that makes it testable without a simulator.
-public func hasKeyboardFocus(in snapshot: any AccessibilitySnapshot) -> Bool {
-  if snapshot.focused {
+public func canReceiveTyping(in snapshot: any AccessibilitySnapshot) -> Bool {
+  if snapshot.focused || snapshot.isKeyboard {
     return true
   }
-  return snapshot.childSnapshots.contains { hasKeyboardFocus(in: $0) }
+  return snapshot.childSnapshots.contains { canReceiveTyping(in: $0) }
 }
