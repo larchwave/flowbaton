@@ -119,6 +119,18 @@ func (runner ExploreRunner) executeSession(
 	}
 	options = runner.applyExploreDefaults(options)
 
+	if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
+		return "", nil, fmt.Errorf("explore: output directory: %w", err)
+	}
+	// Claim the step log before anything else can fail -- a refused provider
+	// is the earliest exit there is, and the one an operator hits repeatedly
+	// while wiring up a key. Session names repeat, so a log left by an
+	// earlier run under this name would be read as this run's evidence.
+	// Every later write replaces this placeholder.
+	if _, err := writeStepLog(nil, options); err != nil {
+		return "", nil, err
+	}
+
 	// Fail closed before any device work: exploration is AI-driven, and a
 	// session that opened a driver first would leave the operator a device
 	// mutation with nothing to show for it.
@@ -131,17 +143,6 @@ func (runner ExploreRunner) executeSession(
 		return "", nil, fmt.Errorf(
 			"%w: set FLOWBATON_AI_PROVIDER plus OPENAI_API_KEY or ANTHROPIC_API_KEY, or pass --api-key",
 			explore.ErrNoAIProvider)
-	}
-
-	if err := os.MkdirAll(options.OutputDir, 0o755); err != nil {
-		return "", nil, fmt.Errorf("explore: output directory: %w", err)
-	}
-	// Claim the step log before anything can fail. Session names repeat, and
-	// a run that dies before its first step -- no device, no runner, no
-	// driver -- would otherwise leave an earlier run's log in place to be
-	// read as this one's. Every later write replaces this placeholder.
-	if _, err := writeStepLog(nil, options); err != nil {
-		return "", nil, err
 	}
 
 	port := options.DriverPort
