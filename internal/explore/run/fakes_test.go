@@ -102,9 +102,10 @@ func textReply(text string) explore.Message {
 // fakeDriver records calls and delegates a few behaviors to overridable
 // functions; everything else is a successful no-op.
 type fakeDriver struct {
-	calls   []string
-	tapped  []device.Point
-	backErr error
+	calls    []string
+	tapped   []device.Point
+	backErr  error
+	inputErr error
 }
 
 func (f *fakeDriver) log(name string) { f.calls = append(f.calls, name) }
@@ -181,7 +182,7 @@ func (f *fakeDriver) BackPress(context.Context) error {
 
 func (f *fakeDriver) InputText(_ context.Context, request device.InputTextRequest) error {
 	f.log("InputText:" + request.Text)
-	return nil
+	return f.inputErr
 }
 
 func (f *fakeDriver) OpenLink(context.Context, device.OpenLinkRequest) error { return nil }

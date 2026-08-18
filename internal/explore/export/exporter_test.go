@@ -188,3 +188,41 @@ func TestEraseAndSwipeEdges(t *testing.T) {
 		t.Error("want an error for a swipe without direction")
 	}
 }
+
+func maskedStep(index int) explore.StepRecord {
+	record := step(index, explore.ActionInput, nil, explore.MaskedText, "")
+	record.Action.Masked = true
+	return record
+}
+
+func TestExportParameterizesMaskedInput(t *testing.T) {
+	result := passingResult(
+		maskedStep(0),
+		step(1, explore.ActionInput, nil, "plain", ""),
+		maskedStep(2),
+	)
+	data, err := Exporter{}.ExportFlow(result, "com.example.app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Contains(text, explore.MaskedText) {
+		t.Fatalf("literal mask exported:\n%s", text)
+	}
+	for _, want := range []string{"${FLOWBATON_EXPLORE_SECRET_1}", "${FLOWBATON_EXPLORE_SECRET_2}", "plain"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("export misses %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestExportKeepsLiteralAsterisks(t *testing.T) {
+	result := passingResult(step(0, explore.ActionInput, nil, "***", ""))
+	data, err := Exporter{}.ExportFlow(result, "com.example.app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"***"`) || strings.Contains(string(data), "FLOWBATON_EXPLORE_SECRET") {
+		t.Fatalf("literal asterisks were treated as a mask:\n%s", data)
+	}
+}

@@ -258,11 +258,6 @@ func (s *toolSession) handleLongPress(ctx context.Context, args json.RawMessage)
 	return s.afterMutation(ctx, "long_press", args, action, s.deps.driver.LongPress(ctx, request))
 }
 
-// inputMask replaces recorded text that may have landed in a secure field,
-// so a typed secret never reaches recipes, step records, or reports. The
-// device still receives the real text; only the records mask.
-const inputMask = "***"
-
 // typingMayLandInSecureField reports whether this screen's typed text could
 // end up in a password-style field: a secure input is present and no plain
 // text input holds focus. iOS publishes no usable focus (hasFocus is false
@@ -298,12 +293,23 @@ func (s *toolSession) handleInputText(ctx context.Context, args json.RawMessage)
 	}
 	action := explore.Action{Kind: explore.ActionInput, Text: in.Text}
 	recorded := args
-	if typingMayLandInSecureField(s.current) {
-		action.Text = inputMask
-		recorded = json.RawMessage(`{"text":"` + inputMask + `"}`)
+	masked := typingMayLandInSecureField(s.current)
+	if masked {
+		action.Text = explore.MaskedText
+		action.Masked = true
+		// The marker is schema-invalid for input_text on purpose: a replay
+		// that missed the guard would still fail to type it, and it cannot
+		// collide with a legitimate literal "***".
+		recorded = json.RawMessage(`{"masked":true}`)
 	}
 	request := device.InputTextRequest{Text: in.Text, AppIDs: []string{s.deps.appID}}
-	return s.afterMutation(ctx, "input_text", recorded, action, s.deps.driver.InputText(ctx, request))
+	execErr := s.deps.driver.InputText(ctx, request)
+	if masked && execErr != nil {
+		// Device errors quote what was typed (Android's no-focus message
+		// does), and ErrText flows into step logs and reports.
+		execErr = errors.New(strings.ReplaceAll(execErr.Error(), in.Text, explore.MaskedText))
+	}
+	return s.afterMutation(ctx, "input_text", recorded, action, execErr)
 }
 
 func (s *toolSession) handleEraseText(ctx context.Context, args json.RawMessage) (string, error) {

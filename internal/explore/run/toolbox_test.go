@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -79,6 +80,9 @@ func TestInputTextRecordingMasksSecureScreens(t *testing.T) {
 				t.Fatalf("recording lines: %v", session.recording)
 			}
 			wantLine := `input_text {"text":"` + tc.wantText + `"}`
+			if tc.wantText == explore.MaskedText {
+				wantLine = `input_text {"masked":true}`
+			}
 			if session.recording[0] != wantLine {
 				t.Fatalf("recorded %q, want %q", session.recording[0], wantLine)
 			}
@@ -93,5 +97,48 @@ func TestInputTextRecordingMasksSecureScreens(t *testing.T) {
 				t.Fatal("raw text leaked into the recording")
 			}
 		})
+	}
+}
+
+func TestInputTextRedactsDriverErrorOnSecureScreens(t *testing.T) {
+	session, driver := inputSession(t, screen("Login", textField("pw", true, true)))
+	driver.inputErr = errors.New(`no focused field accepts "hunter2"`)
+	handler := session.box().Handlers["input_text"]
+	if _, err := handler(context.Background(), json.RawMessage(`{"text":"hunter2"}`)); err != nil {
+		t.Fatal(err)
+	}
+	step := session.steps[0]
+	if step.Status != explore.StepFailed {
+		t.Fatalf("step status %s, want failed", step.Status)
+	}
+	if strings.Contains(step.ErrText, "hunter2") {
+		t.Fatalf("raw text leaked into ErrText: %q", step.ErrText)
+	}
+	if !strings.Contains(step.ErrText, explore.MaskedText) {
+		t.Fatalf("ErrText %q carries no mask", step.ErrText)
+	}
+}
+
+func TestReplayRefusesLegacyMaskedInput(t *testing.T) {
+	// Recordings written before the {"masked":true} marker used the literal
+	// mask as text. Refusing both shapes costs one worker fallback when a
+	// user really typed "***"; replaying a masked secret costs a login.
+	session, driver := inputSession(t, screen("Search", textField("query", false, true)))
+	if session.replay(context.Background(), session.box(), `input_text {"text":"***"}`) {
+		t.Fatal("replay accepted a legacy masked recording")
+	}
+	if slices.Contains(driver.calls, "InputText:***") {
+		t.Fatalf("legacy mask reached the device: %v", driver.calls)
+	}
+}
+
+func TestReplayRefusesMaskedInput(t *testing.T) {
+	session, driver := inputSession(t, screen("Login", textField("pw", true, true)))
+	body := "tap {\"text\":\"Login\"}\ninput_text {\"masked\":true}"
+	if session.replay(context.Background(), session.box(), body) {
+		t.Fatal("replay accepted a masked recording")
+	}
+	if slices.Contains(driver.calls, "InputText:***") {
+		t.Fatalf("masked text reached the device: %v", driver.calls)
 	}
 }

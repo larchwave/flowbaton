@@ -2,8 +2,11 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/js"
@@ -19,9 +22,26 @@ type inputTextCompiled struct {
 	objectForm    bool
 }
 
+// secretVariablePattern matches ${FLOWBATON_…SECRET…} references, the shape
+// the explore exporter writes for text that was typed into a secure field.
+// inputText treats them specially: an unset one fails the flow instead of
+// typing the literal "undefined", and written artifacts keep the authored
+// placeholder, never the resolved value. Ordinary variables keep the pinned
+// behavior (unset interpolates to "undefined" and is reported as evaluated).
+var secretVariablePattern = regexp.MustCompile(`\$\{\s*(FLOWBATON_[A-Za-z0-9_]*SECRET[A-Za-z0-9_]*)\s*\}`)
+
+func secretVariableNames(authored string) []string {
+	names := []string{}
+	for _, match := range secretVariablePattern.FindAllStringSubmatch(authored, -1) {
+		names = append(names, match[1])
+	}
+	return names
+}
+
 type inputTextEvaluated struct {
-	text  string
-	appID string
+	text   string
+	appID  string
+	secret bool
 }
 
 type eraseTextCompiled struct {
@@ -158,6 +178,17 @@ func evaluateInputText(
 	if err != nil {
 		return evaluated, err
 	}
+	secretNames := secretVariableNames(plan.authoredText)
+	for _, name := range secretNames {
+		resolved, resolveErr := evaluation.Interpolate(ctx, "${"+name+"}", nil)
+		if resolveErr != nil {
+			return evaluated, resolveErr
+		}
+		if resolved == "undefined" {
+			return evaluated, NewConfigurationError(
+				"inputText secret variable "+name+" is unset; provide it in the shell before running the flow", nil)
+		}
+	}
 	var label *string
 	if plan.authoredLabel != nil {
 		interpolated, labelErr := evaluation.Interpolate(ctx, *plan.authoredLabel, nil)
@@ -166,18 +197,25 @@ func evaluateInputText(
 		}
 		label = &interpolated
 	}
+	// Artifacts (evaluatedCommand → commands.json) must never carry a
+	// resolved secret; they keep the authored placeholder instead. The
+	// device request below still gets the resolved text.
+	reported := text
+	if len(secretNames) > 0 {
+		reported = plan.authoredText
+	}
 	if plan.objectForm {
-		arguments := map[string]any{"text": text}
+		arguments := map[string]any{"text": reported}
 		if label != nil {
 			arguments["label"] = *label
 		}
 		evaluated.command.Arguments = arguments
 		evaluated.command.Label = clonePointer(label)
 	} else {
-		evaluated.command.Arguments = text
+		evaluated.command.Arguments = reported
 		evaluated.command.Label = nil
 	}
-	evaluated.value = inputTextEvaluated{text: text, appID: appID}
+	evaluated.value = inputTextEvaluated{text: text, appID: appID, secret: len(secretNames) > 0}
 	return evaluated, nil
 }
 
@@ -235,6 +273,13 @@ func executeInputText(ctx context.Context, state *executionState, evaluated eval
 	if err := state.dependencies.Driver.InputText(ctx, request); err != nil {
 		if cancellation := ctx.Err(); cancellation != nil {
 			return effect, cancellation
+		}
+		// Device errors quote what was typed (Android's no-focus message
+		// does), and this error is printed and persisted by reporting. A
+		// resolved secret must not survive in it. Rewriting only the
+		// leaking case keeps every other driver error byte-identical.
+		if plan.secret && strings.Contains(err.Error(), plan.text) {
+			return effect, errors.New(strings.ReplaceAll(err.Error(), plan.text, "***"))
 		}
 		return effect, err
 	}

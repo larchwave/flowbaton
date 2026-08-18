@@ -24,6 +24,11 @@ const (
 	ActionVerify    ActionKind = "verify"
 )
 
+// MaskedText replaces recorded input that may have landed in a secure
+// field. Recorders write it, replay refuses to execute it, and export
+// parameterizes it — a typed secret never survives in any artifact.
+const MaskedText = "***"
+
 // Action is one concrete device interaction or check.
 type Action struct {
 	Kind ActionKind
@@ -34,6 +39,10 @@ type Action struct {
 	Text string
 	// Direction is up/down/left/right for swipe and scroll kinds.
 	Direction string
+	// Masked marks an input whose real text was withheld because it may
+	// have landed in a secure field; Text then carries MaskedText. The
+	// flag, not the text, is the signal — a user can type a literal "***".
+	Masked bool
 }
 
 // StepStatus reports how one executed step ended.

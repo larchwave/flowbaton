@@ -129,7 +129,9 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 			return nil, fmt.Errorf("explore/run: reach %q: %w", key, loopErr)
 		}
 		if screenMatches(session.current, key) {
-			if n.Experience != nil && len(session.recording) > 0 {
+			// A recording that masked a secret is not worth keeping: its
+			// replay would be refused on every future reach anyway.
+			if n.Experience != nil && len(session.recording) > 0 && !recordingHoldsMask(session.recording) {
 				entry := explore.MemoryEntry{Title: "reach " + key, Body: strings.Join(session.recording, "\n")}
 				// Recipe persistence is advisory: a store failure must
 				// not fail a reach that succeeded on the device.
@@ -174,6 +176,32 @@ func (n *Navigator) recipe(ctx context.Context, screen explore.ScreenSignature, 
 
 // replay executes recorded tool lines ("tool {json args}") through the
 // toolbox. Any unknown tool or failed step abandons the replay.
+// maskedRecordingLine reports whether one recorded tool line is a masked
+// input: the {"masked":true} marker handleInputText writes, or the literal
+// mask text that earlier recordings stored. The legacy shape collides with
+// a user really typing "***" — refusing that replay costs one worker
+// fallback; replaying a masked secret would type the mask into a login and
+// submit it.
+func maskedRecordingLine(name, rawArgs string) bool {
+	if name != "input_text" {
+		return false
+	}
+	return strings.Contains(rawArgs, `"masked":true`) ||
+		strings.Contains(rawArgs, `"`+explore.MaskedText+`"`)
+}
+
+// recordingHoldsMask reports whether any line of a recording masked its
+// input, which makes the whole recording non-replayable.
+func recordingHoldsMask(lines []string) bool {
+	for _, line := range lines {
+		name, rawArgs, _ := strings.Cut(strings.TrimSpace(line), " ")
+		if maskedRecordingLine(name, rawArgs) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *toolSession) replay(ctx context.Context, box explore.ToolBox, body string) bool {
 	for _, line := range strings.Split(body, "\n") {
 		line = strings.TrimSpace(line)
@@ -183,6 +211,12 @@ func (s *toolSession) replay(ctx context.Context, box explore.ToolBox, body stri
 		name, rawArgs, _ := strings.Cut(line, " ")
 		if rawArgs == "" {
 			rawArgs = "{}"
+		}
+		if maskedRecordingLine(name, rawArgs) {
+			// A masked secret is not replayable: typing the literal mask
+			// and then submitting would send bad credentials. Fail the
+			// replay so the reach falls back to the worker model.
+			return false
 		}
 		handler, ok := box.Handlers[name]
 		if !ok {

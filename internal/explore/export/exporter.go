@@ -34,7 +34,18 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 		return nil, fmt.Errorf("export: only passing runs export, run status is %q", result.Status)
 	}
 	commands := []*yaml.Node{plain("launchApp")}
+	secrets := 0
 	for _, step := range result.Steps {
+		// A masked input holds no replayable text. Export it as an env
+		// placeholder so the flow stays runnable once the operator
+		// supplies the secret, instead of typing a literal mask. The
+		// FLOWBATON_ prefix is what lets a shell variable reach the flow
+		// (specs/01 reserved environment), and the SECRET fragment is
+		// what the engine's inputText guard and artifact masking key on.
+		if step.Action.Kind == explore.ActionInput && step.Action.Masked {
+			secrets++
+			step.Action.Text = fmt.Sprintf("${FLOWBATON_EXPLORE_SECRET_%d}", secrets)
+		}
 		node, err := commandNode(step)
 		if err != nil {
 			return nil, fmt.Errorf("export: step %d: %w", step.Index, err)
