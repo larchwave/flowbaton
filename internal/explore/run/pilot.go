@@ -69,26 +69,5 @@ func (p *pilot) review(ctx context.Context, logLines []string, final bool) (pilo
 
 // stepLog renders records as the compact per-step lines the pilot reads.
 func stepLog(steps []explore.StepRecord) []string {
-	lines := make([]string, 0, len(steps))
-	for _, step := range steps {
-		line := fmt.Sprintf("step %d: %s", step.Index+1, step.Action.Kind)
-		if step.Action.Text != "" {
-			line += fmt.Sprintf(" %q", truncate(step.Action.Text, 40))
-		}
-		if step.Action.Direction != "" {
-			line += " " + step.Action.Direction
-		}
-		line += fmt.Sprintf(" status=%s changed=%v", step.Status, !step.After.Same(step.Before))
-		if step.Note != "" {
-			line += " note=" + truncate(step.Note, 60)
-		}
-		if step.ErrText != "" {
-			line += " error=" + truncate(step.ErrText, 60)
-		}
-		lines = append(lines, line)
-	}
-	if len(lines) == 0 {
-		lines = append(lines, "(no steps executed yet)")
-	}
-	return lines
+	return explore.StepLines(steps)
 }

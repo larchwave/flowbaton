@@ -255,6 +255,10 @@ func writeExploreArtifacts(
 	if err := os.WriteFile(reportPath, []byte(markdown), 0o644); err != nil {
 		return "", nil, fmt.Errorf("explore: writing report: %w", err)
 	}
+	stepsPath := filepath.Join(options.OutputDir, "steps-"+options.SessionName+".md")
+	if err := os.WriteFile(stepsPath, []byte(stepLogMarkdown(report)), 0o644); err != nil {
+		return "", nil, fmt.Errorf("explore: writing step log: %w", err)
+	}
 
 	passing := make([]explore.TestResult, 0, len(report.Results))
 	for _, result := range report.Results {
@@ -286,6 +290,22 @@ func writeExploreArtifacts(
 		flowPaths = append(flowPaths, path)
 	}
 	return markdown, flowPaths, nil
+}
+
+// stepLogMarkdown renders what the agent did, scenario by scenario. The report
+// answers what the app did; a run that ends without a product verdict leaves
+// the tool calls as the only record, and re-running a session to recover them
+// costs a live device and a model budget.
+func stepLogMarkdown(report *explore.SessionReport) string {
+	builder := &strings.Builder{}
+	builder.WriteString("# session step log\n")
+	for _, result := range report.Results {
+		fmt.Fprintf(builder, "\n## %s (%s)\n", result.Scenario.Name, result.Status)
+		for _, line := range explore.StepLines(result.Steps) {
+			fmt.Fprintf(builder, "- %s\n", line)
+		}
+	}
+	return builder.String()
 }
 
 // applyExploreDefaults resolves the values only the environment can supply:

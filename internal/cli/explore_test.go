@@ -418,3 +418,45 @@ func TestExploreInvokerAppliesDefaultsAndValidates(t *testing.T) {
 		t.Fatal("an unsupported platform was accepted by the invoker")
 	}
 }
+
+func TestExploreRunWritesTheStepLog(t *testing.T) {
+	t.Parallel()
+
+	// The report answers what the app did; only the step log answers what the
+	// agent did. Without it, asking whether a tool was ever called costs a
+	// whole session.
+	outputDir := filepath.Join(t.TempDir(), "run-output")
+	fake := newExploreCrewFake()
+	fake.tester = func(s explore.Scenario) (*explore.TestResult, error) {
+		return &explore.TestResult{
+			Scenario: s,
+			Status:   explore.TestFailed,
+			Steps: []explore.StepRecord{
+				{Index: 0, Action: explore.Action{Kind: explore.ActionTap, Text: "Search"}, Status: explore.StepOK},
+				{
+					Index:   1,
+					Action:  explore.Action{Kind: explore.ActionInput, Text: "milk"},
+					Status:  explore.StepFailed,
+					ErrText: "nowhere to type",
+				},
+			},
+		}, nil
+	}
+	runner := assembledExploreRunner(fake, permissiveDriver())
+
+	var stdout, stderr bytes.Buffer
+	args := exploreArgs(outputDir, t.TempDir(), "--session-name", "night-shift")
+	if got := runner.Run(context.Background(), args, &stdout, &stderr); got != ExitOK {
+		t.Fatalf("exit = %d, want %d; stderr: %s", got, ExitOK, stderr.String())
+	}
+	logBytes, err := os.ReadFile(filepath.Join(outputDir, "steps-night-shift.md"))
+	if err != nil {
+		t.Fatalf("read step log: %v", err)
+	}
+	text := string(logBytes)
+	for _, want := range []string{"login works", "step 1: tap \"Search\"", "step 2: input \"milk\"", "nowhere to type"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("step log = %q, want it to carry %q", text, want)
+		}
+	}
+}
