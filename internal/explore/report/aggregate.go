@@ -94,12 +94,19 @@ func stoppedReason(result explore.TestResult) string {
 
 // driverBreakage reports a run whose final step died on a device or driver
 // error rather than a failed product check.
+//
+// A missed target is excluded: the device answered and the agent aimed at an
+// element the screen does not have, which is evidence about the app, not about
+// the equipment. Such a run is judged on its outcomes like any other.
 func driverBreakage(result explore.TestResult) (string, bool) {
 	if len(result.Steps) == 0 {
 		return "", false
 	}
 	last := result.Steps[len(result.Steps)-1]
 	if last.Status != explore.StepFailed || last.ErrText == "" || last.Action.Kind == explore.ActionVerify {
+		return "", false
+	}
+	if last.TargetMiss {
 		return "", false
 	}
 	return "driver error: " + truncate(last.ErrText, 120), true

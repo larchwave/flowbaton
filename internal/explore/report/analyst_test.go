@@ -232,3 +232,35 @@ func TestNilSessionIsAnError(t *testing.T) {
 		t.Fatal("want an error for a nil session")
 	}
 }
+
+func TestARunEndingOnAMissedTargetIsJudgedOnItsOutcomes(t *testing.T) {
+	// A target that matches nothing is the agent aiming at an element the
+	// screen does not have. The device answered, so calling it a driver error
+	// buries the product verdict under an equipment excuse.
+	session := &explore.SessionReport{
+		AppID:    "com.example.app",
+		Platform: "ios",
+		Results: []explore.TestResult{{
+			Scenario: explore.Scenario{Name: "filter results", Priority: explore.PriorityNormal},
+			Status:   explore.TestFailed,
+			Steps: []explore.StepRecord{{
+				Index:      0,
+				Action:     explore.Action{Kind: explore.ActionTap, Target: &explore.Locator{Kind: explore.LocatorText, Value: "Filter"}},
+				Status:     explore.StepFailed,
+				ErrText:    `no element matched text "Filter" on the current screen`,
+				TargetMiss: true,
+			}},
+			Outcomes: []explore.OutcomeCheck{{Expected: "results are filtered", Met: false}},
+		}},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if strings.Contains(markdown, "## Execution issues") {
+		t.Errorf("a missed target must not be an execution issue:\n%s", markdown)
+	}
+	if !strings.Contains(markdown, "## Defects") {
+		t.Errorf("want the unmet outcome reported as a defect:\n%s", markdown)
+	}
+}

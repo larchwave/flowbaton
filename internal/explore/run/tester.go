@@ -15,6 +15,11 @@ import (
 // unchanged) trigger a warning to the model.
 const stallThreshold = 3
 
+// cycleThreshold is how many consecutive steps bouncing between the same two
+// screens trigger a warning. Four is the shortest run that shows a repeat
+// rather than the there-and-back a scenario may legitimately need.
+const cycleThreshold = 4
+
 // Tester executes one scenario as a bounded tool loop on the worker model,
 // optionally supervised by a pilot conversation on the manager model.
 type Tester struct {
@@ -93,6 +98,9 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 		if streak := trailingStalls(session.steps); streak >= stallThreshold && streak%stallThreshold == 0 && warnedAt != len(session.steps) {
 			warnedAt = len(session.steps)
 			conversation = append(conversation, explore.Message{Role: explore.RoleUser, Text: stallWarning(session.steps, streak)})
+		} else if cycle := trailingCycle(session.steps); cycle >= cycleThreshold && cycle%cycleThreshold == 0 && warnedAt != len(session.steps) {
+			warnedAt = len(session.steps)
+			conversation = append(conversation, explore.Message{Role: explore.RoleUser, Text: cycleWarning(cycle)})
 		}
 		if supervisor != nil && len(session.steps)-reviewed >= pilotCadence {
 			lines := stepLog(session.steps[reviewed:])
@@ -166,6 +174,45 @@ func trailingStalls(steps []explore.StepRecord) int {
 		count++
 	}
 	return count
+}
+
+// trailingCycle counts the trailing steps that only move between two screens.
+// Each one changes the screen, so the stall count never rises, yet the run is
+// as stuck as a screen that never moves.
+func trailingCycle(steps []explore.StepRecord) int {
+	seen := []explore.ScreenSignature{}
+	known := func(sig explore.ScreenSignature) bool {
+		for _, other := range seen {
+			if other.Same(sig) {
+				return true
+			}
+		}
+		if len(seen) == 2 {
+			return false
+		}
+		seen = append(seen, sig)
+		return true
+	}
+	count := 0
+	for index := len(steps) - 1; index >= 0; index-- {
+		step := steps[index]
+		if step.Status != explore.StepOK || !known(step.After) || !known(step.Before) {
+			break
+		}
+		count++
+	}
+	if len(seen) < 2 {
+		return 0
+	}
+	return count
+}
+
+func cycleWarning(cycle int) string {
+	return fmt.Sprintf(
+		"Warning: the last %d steps only moved back and forth between two screens. "+
+			"Repeating that pair proves nothing: pick an element neither screen has "+
+			"used yet, or finish the scenario with what you have.",
+		cycle)
 }
 
 func stallWarning(steps []explore.StepRecord, streak int) string {

@@ -172,7 +172,7 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 		modes++
 	}
 	if modes != 1 {
-		return device.Point{}, fmt.Errorf("target needs exactly one of eidx, text, or id")
+		return device.Point{}, explore.TargetMissError{Reason: "target needs exactly one of eidx, text, or id"}
 	}
 	if args.EIDX != nil {
 		for _, element := range state.Elements {
@@ -181,11 +181,15 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 			}
 			bounds, ok := explore.ElementBounds(element.Node)
 			if !ok {
-				return device.Point{}, fmt.Errorf("element e%d has no usable bounds", *args.EIDX)
+				return device.Point{}, explore.TargetMissError{
+					Reason: fmt.Sprintf("element e%d has no usable bounds", *args.EIDX),
+				}
 			}
 			return hierarchy.Center(bounds), nil
 		}
-		return device.Point{}, fmt.Errorf("no element e%d in the newest element table; call observe", *args.EIDX)
+		return device.Point{}, explore.TargetMissError{
+			Reason: fmt.Sprintf("no element e%d in the newest element table; call observe", *args.EIDX),
+		}
 	}
 	selector := model.ElementSelector{}
 	if args.Text != "" {
@@ -208,5 +212,7 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 			return hierarchy.Center(candidate.Bounds), nil
 		}
 	}
-	return device.Point{}, fmt.Errorf("no element matched %s on the current screen", args.describe())
+	return device.Point{}, explore.TargetMissError{
+		Reason: fmt.Sprintf("no element matched %s on the current screen", args.describe()),
+	}
 }

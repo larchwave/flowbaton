@@ -279,3 +279,63 @@ func TestRunScenarioRefusesNonPositiveStepBudget(t *testing.T) {
 		t.Fatal("zero step budget accepted")
 	}
 }
+
+func TestRunScenarioMarksAMissedTargetOnTheStep(t *testing.T) {
+	// The report separates equipment failures from an agent aiming at nothing,
+	// and the step record is where that distinction is made.
+	home := makeState("com.example.app", screen("Home", button("Login", "login_button", "[0,0][100,50]")))
+	driver := &fakeDriver{}
+	observer := &fakeObserver{states: []*explore.ScreenState{home}}
+	worker := &scriptedLLM{replies: []explore.Message{
+		toolCall("1", "tap", `{"text":"Filter"}`),
+		toolCall("2", "finish", `{"status":"failed"}`),
+	}}
+	tester := newTester(driver, observer, worker, nil, testConfig())
+	result, err := tester.RunScenario(context.Background(), explore.Scenario{Name: "missing control"}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Steps) != 1 {
+		t.Fatalf("steps %+v", result.Steps)
+	}
+	step := result.Steps[0]
+	if step.Status != explore.StepFailed || !step.TargetMiss {
+		t.Fatalf("step = %+v, want a failed step marked as a missed target", step)
+	}
+	if !strings.Contains(step.ErrText, `no element matched text "Filter"`) {
+		t.Fatalf("error text %q, want the message the agent reads", step.ErrText)
+	}
+}
+
+func TestRunScenarioWarnsWhenTheRunBouncesBetweenTwoScreens(t *testing.T) {
+	// Every step here changes the screen, so the stall count stays at zero
+	// while the run makes no headway: forward, back, forward, back until the
+	// budget is gone.
+	home := makeState("com.example.app", screen("Home", button("Next", "next_button", "[0,0][100,50]")))
+	detail := makeState("com.example.app", screen("Detail", button("Back", "back_button", "[0,0][100,50]")))
+	driver := &fakeDriver{}
+	observer := &fakeObserver{states: []*explore.ScreenState{detail, home, detail, home, detail}}
+	worker := &scriptedLLM{replies: []explore.Message{
+		toolCall("1", "tap", `{"eidx":0}`),
+		toolCall("2", "tap", `{"eidx":0}`),
+		toolCall("3", "tap", `{"eidx":0}`),
+		toolCall("4", "tap", `{"eidx":0}`),
+		toolCall("5", "finish", `{"status":"failed"}`),
+	}}
+	tester := newTester(driver, observer, worker, nil, testConfig())
+	if _, err := tester.RunScenario(context.Background(), explore.Scenario{Name: "bounce"}, home); err != nil {
+		t.Fatal(err)
+	}
+	warned := 0
+	for _, request := range worker.requests {
+		for _, message := range request.Messages {
+			if message.Role == explore.RoleUser && strings.Contains(message.Text, "between two screens") {
+				warned++
+				break
+			}
+		}
+	}
+	if warned != 1 {
+		t.Fatalf("cycle warning seen in %d requests, want 1", warned)
+	}
+}

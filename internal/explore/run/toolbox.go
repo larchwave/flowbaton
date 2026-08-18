@@ -193,8 +193,10 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	}
 	switch {
 	case execErr != nil:
+		var miss explore.TargetMissError
 		step.Status = explore.StepFailed
 		step.ErrText = execErr.Error()
+		step.TargetMiss = errors.As(execErr, &miss)
 	case step.After.Same(before):
 		step.Status = explore.StepNoChange
 	default:

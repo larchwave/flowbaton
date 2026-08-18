@@ -58,6 +58,21 @@ type StepRecord struct {
 	After   ScreenSignature
 	At      time.Time
 	ErrText string
+	// TargetMiss marks a step that failed because the screen has no element
+	// the agent's target names. The device answered; the agent aimed at
+	// nothing, so a report must not read this as broken equipment.
+	TargetMiss bool
+}
+
+// TargetMissError is the error a target that resolves to no element returns.
+// The message is the whole error: the agent reads it as a tool result, so it
+// carries no wrapper text.
+type TargetMissError struct {
+	Reason string
+}
+
+func (e TargetMissError) Error() string {
+	return e.Reason
 }
 
 // OutcomeCheck is one expected outcome with its verification result.
