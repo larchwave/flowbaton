@@ -54,6 +54,62 @@ func TestFlattenScreenAssignsStableIndexes(t *testing.T) {
 	}
 }
 
+func TestFlattenScreenListsTextInputsWithoutLabels(t *testing.T) {
+	// An empty field carries no text, label, or identifier, so the attribute
+	// rules alone drop it -- and a typing scenario can never reach it.
+	tree := device.TreeNode{
+		Attributes: map[string]string{"class": "Root"},
+		Children: []device.TreeNode{
+			{Attributes: map[string]string{"class": "android.widget.EditText", "bounds": "[0,0][100,50]"}},
+			{Attributes: map[string]string{"elementType": "49", "bounds": "[0,60][100,110]"}},
+			{Attributes: map[string]string{"class": "android.widget.TextView"}},
+		},
+	}
+	flat, err := FlattenScreen(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(flat) != 2 {
+		t.Fatalf("flattened %d elements, want the two text inputs: %+v", len(flat), flat)
+	}
+	if flat[0].Node.Attributes["class"] != "android.widget.EditText" {
+		t.Fatalf("first element %+v", flat[0])
+	}
+	if flat[1].Node.Attributes["elementType"] != "49" {
+		t.Fatalf("second element %+v", flat[1])
+	}
+}
+
+func TestIsTextInputSeparatesEditableFromStaticText(t *testing.T) {
+	editable := []device.TreeNode{
+		{Attributes: map[string]string{"class": "android.widget.EditText"}},
+		{Attributes: map[string]string{"class": "androidx.appcompat.widget.AppCompatEditText"}},
+		{Attributes: map[string]string{"class": "android.widget.AutoCompleteTextView"}},
+		{Attributes: map[string]string{"elementType": "45"}},
+		{Attributes: map[string]string{"elementType": "49"}},
+		{Attributes: map[string]string{"elementType": "50"}},
+		{Attributes: map[string]string{"elementType": "52"}},
+	}
+	for _, node := range editable {
+		if !IsTextInput(node) {
+			t.Fatalf("IsTextInput(%v) = false, want true", node.Attributes)
+		}
+	}
+	static := []device.TreeNode{
+		{Attributes: map[string]string{"class": "android.widget.TextView"}},
+		{Attributes: map[string]string{"class": "android.widget.Button"}},
+		{Attributes: map[string]string{"elementType": "44"}},
+		{Attributes: map[string]string{"elementType": "47"}},
+		{Attributes: map[string]string{"elementType": "48"}},
+		{Attributes: map[string]string{}},
+	}
+	for _, node := range static {
+		if IsTextInput(node) {
+			t.Fatalf("IsTextInput(%v) = true, want false", node.Attributes)
+		}
+	}
+}
+
 func TestComputeSignatureIgnoresVolatileDigits(t *testing.T) {
 	first := ComputeSignature("app", sampleTree())
 	changed := sampleTree()

@@ -14,6 +14,31 @@ import (
 // node worth listing for agents.
 var interestingAttrs = []string{"text", "label", "name", "resource-id", "id", "hintText", "accessibilityText"}
 
+// iosTextInputTypes are the XCUIElementType codes that accept typed text:
+// searchField 45, textField 49, secureTextField 50, textView 52. Static text
+// is 48 and accepts nothing.
+var iosTextInputTypes = map[string]bool{"45": true, "49": true, "50": true, "52": true}
+
+// androidTextInputClasses are the widget class fragments that accept typed
+// text. TextView alone is a label, so only its editable descendants count.
+var androidTextInputClasses = []string{"EditText", "AutoCompleteTextView"}
+
+// IsTextInput reports whether typed text can land in this element once it
+// holds keyboard focus. Android names the widget in class; iOS carries a
+// numeric element type.
+func IsTextInput(node device.TreeNode) bool {
+	if iosTextInputTypes[node.Attributes["elementType"]] {
+		return true
+	}
+	class := node.Attributes["class"]
+	for _, fragment := range androidTextInputClasses {
+		if strings.Contains(class, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
 // FlattenScreen lists the elements of a screen tree that agents interact
 // with, assigning each a stable EIDX in document order. The same tree
 // always yields the same indexes, so research maps and tester tools agree
@@ -49,6 +74,11 @@ func FlattenScreen(root device.TreeNode) ([]FlatElement, error) {
 func isInteresting(element *hierarchy.Element) bool {
 	node := element.Node
 	if node.Clickable != nil && *node.Clickable {
+		return true
+	}
+	// An empty field carries none of the interesting attributes, so listing
+	// it takes its own rule -- otherwise no agent can tap it to type.
+	if IsTextInput(node) {
 		return true
 	}
 	if len(element.Children) > 0 {

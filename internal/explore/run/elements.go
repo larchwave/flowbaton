@@ -75,6 +75,14 @@ func elementTable(state *explore.ScreenState) string {
 		if element.Node.Clickable != nil && *element.Node.Clickable {
 			builder.WriteString(" clickable")
 		}
+		// Typing goes to whatever holds keyboard focus, so both marks are
+		// load-bearing: which rows accept text, and whether a tap took focus.
+		if explore.IsTextInput(element.Node) {
+			builder.WriteString(" text-field")
+		}
+		if element.Node.Focused != nil && *element.Node.Focused {
+			builder.WriteString(" focused")
+		}
 		builder.WriteString("\n")
 	}
 	if rows == 0 {
