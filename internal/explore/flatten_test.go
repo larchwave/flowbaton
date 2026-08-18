@@ -140,6 +140,43 @@ func TestIsTextInputSeparatesEditableFromStaticText(t *testing.T) {
 	}
 }
 
+func TestComputeSignatureReadsTheIOSAttributeDialect(t *testing.T) {
+	// The iOS driver names a node with elementType, id, and accessibilityText.
+	// Reading only the Android spelling left every iOS node contributing the
+	// same empty triple, so screens collided on tree shape and carried no
+	// labels at all.
+	ios := func(elementType, label, id string, children ...device.TreeNode) device.TreeNode {
+		attrs := map[string]string{"elementType": elementType}
+		if label != "" {
+			attrs["accessibilityText"] = label
+		}
+		if id != "" {
+			attrs["id"] = id
+		}
+		return device.TreeNode{Attributes: attrs, Children: children}
+	}
+	list := ios("1", "", "",
+		ios("9", "New Reminder", "add"),
+		ios("9", "Add List", "addlist"))
+	settings := ios("1", "", "",
+		ios("48", "Notifications", "notif"),
+		ios("48", "Privacy Policy", "privacy"))
+
+	listSignature := ComputeSignature("app", list)
+	if listSignature.Same(ComputeSignature("app", settings)) {
+		t.Fatal("two different iOS screens share one signature")
+	}
+	if len(listSignature.Salient) == 0 || listSignature.Salient[0] != "New Reminder" {
+		t.Fatalf("salient %v, want the iOS labels", listSignature.Salient)
+	}
+	// Role and identity must count too: same labels, different control kinds.
+	labelled := ios("1", "", "", ios("9", "Done", "done"))
+	retyped := ios("1", "", "", ios("48", "Done", "done"))
+	if ComputeSignature("app", labelled).Same(ComputeSignature("app", retyped)) {
+		t.Fatal("element type is missing from the signature")
+	}
+}
+
 func TestComputeSignatureIgnoresStatusBarChrome(t *testing.T) {
 	// The signature names the screen for agents and keys the research cache.
 	// Built over the status bar it names screens "No signal, SSID 3 of 3

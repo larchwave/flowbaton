@@ -139,12 +139,9 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 		if isChrome(node) {
 			return
 		}
-		role := node.Attributes["class"]
-		if role == "" {
-			role = node.Attributes["type"]
-		}
-		label := firstAttr(node, "text", "label", "name")
-		parts = append(parts, role+"|"+node.Attributes["resource-id"]+"|"+normalizeText(label))
+		role := signatureRole(node)
+		label := signatureLabel(node)
+		parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
 		if len(salient) < 2 {
 			trimmed := strings.TrimSpace(label)
 			if trimmed != "" && len(trimmed) <= 40 {
@@ -162,6 +159,24 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 		Salient:    salient,
 		TreeDigest: hex.EncodeToString(digest[:8]),
 	}
+}
+
+// The two platforms spell the same three facts differently: Android sends
+// class, resource-id, and text; iOS sends elementType, id, and
+// accessibilityText. Reading one dialect only makes every node of the other
+// platform contribute the same empty triple, which collapses the digest onto
+// tree shape and leaves the salient labels empty.
+
+func signatureRole(node device.TreeNode) string {
+	return firstAttr(node, "class", "type", "elementType")
+}
+
+func signatureID(node device.TreeNode) string {
+	return firstAttr(node, "resource-id", "id")
+}
+
+func signatureLabel(node device.TreeNode) string {
+	return firstAttr(node, "text", "label", "name", "accessibilityText", "title")
 }
 
 func firstAttr(node device.TreeNode, keys ...string) string {
