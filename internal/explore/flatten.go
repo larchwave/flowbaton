@@ -23,6 +23,10 @@ var iosTextInputTypes = map[string]bool{"45": true, "49": true, "50": true, "52"
 // text. TextView alone is a label, so only its editable descendants count.
 var androidTextInputClasses = []string{"EditText", "AutoCompleteTextView"}
 
+// iosSecureTextFieldType is the XCUIElementType code of secureTextField
+// (50), the field that masks what is typed into it.
+const iosSecureTextFieldType = "50"
+
 // iosStatusBarType is the XCUIElementType of the status bar (25). It is a
 // sibling window of the app, not part of it.
 const iosStatusBarType = "25"
@@ -53,6 +57,16 @@ func IsTextInput(node device.TreeNode) bool {
 		}
 	}
 	return false
+}
+
+// IsSecureTextInput reports whether this element masks what is typed into
+// it: an iOS secure text field or an Android password input. What lands in
+// such a field is a secret by declaration and must never reach recordings.
+func IsSecureTextInput(node device.TreeNode) bool {
+	if node.Attributes["elementType"] == iosSecureTextFieldType {
+		return true
+	}
+	return node.Attributes["password"] == "true" && IsTextInput(node)
 }
 
 // FlattenScreen lists the elements of a screen tree that agents interact

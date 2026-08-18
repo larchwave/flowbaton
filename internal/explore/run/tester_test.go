@@ -326,16 +326,16 @@ func TestRunScenarioWarnsWhenTheRunBouncesBetweenTwoScreens(t *testing.T) {
 	if _, err := tester.RunScenario(context.Background(), explore.Scenario{Name: "bounce"}, home); err != nil {
 		t.Fatal(err)
 	}
+	// The warning stays in the conversation once injected, so the honest count
+	// is how many times it was injected: occurrences in the final request.
 	warned := 0
-	for _, request := range worker.requests {
-		for _, message := range request.Messages {
-			if message.Role == explore.RoleUser && strings.Contains(message.Text, "between two screens") {
-				warned++
-				break
-			}
+	last := worker.requests[len(worker.requests)-1]
+	for _, message := range last.Messages {
+		if message.Role == explore.RoleUser && strings.Contains(message.Text, "between two screens") {
+			warned++
 		}
 	}
 	if warned != 1 {
-		t.Fatalf("cycle warning seen in %d requests, want 1", warned)
+		t.Fatalf("cycle warning injected %d times, want 1", warned)
 	}
 }

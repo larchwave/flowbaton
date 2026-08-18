@@ -228,3 +228,25 @@ func TestComputeSignatureIgnoresVolatileDigits(t *testing.T) {
 		t.Fatalf("salient %v", first.Salient)
 	}
 }
+
+func TestIsSecureTextInput(t *testing.T) {
+	cases := []struct {
+		name  string
+		attrs map[string]string
+		want  bool
+	}{
+		{"ios secure field", map[string]string{"elementType": "50"}, true},
+		{"ios plain field", map[string]string{"elementType": "49"}, false},
+		{"android password field", map[string]string{"class": "android.widget.EditText", "password": "true"}, true},
+		{"android plain field", map[string]string{"class": "android.widget.EditText", "password": "false"}, false},
+		{"android password attr on non-input", map[string]string{"class": "android.widget.Button", "password": "true"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := IsSecureTextInput(device.TreeNode{Attributes: tc.attrs})
+			if got != tc.want {
+				t.Fatalf("IsSecureTextInput(%v) = %v, want %v", tc.attrs, got, tc.want)
+			}
+		})
+	}
+}

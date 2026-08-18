@@ -16,9 +16,11 @@ import (
 const stallThreshold = 3
 
 // cycleThreshold is how many consecutive steps bouncing between the same two
-// screens trigger a warning. Four is the shortest run that shows a repeat
-// rather than the there-and-back a scenario may legitimately need.
-const cycleThreshold = 4
+// screens trigger a warning. Three is the shortest run that shows a repeat:
+// the there-and-back a scenario may legitimately need is two steps, and a
+// third screen resets the count either way. A run gets few turns, so waiting
+// longer spends the whole budget on the loop it is meant to break.
+const cycleThreshold = 3
 
 // Tester executes one scenario as a bounded tool loop on the worker model,
 // optionally supervised by a pilot conversation on the manager model.

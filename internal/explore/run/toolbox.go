@@ -258,6 +258,34 @@ func (s *toolSession) handleLongPress(ctx context.Context, args json.RawMessage)
 	return s.afterMutation(ctx, "long_press", args, action, s.deps.driver.LongPress(ctx, request))
 }
 
+// inputMask replaces recorded text that may have landed in a secure field,
+// so a typed secret never reaches recipes, step records, or reports. The
+// device still receives the real text; only the records mask.
+const inputMask = "***"
+
+// typingMayLandInSecureField reports whether this screen's typed text could
+// end up in a password-style field: a secure input is present and no plain
+// text input holds focus. iOS publishes no usable focus (hasFocus is false
+// once the keyboard is open), so any secure field on an iOS screen masks.
+// Over-redaction is acceptable; leaking is not — a masked recipe that
+// replays "***" simply fails the reach and falls back to the worker model.
+// ponytail: iOS over-redacts username typing on login screens; a per-node
+// keyboard-focus signal from the runner would tighten it.
+func typingMayLandInSecureField(state *explore.ScreenState) bool {
+	secureSeen := false
+	plainFocused := false
+	for _, element := range state.Elements {
+		if explore.IsSecureTextInput(element.Node) {
+			secureSeen = true
+			continue
+		}
+		if explore.IsTextInput(element.Node) && element.Node.Focused != nil && *element.Node.Focused {
+			plainFocused = true
+		}
+	}
+	return secureSeen && !plainFocused
+}
+
 func (s *toolSession) handleInputText(ctx context.Context, args json.RawMessage) (string, error) {
 	var in struct {
 		Text string `json:"text"`
@@ -269,8 +297,13 @@ func (s *toolSession) handleInputText(ctx context.Context, args json.RawMessage)
 		return "", errors.New("input_text needs non-empty text")
 	}
 	action := explore.Action{Kind: explore.ActionInput, Text: in.Text}
+	recorded := args
+	if typingMayLandInSecureField(s.current) {
+		action.Text = inputMask
+		recorded = json.RawMessage(`{"text":"` + inputMask + `"}`)
+	}
 	request := device.InputTextRequest{Text: in.Text, AppIDs: []string{s.deps.appID}}
-	return s.afterMutation(ctx, "input_text", args, action, s.deps.driver.InputText(ctx, request))
+	return s.afterMutation(ctx, "input_text", recorded, action, s.deps.driver.InputText(ctx, request))
 }
 
 func (s *toolSession) handleEraseText(ctx context.Context, args json.RawMessage) (string, error) {
