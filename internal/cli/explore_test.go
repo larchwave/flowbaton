@@ -460,3 +460,70 @@ func TestExploreRunWritesTheStepLog(t *testing.T) {
 		}
 	}
 }
+
+func TestExploreRunWritesTheStepLogAfterAFailedSession(t *testing.T) {
+	// A session that dies mid-scenario is exactly when the step log is worth
+	// having. The session loop hands back the partial report for that reason.
+	outputDir := filepath.Join(t.TempDir(), "run-output")
+	fake := newExploreCrewFake()
+	fake.tester = func(s explore.Scenario) (*explore.TestResult, error) {
+		partial := &explore.TestResult{
+			Scenario: s,
+			Status:   explore.TestStopped,
+			Steps: []explore.StepRecord{{
+				Index:  0,
+				Action: explore.Action{Kind: explore.ActionTap, Text: "Search"},
+				Status: explore.StepOK,
+			}},
+		}
+		return partial, errors.New("the app crashed mid-scenario")
+	}
+	runner := assembledExploreRunner(fake, permissiveDriver())
+
+	var stdout, stderr bytes.Buffer
+	args := exploreArgs(outputDir, t.TempDir(), "--session-name", "night-shift")
+	if got := runner.Run(context.Background(), args, &stdout, &stderr); got != ExitFailure {
+		t.Fatalf("exit = %d, want %d; stderr: %s", got, ExitFailure, stderr.String())
+	}
+	logBytes, err := os.ReadFile(filepath.Join(outputDir, "steps-night-shift.md"))
+	if err != nil {
+		t.Fatalf("read step log after a failed session: %v", err)
+	}
+	if !strings.Contains(string(logBytes), "step 1: tap \"Search\"") {
+		t.Fatalf("step log = %q, want the steps the run did manage", logBytes)
+	}
+}
+
+func TestExploreRunReplacesAStepLogFromAnEarlierRun(t *testing.T) {
+	// Session names can repeat. A log left by an earlier run reads as this
+	// run's evidence, so a run that records nothing must still say so.
+	outputDir := filepath.Join(t.TempDir(), "run-output")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(outputDir, "steps-night-shift.md")
+	if err := os.WriteFile(stale, []byte("# session step log\n\n## old run (passed)\n- step 1: tap \"Ghost\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fake := newExploreCrewFake()
+	fake.tester = func(explore.Scenario) (*explore.TestResult, error) {
+		return nil, errors.New("the app crashed before any step")
+	}
+	runner := assembledExploreRunner(fake, permissiveDriver())
+
+	var stdout, stderr bytes.Buffer
+	args := exploreArgs(outputDir, t.TempDir(), "--session-name", "night-shift")
+	if got := runner.Run(context.Background(), args, &stdout, &stderr); got != ExitFailure {
+		t.Fatalf("exit = %d, want %d; stderr: %s", got, ExitFailure, stderr.String())
+	}
+	logBytes, err := os.ReadFile(stale)
+	if err != nil {
+		t.Fatalf("read step log: %v", err)
+	}
+	if strings.Contains(string(logBytes), "Ghost") {
+		t.Fatalf("the earlier run's log survived this run:\n%s", logBytes)
+	}
+	if !strings.Contains(string(logBytes), "no scenario ran") {
+		t.Fatalf("step log = %q, want it to say that nothing ran", logBytes)
+	}
+}

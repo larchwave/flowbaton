@@ -168,6 +168,14 @@ func (runner ExploreRunner) executeSession(
 		closeErr = fmt.Errorf("explore: closing driver: %w", closeErr)
 	}
 	if err := errors.Join(sessionErr, closeErr); err != nil {
+		// The session loop hands back what it has with every error, and a run
+		// that died mid-scenario is exactly when its steps are worth reading.
+		// A log that cannot be written must not replace the failure itself.
+		if path, logErr := writeStepLog(report, options); logErr != nil {
+			fmt.Fprintf(stderr, "explore: the step log could not be written: %v\n", logErr)
+		} else if path != "" {
+			fmt.Fprintf(stderr, "explore: steps up to the failure are in %s\n", path)
+		}
 		return "", nil, err
 	}
 	return writeExploreArtifacts(report, crew, options, stdout, stderr)
@@ -255,9 +263,8 @@ func writeExploreArtifacts(
 	if err := os.WriteFile(reportPath, []byte(markdown), 0o644); err != nil {
 		return "", nil, fmt.Errorf("explore: writing report: %w", err)
 	}
-	stepsPath := filepath.Join(options.OutputDir, "steps-"+options.SessionName+".md")
-	if err := os.WriteFile(stepsPath, []byte(stepLogMarkdown(report)), 0o644); err != nil {
-		return "", nil, fmt.Errorf("explore: writing step log: %w", err)
+	if _, err := writeStepLog(report, options); err != nil {
+		return "", nil, err
 	}
 
 	passing := make([]explore.TestResult, 0, len(report.Results))
@@ -292,6 +299,19 @@ func writeExploreArtifacts(
 	return markdown, flowPaths, nil
 }
 
+// writeStepLog writes the step log and answers the path it wrote.
+//
+// It writes even when nothing ran, because session names repeat: a log left
+// by an earlier run under the same name would be read as this run's evidence.
+// Saying "no scenario ran" is the honest replacement.
+func writeStepLog(report *explore.SessionReport, options exploreOptions) (string, error) {
+	path := filepath.Join(options.OutputDir, "steps-"+options.SessionName+".md")
+	if err := os.WriteFile(path, []byte(stepLogMarkdown(report)), 0o644); err != nil {
+		return "", fmt.Errorf("explore: writing step log: %w", err)
+	}
+	return path, nil
+}
+
 // stepLogMarkdown renders what the agent did, scenario by scenario. The report
 // answers what the app did; a run that ends without a product verdict leaves
 // the tool calls as the only record, and re-running a session to recover them
@@ -299,6 +319,10 @@ func writeExploreArtifacts(
 func stepLogMarkdown(report *explore.SessionReport) string {
 	builder := &strings.Builder{}
 	builder.WriteString("# session step log\n")
+	if report == nil || len(report.Results) == 0 {
+		builder.WriteString("\n(no scenario ran)\n")
+		return builder.String()
+	}
 	for _, result := range report.Results {
 		fmt.Fprintf(builder, "\n## %s (%s)\n", result.Scenario.Name, result.Status)
 		for _, line := range explore.StepLines(result.Steps) {
