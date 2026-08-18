@@ -80,6 +80,36 @@ func TestFlattenScreenListsTextInputsWithoutLabels(t *testing.T) {
 	}
 }
 
+func TestFlattenScreenSkipsStatusBarChrome(t *testing.T) {
+	// The status bar is a sibling window of the app, so its clock, carrier,
+	// and battery labels reach the element list and read as app content --
+	// live sessions planned scenarios about Wi-Fi and signal in a reminders
+	// app because of exactly these rows.
+	tree := device.TreeNode{
+		Attributes: map[string]string{"elementType": "1"},
+		Children: []device.TreeNode{
+			{
+				Attributes: map[string]string{"elementType": "25"},
+				Children: []device.TreeNode{
+					{Attributes: map[string]string{"elementType": "48", "accessibilityText": "10:46"}},
+					{Attributes: map[string]string{"elementType": "1", "accessibilityText": "No signal"}},
+				},
+			},
+			{Attributes: map[string]string{"elementType": "9", "accessibilityText": "New Reminder"}},
+		},
+	}
+	flat, err := FlattenScreen(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(flat) != 1 {
+		t.Fatalf("flattened %d elements, want only the app button: %+v", len(flat), flat)
+	}
+	if got := flat[0].Node.Attributes["accessibilityText"]; got != "New Reminder" {
+		t.Fatalf("kept %q, want the app element", got)
+	}
+}
+
 func TestIsTextInputSeparatesEditableFromStaticText(t *testing.T) {
 	editable := []device.TreeNode{
 		{Attributes: map[string]string{"class": "android.widget.EditText"}},

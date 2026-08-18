@@ -23,6 +23,22 @@ var iosTextInputTypes = map[string]bool{"45": true, "49": true, "50": true, "52"
 // text. TextView alone is a label, so only its editable descendants count.
 var androidTextInputClasses = []string{"EditText", "AutoCompleteTextView"}
 
+// iosStatusBarType is the XCUIElementType of the status bar (25). It is a
+// sibling window of the app, not part of it.
+const iosStatusBarType = "25"
+
+// isChrome reports whether this node roots operating-system furniture rather
+// than the app under test. Its clock, carrier, and battery labels otherwise
+// read as app content: live sessions planned Wi-Fi and signal scenarios in a
+// reminders app off exactly those rows.
+//
+// Only the iOS status bar is recognized. The Android agent has not been seen
+// emitting system-user-interface windows in an app dump, so nothing is
+// skipped there until a device shows one.
+func isChrome(node device.TreeNode) bool {
+	return node.Attributes["elementType"] == iosStatusBarType
+}
+
 // IsTextInput reports whether typed text can land in this element once it
 // holds keyboard focus. Android names the widget in class; iOS carries a
 // numeric element type.
@@ -51,6 +67,9 @@ func FlattenScreen(root device.TreeNode) ([]FlatElement, error) {
 	flat := []FlatElement{}
 	var walk func(element *hierarchy.Element, path string, depth int)
 	walk = func(element *hierarchy.Element, path string, depth int) {
+		if isChrome(element.Node) {
+			return
+		}
 		if isInteresting(element) {
 			flat = append(flat, FlatElement{
 				EIDX:  len(flat),
