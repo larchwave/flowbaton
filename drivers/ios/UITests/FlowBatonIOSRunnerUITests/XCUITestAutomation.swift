@@ -278,11 +278,12 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
 
   // MARK: - Hierarchy
 
-  /// viewHierarchy serves the app under test AND the system chrome behind it.
+  /// viewHierarchy serves the app under test AND the system chrome around it.
   ///
-  /// The status bar belongs to the springboard, not to the app, so an app-only
-  /// snapshot cannot see the clock, the signal bars or the battery. The status
-  /// bar is therefore a second subtree under the public zero-sized root.
+  /// The status bar and any system alert belong to the springboard, not to the
+  /// app, so an app-only snapshot cannot see the clock, the signal bars, the
+  /// battery, or a permission dialog sitting over the app. They are therefore a
+  /// second subtree under the public zero-sized root.
   ///
   /// The springboard is deliberately NOT required to be in the foreground — it
   /// never is while an app is up, which is exactly when its status bar matters.
@@ -299,7 +300,8 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
       }
       return hierarchyPayload(
         app: SnapshotAdapter(snapshot),
-        systemChrome: Self.isSpringboard(app) ? [] : Self.statusBarSnapshots(),
+        systemChrome: Self.isSpringboard(app)
+          ? [] : Self.statusBarSnapshots() + Self.systemAlertSnapshots(),
         excludeKeyboardElements: excludeKeyboardElements)
     }
     do {
@@ -363,6 +365,25 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   static func statusBarSnapshots() -> [any AccessibilitySnapshot] {
     let bars = XCUIApplication(bundleIdentifier: springboardID).statusBars
     return bars.allElementsBoundByAccessibilityElement.compactMap {
+      guard let snapshot = try? $0.snapshot() else { return nil }
+      return SnapshotAdapter(snapshot)
+    }
+  }
+
+  /// systemAlertSnapshots takes the springboard's alerts and nothing else.
+  ///
+  /// A permission alert belongs to the springboard, so an app-only snapshot
+  /// cannot see it while it covers the app: the served tree looks unchanged,
+  /// every tap lands on a dialog nobody reported, and an exploring agent reads
+  /// the screen as frozen. Serving the alert beside the status bar puts the
+  /// blocking dialog and its buttons where a selector can reach them.
+  ///
+  /// Failures are swallowed for the same reason as the status bar: an alert
+  /// that cannot be snapshot is worth less than the app.
+  @MainActor
+  static func systemAlertSnapshots() -> [any AccessibilitySnapshot] {
+    let alerts = XCUIApplication(bundleIdentifier: springboardID).alerts
+    return alerts.allElementsBoundByAccessibilityElement.compactMap {
       guard let snapshot = try? $0.snapshot() else { return nil }
       return SnapshotAdapter(snapshot)
     }
