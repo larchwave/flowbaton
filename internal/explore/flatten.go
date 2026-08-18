@@ -133,6 +133,12 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 	salient := []string{}
 	var walk func(node device.TreeNode)
 	walk = func(node device.TreeNode) {
+		// Chrome is skipped here for the same reason as in FlattenScreen, and
+		// twice over: it would name the screen after the carrier and split one
+		// screen into many as reception changes.
+		if isChrome(node) {
+			return
+		}
 		role := node.Attributes["class"]
 		if role == "" {
 			role = node.Attributes["type"]

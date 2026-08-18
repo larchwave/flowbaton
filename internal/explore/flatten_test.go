@@ -140,6 +140,39 @@ func TestIsTextInputSeparatesEditableFromStaticText(t *testing.T) {
 	}
 }
 
+func TestComputeSignatureIgnoresStatusBarChrome(t *testing.T) {
+	// The signature names the screen for agents and keys the research cache.
+	// Built over the status bar it names screens "No signal, SSID 3 of 3
+	// Wi-Fi bars" and splits one screen into many as reception changes.
+	withBar := func(carrier string) device.TreeNode {
+		return device.TreeNode{
+			Attributes: map[string]string{"elementType": "1"},
+			Children: []device.TreeNode{
+				{
+					Attributes: map[string]string{"elementType": "25"},
+					Children: []device.TreeNode{
+						{Attributes: map[string]string{"elementType": "48", "text": carrier}},
+					},
+				},
+				{Attributes: map[string]string{"elementType": "9", "text": "New Reminder"}},
+			},
+		}
+	}
+	first := ComputeSignature("app", withBar("No signal"))
+	if len(first.Salient) == 0 || first.Salient[0] != "New Reminder" {
+		t.Fatalf("salient %v, want the app label first", first.Salient)
+	}
+	for _, label := range first.Salient {
+		if label == "No signal" {
+			t.Fatalf("status bar text reached the salient labels: %v", first.Salient)
+		}
+	}
+	second := ComputeSignature("app", withBar("SSID, 3 of 3 Wi-Fi bars"))
+	if !first.Same(second) {
+		t.Fatalf("reception change split the screen: %q vs %q", first.TreeDigest, second.TreeDigest)
+	}
+}
+
 func TestComputeSignatureIgnoresVolatileDigits(t *testing.T) {
 	first := ComputeSignature("app", sampleTree())
 	changed := sampleTree()
