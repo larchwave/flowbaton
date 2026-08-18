@@ -3,9 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/larchwave/flowbaton/internal/android"
 	"github.com/larchwave/flowbaton/internal/device"
@@ -117,15 +120,45 @@ func NewDeviceSession(ctx context.Context, options TestOptions, shard Shard) (De
 	}, nil
 }
 
+// diagnosticProbeTimeout bounds the "is anyone already serving?" dial. It is
+// short because the answer is a local port either accepting or refusing.
+const diagnosticProbeTimeout = 300 * time.Millisecond
+
+// driverAlreadyServing reports whether something already answers on the
+// driver port. Injected for tests.
+var driverAlreadyServing = func(port int) bool {
+	connection, err := net.DialTimeout(
+		"tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), diagnosticProbeTimeout)
+	if err != nil {
+		return false
+	}
+	_ = connection.Close()
+	return true
+}
+
 // diagnosticDriverOptions are what the one-shot diagnostics — hierarchy,
 // query, and the MCP screenshot tool — build their driver with.
 //
-// ReinstallDriver mirrors the `test` default because these commands run
-// against a plain device: nothing has started a runner or installed an agent,
-// so dialing alone reaches a port nobody serves. Each diagnostic already takes
-// its own ephemeral port, so managed delivery cannot collide with a session.
-func diagnosticDriverOptions(platform string) TestOptions {
-	return TestOptions{Platform: platform, ReinstallDriver: true}
+// These commands read the device and change nothing, so they must not disturb
+// a session that is already driving it. Managed delivery is not passive:
+// Android's open uninstalls both agent packages before reinstalling them
+// (spec 02 §2.2), which would pull the agent out from under a running test or
+// serve. So it is taken only where it cannot do that.
+//
+// iOS shares one base port with every runner, so a live session is
+// discoverable: if the port answers, the diagnostic dials that runner and
+// installs nothing. Only an unanswered port earns managed delivery, which is
+// what makes these commands work on a plain simulator.
+//
+// Android takes an ephemeral port per invocation, so a running session is not
+// discoverable this way and no probe can make the reinstall safe. It stays
+// passive and needs an operator-started agent, exactly as before.
+func diagnosticDriverOptions(platform string, port int) TestOptions {
+	options := TestOptions{Platform: platform}
+	if strings.EqualFold(platform, "ios") && !driverAlreadyServing(port) {
+		options.ReinstallDriver = true
+	}
+	return options
 }
 
 func newDriver(ctx context.Context, options TestOptions, udid string, port int, shardNumber int) (device.Driver, error) {

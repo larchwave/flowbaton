@@ -31,6 +31,12 @@ func TestDiagnosticsResolveTheManagedRunner(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			// Pin the probe: whether this host has something on the base port
+			// must not decide whether the diagnostic asks for a driver.
+			previousProbe := driverAlreadyServing
+			driverAlreadyServing = func(int) bool { return false }
+			t.Cleanup(func() { driverAlreadyServing = previousProbe })
+
 			previous := resolveIOSRunnerBundle
 			resolved := false
 			// Refusing here keeps the test off the network: the fetch stops at
