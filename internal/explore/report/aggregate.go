@@ -47,7 +47,7 @@ func aggregate(session *explore.SessionReport) aggregation {
 			agg.issues = append(agg.issues, execIssue{test: name, reason: stoppedReason(result)})
 			continue
 		}
-		if reason, broke := driverBreakage(result); broke {
+		if reason, ended := endedOnAFailedStep(result); ended {
 			agg.issues = append(agg.issues, execIssue{test: name, reason: reason})
 			continue
 		}
@@ -92,13 +92,16 @@ func stoppedReason(result explore.TestResult) string {
 	return "run stopped before a verdict"
 }
 
-// driverBreakage reports a run whose final step died on a device or driver
-// error rather than a failed product check.
+// endedOnAFailedStep reports a run whose final step died on an error rather
+// than on a failed product check, and names the reason honestly.
 //
-// A missed target is excluded: the device answered and the agent aimed at an
-// element the screen does not have, which is evidence about the app, not about
-// the equipment. Such a run is judged on its outcomes like any other.
-func driverBreakage(result explore.TestResult) (string, bool) {
+// The two cases read very differently to whoever triages the report. A device
+// or driver error is broken equipment. A missed target is the agent aiming at
+// an element the screen does not have: the device answered, and the unmet
+// outcome behind it says as much about the agent's route as about the app, so
+// it stays out of the defect list rather than becoming a defect nobody can
+// reproduce.
+func endedOnAFailedStep(result explore.TestResult) (string, bool) {
 	if len(result.Steps) == 0 {
 		return "", false
 	}
@@ -107,7 +110,8 @@ func driverBreakage(result explore.TestResult) (string, bool) {
 		return "", false
 	}
 	if last.TargetMiss {
-		return "", false
+		return "the run ended aiming at something the screen does not have: " +
+			truncate(last.ErrText, 120), true
 	}
 	return "driver error: " + truncate(last.ErrText, 120), true
 }

@@ -233,10 +233,11 @@ func TestNilSessionIsAnError(t *testing.T) {
 	}
 }
 
-func TestARunEndingOnAMissedTargetIsJudgedOnItsOutcomes(t *testing.T) {
+func TestARunEndingOnAMissedTargetIsNeitherADefectNorADriverError(t *testing.T) {
 	// A target that matches nothing is the agent aiming at an element the
-	// screen does not have. The device answered, so calling it a driver error
-	// buries the product verdict under an equipment excuse.
+	// screen does not have. Calling it a driver error blames the equipment;
+	// promoting its unmet outcome to a defect invents a product bug out of a
+	// wrong route. It is an execution issue, named for what happened.
 	session := &explore.SessionReport{
 		AppID:    "com.example.app",
 		Platform: "ios",
@@ -257,10 +258,13 @@ func TestARunEndingOnAMissedTargetIsJudgedOnItsOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Report: %v", err)
 	}
-	if strings.Contains(markdown, "## Execution issues") {
-		t.Errorf("a missed target must not be an execution issue:\n%s", markdown)
+	if strings.Contains(markdown, "## Defects") {
+		t.Errorf("a missed target must not become a product defect:\n%s", markdown)
 	}
-	if !strings.Contains(markdown, "## Defects") {
-		t.Errorf("want the unmet outcome reported as a defect:\n%s", markdown)
+	if !strings.Contains(markdown, "aiming at something the screen does not have") {
+		t.Errorf("want the execution issue named for what happened:\n%s", markdown)
+	}
+	if strings.Contains(markdown, "driver error") {
+		t.Errorf("a missed target must not be blamed on the driver:\n%s", markdown)
 	}
 }
