@@ -36,7 +36,7 @@ func realQueryFetch(
 	if err != nil {
 		return nil, err
 	}
-	driver, err := newDriver(ctx, TestOptions{Platform: platform}, udid, port, 1)
+	driver, err := newDriver(ctx, diagnosticDriverOptions(platform), udid, port, 1)
 	if err != nil {
 		return nil, err
 	}

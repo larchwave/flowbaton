@@ -117,6 +117,17 @@ func NewDeviceSession(ctx context.Context, options TestOptions, shard Shard) (De
 	}, nil
 }
 
+// diagnosticDriverOptions are what the one-shot diagnostics — hierarchy,
+// query, and the MCP screenshot tool — build their driver with.
+//
+// ReinstallDriver mirrors the `test` default because these commands run
+// against a plain device: nothing has started a runner or installed an agent,
+// so dialing alone reaches a port nobody serves. Each diagnostic already takes
+// its own ephemeral port, so managed delivery cannot collide with a session.
+func diagnosticDriverOptions(platform string) TestOptions {
+	return TestOptions{Platform: platform, ReinstallDriver: true}
+}
+
 func newDriver(ctx context.Context, options TestOptions, udid string, port int, shardNumber int) (device.Driver, error) {
 	switch strings.ToLower(options.Platform) {
 	case "ios", "ios-physical":
