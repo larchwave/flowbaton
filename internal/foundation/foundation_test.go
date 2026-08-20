@@ -386,8 +386,12 @@ func TestPublicDeliverySurfaceManifestIsDecidable(t *testing.T) {
 }
 
 func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
-	// These exact objects predate the Lore requirement. Keeping the list exact
-	// avoids rewriting published objects and makes any policy widening visible.
+	// Published objects this policy cannot reach. The first nine predate the
+	// Lore requirement. The tenth does not: it was authored under the policy
+	// and shipped without the trailers, and by the time that was caught it was
+	// already on the remote, where correcting it would mean rewriting a
+	// published object. Keeping the list exact avoids that rewrite and makes
+	// any widening visible; a new entry here is a miss, not an exemption.
 	grandfathered := map[string]bool{
 		"9acd46adfc5889a46ddc029f78e1b389f25c66ac": false,
 		"3b3b22b886a27112eac6e2e712b8f86ee7d2d155": false,
@@ -398,9 +402,10 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 		"9a53db626da6c84af05e57a9500d0ccf8e93746c": false,
 		"ba1a3b6004f7b5c1b28dc83f616b3649bd453e7e": false,
 		"153e578a81cd0ab23b343054ebfc5082bfc4324e": false,
+		"97697efbb587f9a9eb1175d5843c2cd98aea7c22": false,
 	}
-	if len(grandfathered) != 9 {
-		t.Fatalf("Lore grandfather set has %d entries, want exactly 9", len(grandfathered))
+	if len(grandfathered) != 10 {
+		t.Fatalf("Lore grandfather set has %d entries, want exactly 10", len(grandfathered))
 	}
 	hasGitMetadata, err := repositoryHasGitMetadata(repoRoot(t))
 	if err != nil {
