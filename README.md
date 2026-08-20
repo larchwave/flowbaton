@@ -15,7 +15,7 @@ itself. No server process, no JVM, no device cloud.
 
 [Install](#install) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Flow commands](#flow-command-surface) · [CLI](#cli-surface) · [Docs](#documentation)
 
-<img src="docs/assets/hero.webp" width="820" alt="A flow file, a baton in flight, and three phones — YAML in, tested devices out">
+<img src="docs/assets/hero.webp" width="900" alt="A hand holding a written flow passes a baton to a robotic arm reaching out of a phone screen, which taps another device">
 
 </div>
 
