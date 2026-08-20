@@ -178,7 +178,7 @@ func (n *Navigator) recipe(ctx context.Context, screen explore.ScreenSignature, 
 // toolbox. Any unknown tool or failed step abandons the replay.
 // maskedRecordingLine reports whether one recorded tool line is a masked
 // input: the {"masked":true} marker handleInputText writes, or the literal
-// mask text that earlier recordings stored. The legacy shape collides with
+// mask text that earlier recordings stored. That earlier shape collides with
 // a user really typing "***" — refusing that replay costs one worker
 // fallback; replaying a masked secret would type the mask into a login and
 // submit it.

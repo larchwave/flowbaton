@@ -22,7 +22,7 @@ type inputTextCompiled struct {
 	objectForm    bool
 }
 
-// secretVariablePattern matches ${FLOWBATON_…SECRET…} references, the shape
+// secretVariablePattern matches ${FLOWBATON_…SECRET…} placeholders, the shape
 // the explore exporter writes for text that was typed into a secure field.
 // inputText treats them specially: an unset one fails the flow instead of
 // typing the literal "undefined", and written artifacts keep the authored

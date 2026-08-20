@@ -119,16 +119,16 @@ func TestInputTextRedactsDriverErrorOnSecureScreens(t *testing.T) {
 	}
 }
 
-func TestReplayRefusesLegacyMaskedInput(t *testing.T) {
+func TestReplayRefusesLiteralMaskInput(t *testing.T) {
 	// Recordings written before the {"masked":true} marker used the literal
 	// mask as text. Refusing both shapes costs one worker fallback when a
 	// user really typed "***"; replaying a masked secret costs a login.
 	session, driver := inputSession(t, screen("Search", textField("query", false, true)))
 	if session.replay(context.Background(), session.box(), `input_text {"text":"***"}`) {
-		t.Fatal("replay accepted a legacy masked recording")
+		t.Fatal("replay accepted a literal-mask recording")
 	}
 	if slices.Contains(driver.calls, "InputText:***") {
-		t.Fatalf("legacy mask reached the device: %v", driver.calls)
+		t.Fatalf("literal mask reached the device: %v", driver.calls)
 	}
 }
 
