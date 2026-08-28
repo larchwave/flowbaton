@@ -235,3 +235,20 @@ func TestAFailedStepStillRefreshesTheScreenOrMarksItStale(t *testing.T) {
 		t.Fatalf("a check against a stale table reached the judge: %+v", got)
 	}
 }
+
+// A signature that did not move does not mean the rows did not: the digest
+// folds digit runs and ignores geometry, and the table filters on both. So
+// every reply after a successful re-observation carries the fresh table,
+// failure with an unchanged signature included.
+func TestAFailedStepWithAnUnchangedSignatureStillSendsTheTable(t *testing.T) {
+	t.Parallel()
+	login := screen("Login", textField("user", false, false))
+	session, _ := inputSession(t, login)
+	reply, err := session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reply, "the screen did not change") || !strings.Contains(reply, elementTableHeading) {
+		t.Fatalf("reply = %q, want the fresh table with the unchanged note", reply)
+	}
+}

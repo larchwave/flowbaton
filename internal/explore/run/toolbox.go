@@ -228,13 +228,16 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	case explore.StepFailed:
 		// The failure reply carries the fresh table too: the screen was
 		// re-observed above, and a model still aiming at the old indexes
-		// would miss. When no observation could be taken, say so instead
-		// of repeating a table that may be gone.
+		// would miss. It is sent even when the signature did not move --
+		// the digest folds digits and ignores geometry, and the table's rows
+		// do not -- so the model always holds the rows the session holds.
+		// When no observation could be taken, say so instead of repeating a
+		// table that may be gone.
 		if s.stale {
 			return fmt.Sprintf("%s failed: %s\n\nthe screen could not be re-observed; call observe before the next action", tool, step.ErrText), nil
 		}
 		if step.After.Same(before) {
-			return fmt.Sprintf("%s failed: %s\n\nthe screen did not change", tool, step.ErrText), nil
+			return fmt.Sprintf("%s failed: %s\n\nthe screen did not change\n\n%s", tool, step.ErrText, elementTable(s.current)), nil
 		}
 		return fmt.Sprintf("%s failed: %s\n\nthe screen changed anyway\n\n%s", tool, step.ErrText, elementTable(s.current)), nil
 	case explore.StepNoChange:
