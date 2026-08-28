@@ -141,7 +141,7 @@ func (s *toolSession) box() explore.ToolBox {
 		{Name: "hide_keyboard", Description: "Dismiss the on-screen keyboard.", Schema: emptySchema()},
 		{Name: "wait", Description: "Pause for a few seconds (at most 10) while the app catches up.", Schema: json.RawMessage(`{"type":"object","properties":{"seconds":{"type":"integer","minimum":1,"maximum":10}},"required":["seconds"],"additionalProperties":false}`)},
 		{Name: "observe", Description: "Capture a fresh observation and return the new element table.", Schema: emptySchema()},
-		{Name: "check_visible", Description: "Check that an element with the given text or id is on the current screen.", Schema: targetSchema()},
+		{Name: "check_visible", Description: "Check that an element with the given index, text, or id is on the current screen.", Schema: targetSchema()},
 		{Name: "note", Description: "Record a short free-text finding.", Schema: json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}`)},
 		{Name: "finish", Description: "End the run with a status and per-outcome results.", Schema: json.RawMessage(`{"type":"object","properties":{` +
 			`"status":{"type":"string","enum":["passed","failed"]},` +
@@ -431,8 +431,20 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 	if err := strictjson.Decode(args, &in); err != nil {
 		return "", fmt.Errorf("check_visible arguments: %w", err)
 	}
+	check := explore.OutcomeCheck{Expected: "visible: " + in.describe()}
+	if in.EIDX != nil {
+		// An index names a row of the newest table, so it is visible exactly
+		// when that table still lists it.
+		if label, ok := elementByIndex(s.current, *in.EIDX); ok {
+			check.Met = true
+			check.Evidence = fmt.Sprintf("e%d %q is in the newest element table", *in.EIDX, label)
+		} else {
+			check.Evidence = fmt.Sprintf("no element e%d in the newest element table", *in.EIDX)
+		}
+		return s.recordCheck(check), nil
+	}
 	if in.Text == "" && in.ID == "" {
-		return "", errors.New("check_visible needs text or id")
+		return "", errors.New("check_visible needs eidx, text, or id")
 	}
 	selector := model.ElementSelector{}
 	if in.Text != "" {
@@ -442,7 +454,6 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 		id := in.ID
 		selector.IDRegex = &id
 	}
-	check := explore.OutcomeCheck{Expected: "visible: " + in.describe()}
 	root, err := hierarchy.New(s.current.Hierarchy)
 	if err != nil {
 		return "", fmt.Errorf("normalize screen tree: %w", err)
@@ -457,11 +468,26 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 		check.Met = true
 		check.Evidence = fmt.Sprintf("matched %d element(s), first: %q", len(found), elementLabel(found[0].Node))
 	}
+	return s.recordCheck(check), nil
+}
+
+// recordCheck keeps one check_visible result for the verdict and renders
+// the tool reply.
+func (s *toolSession) recordCheck(check explore.OutcomeCheck) string {
 	s.checks = append(s.checks, check)
 	if check.Met {
-		return "visible: " + check.Evidence, nil
+		return "visible: " + check.Evidence
 	}
-	return "not visible: " + check.Evidence, nil
+	return "not visible: " + check.Evidence
+}
+
+func elementByIndex(state *explore.ScreenState, eidx int) (string, bool) {
+	for _, element := range state.Elements {
+		if element.EIDX == eidx {
+			return elementLabel(element.Node), true
+		}
+	}
+	return "", false
 }
 
 func (s *toolSession) handleNote(ctx context.Context, args json.RawMessage) (string, error) {

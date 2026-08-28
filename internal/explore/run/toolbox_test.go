@@ -142,3 +142,22 @@ func TestReplayRefusesMaskedInput(t *testing.T) {
 		t.Fatalf("masked text reached the device: %v", driver.calls)
 	}
 }
+
+// The target schema offers eidx to every target tool, and a live tester
+// (2026-08-28) called check_visible with it seven times in one turn; each
+// call failed with "needs text or id". An index from the newest table is a
+// fine thing to check: it is visible exactly when the table still lists it.
+func TestCheckVisibleAcceptsAnElementIndex(t *testing.T) {
+	t.Parallel()
+	session, _ := inputSession(t, screen("Login", textField("user", false, false)))
+	reply, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":0}`))
+	if err != nil || !strings.HasPrefix(reply, "visible: ") {
+		t.Fatalf("reply %q, err %v", reply, err)
+	}
+	if reply, err = session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":99}`)); err != nil || !strings.HasPrefix(reply, "not visible: ") {
+		t.Fatalf("reply %q, err %v", reply, err)
+	}
+	if len(session.checks) != 2 || !session.checks[0].Met || session.checks[1].Met {
+		t.Fatalf("checks = %+v", session.checks)
+	}
+}
