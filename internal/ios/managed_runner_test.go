@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -39,15 +40,21 @@ func (process *fakeRunnerProcess) exited() <-chan error { return process.exit }
 func TestOpenStartsTheRunnerWhenItOwnsOne(t *testing.T) {
 	t.Parallel()
 
+	// The port answers only once the child was started, as a real one does.
+	var started atomic.Bool
 	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/status" {
+		if r.URL.Path == "/status" && started.Load() {
 			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
 		}
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
 	})
 	process := &fakeRunnerProcess{}
 	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
 	driver.spawnRunner = func(_ context.Context, args, environment []string) (runnerProcess, error) {
 		process.args, process.environment = args, environment
+		started.Store(true)
 		return process, nil
 	}
 
@@ -172,5 +179,39 @@ func TestOpenReportsWhyTheRunnerDied(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "/gone/Runner.xctestrun") {
 		t.Fatalf("error = %q, want it to carry what xcodebuild said", err)
+	}
+}
+
+// A port that answers /status before this driver started anything belongs to
+// someone else: another driver, possibly serving another simulator, whose
+// status is just as "ok". Starting a child then would bind nothing and every
+// request would go to the stranger — a session took its screens from another
+// simulator that way. Managed delivery refuses instead, naming the port.
+func TestOpenRefusesAPortAnotherRunnerAlreadyHolds(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" {
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		}
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	spawned := false
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		spawned = true
+		return &fakeRunnerProcess{}, nil
+	}
+
+	err := driver.Open(context.Background())
+	if err == nil {
+		t.Fatal("Open used a runner it did not start")
+	}
+	for _, want := range []string{strconv.Itoa(driver.port), "UDID-1", "--driver-port"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want it to mention %q", err, want)
+		}
+	}
+	if spawned {
+		t.Fatal("a child was started on a port someone else holds")
 	}
 }

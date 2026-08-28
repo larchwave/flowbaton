@@ -86,6 +86,16 @@ func (driver *Driver) openManagedRunner(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// A runner already answering on the port cannot be the one about to be
+	// started. Another driver holds it — one serving a different simulator
+	// answers /status just as well — and the child would bind nothing while
+	// every request went to the stranger. A session took its screens from
+	// another simulator that way.
+	if err := driver.client.Status(ctx); err == nil {
+		return fmt.Errorf(
+			"127.0.0.1:%d already answers as a runner before this driver started one for %s; another driver holds the port — stop it, or pass --driver-port",
+			driver.port, driver.udid)
+	}
 	spawn := driver.spawnRunner
 	if spawn == nil {
 		spawn = realRunnerSpawn
