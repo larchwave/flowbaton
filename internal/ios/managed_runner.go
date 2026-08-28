@@ -135,7 +135,17 @@ func (driver *Driver) awaitRunner(
 	var lastErr error
 	for {
 		if lastErr = driver.client.Status(ctx); lastErr == nil {
-			return nil
+			// An answer counts only while the child is alive: a stranger who
+			// took the port after the probe answers /status just as well,
+			// and the child that lost the bind is gone by now.
+			select {
+			case reason := <-process.exited():
+				return fmt.Errorf(
+					"the runner for %s stopped before it answered; 127.0.0.1:%d answers for someone else: %v",
+					driver.udid, driver.port, reason)
+			default:
+				return nil
+			}
 		}
 		select {
 		case reason := <-process.exited():

@@ -215,3 +215,33 @@ func TestOpenRefusesAPortAnotherRunnerAlreadyHolds(t *testing.T) {
 		t.Fatal("a child was started on a port someone else holds")
 	}
 }
+
+// The probe before the spawn closes most of the window, not all of it: a
+// stranger can take the port after the probe, the child then loses the bind
+// and dies, and the stranger answers /status. An answer counts only while
+// the child is alive.
+func TestOpenRejectsAStatusAnswerFromAfterTheChildDied(t *testing.T) {
+	t.Parallel()
+
+	var started atomic.Bool
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" && started.Load() {
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	exit := make(chan error, 1)
+	exit <- errors.New("address already in use")
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		started.Store(true)
+		return &fakeRunnerProcess{exit: exit}, nil
+	}
+
+	err := driver.Open(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "someone else") || !strings.Contains(err.Error(), "address already in use") {
+		t.Fatalf("Open() error = %v, want the dead child and the stranger named", err)
+	}
+}
