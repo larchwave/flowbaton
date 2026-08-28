@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/larchwave/flowbaton/internal/explore"
-	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 // pilotCadence is how many executed steps pass between pilot check-ins.
@@ -57,7 +56,7 @@ func (p *pilot) review(ctx context.Context, logLines []string, final bool) (pilo
 		return pilotOrder{}, fmt.Errorf("pilot review: %w", err)
 	}
 	order := pilotOrder{}
-	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &order); err != nil {
+	if err := explore.DecodeReply(response.Message.Text, &order); err != nil {
 		return pilotOrder{}, fmt.Errorf("pilot reply: %w", err)
 	}
 	if order.Decision != "continue" && order.Decision != "stop" {

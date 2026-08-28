@@ -4,12 +4,12 @@ package planning
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/larchwave/flowbaton/internal/explore"
-	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 // Planner implements explore.Planner on top of one chat model.
@@ -23,10 +23,29 @@ type Planner struct {
 var _ explore.Planner = (*Planner)(nil)
 
 type plannedScenario struct {
-	Name     string   `json:"name"`
-	Priority string   `json:"priority"`
-	Steps    []string `json:"steps"`
-	Expected []string `json:"expected"`
+	Name     string `json:"name"`
+	Priority string `json:"priority"`
+	Steps    lines  `json:"steps"`
+	Expected lines  `json:"expected"`
+}
+
+// lines is a string list that also accepts one bare string: models asked
+// for ["outcome"] sometimes answer "outcome" for a single-item list, and
+// one item is a valid list, not a reason to retry the whole plan.
+type lines []string
+
+func (l *lines) UnmarshalJSON(data []byte) error {
+	var one string
+	if err := json.Unmarshal(data, &one); err == nil {
+		*l = lines{one}
+		return nil
+	}
+	var many []string
+	if err := json.Unmarshal(data, &many); err != nil {
+		return err
+	}
+	*l = lines(many)
+	return nil
 }
 
 type planReply struct {
@@ -100,7 +119,7 @@ func (p *Planner) converse(ctx context.Context, messages []explore.Message) (pla
 
 func decodeReply(text string) (planReply, error) {
 	var reply planReply
-	if err := strictjson.Decode([]byte(explore.UnfencedJSON(text)), &reply); err != nil {
+	if err := explore.DecodeReply(text, &reply); err != nil {
 		return planReply{}, err
 	}
 	if len(reply.Scenarios) == 0 {

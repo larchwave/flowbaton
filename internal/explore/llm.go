@@ -3,7 +3,10 @@ package explore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
+
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 // Role identifies the author of a chat message.
@@ -96,4 +99,26 @@ func UnfencedJSON(text string) string {
 		trimmed = trimmed[:end]
 	}
 	return strings.TrimSpace(trimmed)
+}
+
+// replyExcerptLimit bounds how much of a rejected reply a decode error quotes.
+const replyExcerptLimit = 240
+
+// DecodeReply unfences a model reply and decodes it strictly into target. A
+// decode failure quotes the start of the reply, because the syntax error
+// alone ("invalid character after object key") says nothing about what the
+// model actually sent. Every model-reply decode goes through here.
+func DecodeReply(text string, target any) error {
+	if err := strictjson.Decode([]byte(UnfencedJSON(text)), target); err != nil {
+		return fmt.Errorf("%w; reply begins %q", err, replyExcerpt(text))
+	}
+	return nil
+}
+
+func replyExcerpt(text string) string {
+	excerpt := strings.Join(strings.Fields(text), " ")
+	if len(excerpt) > replyExcerptLimit {
+		excerpt = excerpt[:replyExcerptLimit] + "…"
+	}
+	return excerpt
 }

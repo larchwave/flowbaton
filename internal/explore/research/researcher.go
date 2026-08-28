@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/larchwave/flowbaton/internal/explore"
-	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 // Cache stores researched UI maps by screen key. Nil on the Researcher
@@ -110,7 +109,7 @@ func (r *Researcher) proposeSections(ctx context.Context, state *explore.ScreenS
 		return sectionsReply{}, fmt.Errorf("research: section proposal: %w", err)
 	}
 	reply := sectionsReply{}
-	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &reply); err != nil {
+	if err := explore.DecodeReply(response.Message.Text, &reply); err != nil {
 		return sectionsReply{}, fmt.Errorf("research: decode section proposal: %w", err)
 	}
 	unknown := unknownIndexes(reply, known)
@@ -125,7 +124,7 @@ func (r *Researcher) proposeSections(ctx context.Context, state *explore.ScreenS
 	if err != nil {
 		return sectionsReply{}, fmt.Errorf("research: section correction: %w", err)
 	}
-	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &reply); err != nil {
+	if err := explore.DecodeReply(response.Message.Text, &reply); err != nil {
 		return sectionsReply{}, fmt.Errorf("research: decode section correction: %w", err)
 	}
 	return dropUnknown(reply, known), nil
@@ -147,7 +146,7 @@ func (r *Researcher) mergeVisualNotes(ctx context.Context, state *explore.Screen
 		return fmt.Errorf("research: visual pass: %w", err)
 	}
 	reply := visionReply{}
-	if err := strictjson.Decode([]byte(explore.UnfencedJSON(response.Message.Text)), &reply); err != nil {
+	if err := explore.DecodeReply(response.Message.Text, &reply); err != nil {
 		return fmt.Errorf("research: decode visual pass: %w", err)
 	}
 	byIndex := map[int]visionElement{}

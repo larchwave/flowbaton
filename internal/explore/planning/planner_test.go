@@ -292,3 +292,16 @@ func TestStylesRegistry(t *testing.T) {
 		t.Fatalf("lookup nope = %+v known=%v", style, known)
 	}
 }
+
+func TestPlanNextAcceptsABareStringForASingleItemList(t *testing.T) {
+	// A model answering "outcome" where ["outcome"] was asked still gave a
+	// usable one-item list; only a non-string, non-list value is a failure.
+	var reply planReply
+	err := explore.DecodeReply(`{"scenarios":[{"name":"n","priority":"normal","steps":"tap add","expected":["a","b"]}]}`, &reply)
+	if err != nil || len(reply.Scenarios) != 1 || len(reply.Scenarios[0].Steps) != 1 || reply.Scenarios[0].Steps[0] != "tap add" || len(reply.Scenarios[0].Expected) != 2 {
+		t.Fatalf("decode: %v %+v", err, reply)
+	}
+	if err := explore.DecodeReply(`{"scenarios":[{"name":"n","priority":"normal","steps":7,"expected":["a"]}]}`, &reply); err == nil {
+		t.Fatal("a number decoded as a step list")
+	}
+}
