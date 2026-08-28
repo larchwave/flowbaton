@@ -161,3 +161,21 @@ func TestCheckVisibleAcceptsAnElementIndex(t *testing.T) {
 		t.Fatalf("checks = %+v", session.checks)
 	}
 }
+
+// A check measured screens ago is not evidence about the final screen; the
+// judge gets only the checks measured where the run ended.
+func TestChecksOnFinalScreenDropEarlierScreens(t *testing.T) {
+	t.Parallel()
+	session, _ := inputSession(t, screen("Login", textField("user", false, false)))
+	if _, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":0}`)); err != nil {
+		t.Fatal(err)
+	}
+	session.current = makeState("app", screen("Home", textField("search", false, false)))
+	if _, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":99}`)); err != nil {
+		t.Fatal(err)
+	}
+	final := session.checksOnFinalScreen()
+	if len(session.checks) != 2 || len(final) != 1 || final[0].Met {
+		t.Fatalf("all = %+v, final = %+v", session.checks, final)
+	}
+}

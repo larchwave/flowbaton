@@ -87,7 +87,7 @@ func driverCheckLines(checks []explore.OutcomeCheck) string {
 		return ""
 	}
 	builder := &strings.Builder{}
-	builder.WriteString("\nDriver checks made during the run (measured on the screen at the time, not model claims):\n")
+	builder.WriteString("\nDriver checks measured on this final screen (facts, not model claims):\n")
 	for _, check := range checks {
 		fmt.Fprintf(builder, "- %s: %t (%s)\n", check.Expected, check.Met, check.Evidence)
 	}

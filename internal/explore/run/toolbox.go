@@ -88,14 +88,18 @@ type finishOutcome struct {
 // toolSession holds the mutable state one tool loop accumulates: the newest
 // observation, executed steps, notes, checks, and the finish verdict.
 type toolSession struct {
-	deps      toolDeps
-	current   *explore.ScreenState
-	steps     []explore.StepRecord
-	notes     []string
-	checks    []explore.OutcomeCheck
-	finish    *finishArgs
-	recording []string
-	record    bool
+	deps    toolDeps
+	current *explore.ScreenState
+	steps   []explore.StepRecord
+	notes   []string
+	checks  []explore.OutcomeCheck
+	// checkScreens holds, per entry of checks, the key of the screen it was
+	// measured on; a check from an earlier screen says nothing about the
+	// final one.
+	checkScreens []string
+	finish       *finishArgs
+	recording    []string
+	record       bool
 }
 
 func newToolSession(deps toolDeps, start *explore.ScreenState) (*toolSession, error) {
@@ -475,10 +479,25 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 // the tool reply.
 func (s *toolSession) recordCheck(check explore.OutcomeCheck) string {
 	s.checks = append(s.checks, check)
+	s.checkScreens = append(s.checkScreens, s.current.Signature.Key())
 	if check.Met {
 		return "visible: " + check.Evidence
 	}
 	return "not visible: " + check.Evidence
+}
+
+// checksOnFinalScreen returns the checks measured on the screen the run
+// ended on. Handing the judge a check from an earlier screen invites a
+// pass on evidence that is no longer true.
+func (s *toolSession) checksOnFinalScreen() []explore.OutcomeCheck {
+	var current []explore.OutcomeCheck
+	final := s.current.Signature.Key()
+	for i, check := range s.checks {
+		if s.checkScreens[i] == final {
+			current = append(current, check)
+		}
+	}
+	return current
 }
 
 func elementByIndex(state *explore.ScreenState, eidx int) (string, bool) {

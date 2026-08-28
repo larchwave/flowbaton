@@ -42,7 +42,7 @@ func TestAskWorkerOutcomeHandsDriverChecksToTheJudge(t *testing.T) {
 	askWorkerOutcome(context.Background(), llm, "the reminder is listed", &explore.ScreenState{}, checks)
 	prompt := llm.requests[0].Messages[1].Text
 	for _, want := range []string{
-		"Driver checks",
+		"Driver checks measured on this final screen",
 		`- visible: text "mmx7 morning reminder": true (matched 1 element(s), first: "mmx7 morning reminder")`,
 		`- visible: text "No Reminders": false (no matching element in the current tree)`,
 	} {

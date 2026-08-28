@@ -121,7 +121,7 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 		}
 	}
 
-	checks := evaluateOutcomes(ctx, t.Models.Worker, scenario.Expected, session.current, session.finish, session.checks)
+	checks := evaluateOutcomes(ctx, t.Models.Worker, scenario.Expected, session.current, session.finish, session.checksOnFinalScreen())
 	t.fill(result, session)
 	result.Outcomes = append(append([]explore.OutcomeCheck(nil), checks...), session.checks...)
 	switch {
