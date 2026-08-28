@@ -208,17 +208,26 @@ func TestAFailedStepStillRefreshesTheScreenOrMarksItStale(t *testing.T) {
 		errs:   []error{nil, errors.New("hierarchy unavailable")},
 	}
 
-	if _, err := session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed")); err != nil {
+	reply, err := session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	if !session.current.Signature.Same(makeState("app", home).Signature) {
 		t.Fatalf("failed step left the old screen in place: %+v", session.current.Signature)
 	}
+	// The model must see the screen it is now on, not keep the old indexes.
+	if !strings.Contains(reply, "the screen changed anyway") || !strings.Contains(reply, elementTableHeading) {
+		t.Fatalf("failure reply hides the fresh screen: %q", reply)
+	}
 
-	if _, err := session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed")); err != nil {
+	reply, err = session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	reply, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":0}`))
+	if !strings.Contains(reply, "call observe") || strings.Contains(reply, elementTableHeading) {
+		t.Fatalf("failure reply after a lost observation = %q", reply)
+	}
+	reply, err = session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":0}`))
 	if err != nil || !strings.Contains(reply, "call observe") {
 		t.Fatalf("stale check reply = %q, err %v", reply, err)
 	}

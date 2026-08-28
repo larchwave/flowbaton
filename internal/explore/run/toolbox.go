@@ -226,7 +226,17 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	}
 	switch step.Status {
 	case explore.StepFailed:
-		return fmt.Sprintf("%s failed: %s", tool, step.ErrText), nil
+		// The failure reply carries the fresh table too: the screen was
+		// re-observed above, and a model still aiming at the old indexes
+		// would miss. When no observation could be taken, say so instead
+		// of repeating a table that may be gone.
+		if s.stale {
+			return fmt.Sprintf("%s failed: %s\n\nthe screen could not be re-observed; call observe before the next action", tool, step.ErrText), nil
+		}
+		if step.After.Same(before) {
+			return fmt.Sprintf("%s failed: %s\n\nthe screen did not change", tool, step.ErrText), nil
+		}
+		return fmt.Sprintf("%s failed: %s\n\nthe screen changed anyway\n\n%s", tool, step.ErrText, elementTable(s.current)), nil
 	case explore.StepNoChange:
 		return fmt.Sprintf("%s done, but the screen did not change\n\n%s", tool, elementTable(s.current)), nil
 	default:
