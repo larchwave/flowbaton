@@ -494,3 +494,38 @@ func TestChatModelsFromEnv(t *testing.T) {
 		}
 	})
 }
+
+func TestChatSplitsAssistantToolCallsForAnthropic(t *testing.T) {
+	t.Parallel()
+	// The anthropic adapter reads only Parts[0] of an assistant message: a
+	// text part first drops the tool_use, a second tool call is never sent,
+	// and the tool_result that follows then names an id the API never saw.
+	fake := &scriptedChatModel{response: textResponse("ok")}
+	client := NewChatClient(fake, ProviderAnthropic, "", 0)
+	request := explore.ChatRequest{Messages: []explore.Message{
+		{Role: explore.RoleUser, Text: "go"},
+		{Role: explore.RoleAssistant, Text: "tapping twice", ToolCalls: []explore.ToolCall{
+			{ID: "call-1", Name: "tap", Arguments: json.RawMessage(`{"index":3}`)},
+			{ID: "call-2", Name: "tap", Arguments: json.RawMessage(`{"index":4}`)},
+		}},
+		{Role: explore.RoleTool, Text: "tapped", ToolCallID: "call-1"},
+		{Role: explore.RoleTool, Text: "tapped", ToolCallID: "call-2"},
+	}}
+	if _, err := client.Chat(context.Background(), request); err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	sent := fake.lastMessages
+	if len(sent) != 6 {
+		t.Fatalf("sent %d messages, want 6: %#v", len(sent), sent)
+	}
+	if text, ok := sent[1].Parts[0].(llms.TextContent); !ok || text.Text != "tapping twice" || sent[1].Role != llms.ChatMessageTypeAI {
+		t.Fatalf("text message = %#v", sent[1])
+	}
+	for i, id := range []string{"call-1", "call-2"} {
+		message := sent[2+i]
+		call, ok := message.Parts[0].(llms.ToolCall)
+		if !ok || call.ID != id || len(message.Parts) != 1 || message.Role != llms.ChatMessageTypeAI {
+			t.Fatalf("tool call message %d = %#v", i, message)
+		}
+	}
+}

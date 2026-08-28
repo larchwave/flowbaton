@@ -119,9 +119,39 @@ func chatMessages(provider Provider, messages []explore.Message) ([]llms.Message
 		if len(parts) == 0 {
 			return nil, fmt.Errorf("aiengine: message %d has no content", i)
 		}
+		if provider == ProviderAnthropic && message.Role == explore.RoleAssistant && len(message.ToolCalls) > 0 {
+			converted = append(converted, splitAssistantParts(role, parts)...)
+			continue
+		}
 		converted = append(converted, llms.MessageContent{Role: role, Parts: parts})
 	}
 	return converted, nil
+}
+
+// splitAssistantParts gives each tool call its own assistant message, with
+// any text ahead of them as a message of its own. The anthropic adapter
+// (langchaingo v0.1.14) serializes only Parts[0] of an assistant message,
+// so a text part would drop the tool_use and a second call would never be
+// sent; the tool_result that follows would then name an id the API never
+// saw and the request fails with 400. The API folds consecutive
+// assistant turns back into one.
+func splitAssistantParts(role llms.ChatMessageType, parts []llms.ContentPart) []llms.MessageContent {
+	var split []llms.MessageContent
+	var text []llms.ContentPart
+	for _, part := range parts {
+		if _, isCall := part.(llms.ToolCall); !isCall {
+			text = append(text, part)
+		}
+	}
+	if len(text) > 0 {
+		split = append(split, llms.MessageContent{Role: role, Parts: text})
+	}
+	for _, part := range parts {
+		if _, isCall := part.(llms.ToolCall); isCall {
+			split = append(split, llms.MessageContent{Role: role, Parts: []llms.ContentPart{part}})
+		}
+	}
+	return split
 }
 
 func chatRole(role explore.Role) (llms.ChatMessageType, error) {
