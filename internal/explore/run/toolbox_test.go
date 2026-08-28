@@ -162,20 +162,26 @@ func TestCheckVisibleAcceptsAnElementIndex(t *testing.T) {
 	}
 }
 
-// A check measured screens ago is not evidence about the final screen; the
-// judge gets only the checks measured where the run ended.
-func TestChecksOnFinalScreenDropEarlierScreens(t *testing.T) {
+// A check followed by a step is not evidence about the final screen, even
+// when the step brought the same screen key back: the judge gets only the
+// checks measured after the last step.
+func TestChecksOnFinalScreenDropAnythingBeforeTheLastStep(t *testing.T) {
 	t.Parallel()
 	session, _ := inputSession(t, screen("Login", textField("user", false, false)))
 	if _, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":0}`)); err != nil {
 		t.Fatal(err)
 	}
-	session.current = makeState("app", screen("Home", textField("search", false, false)))
+	// A step that changes nothing on screen still moves the run on.
+	session.steps = append(session.steps, explore.StepRecord{})
 	if _, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":99}`)); err != nil {
 		t.Fatal(err)
 	}
 	final := session.checksOnFinalScreen()
 	if len(session.checks) != 2 || len(final) != 1 || final[0].Met {
 		t.Fatalf("all = %+v, final = %+v", session.checks, final)
+	}
+	session.steps = append(session.steps, explore.StepRecord{})
+	if got := session.checksOnFinalScreen(); len(got) != 0 {
+		t.Fatalf("a check before the last step reached the judge: %+v", got)
 	}
 }

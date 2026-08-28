@@ -93,13 +93,13 @@ type toolSession struct {
 	steps   []explore.StepRecord
 	notes   []string
 	checks  []explore.OutcomeCheck
-	// checkScreens holds, per entry of checks, the key of the screen it was
-	// measured on; a check from an earlier screen says nothing about the
-	// final one.
-	checkScreens []string
-	finish       *finishArgs
-	recording    []string
-	record       bool
+	// checkSteps holds, per entry of checks, how many steps had run when it
+	// was measured; a check followed by any step says nothing about the
+	// screen the run ended on.
+	checkSteps []int
+	finish     *finishArgs
+	recording  []string
+	record     bool
 }
 
 func newToolSession(deps toolDeps, start *explore.ScreenState) (*toolSession, error) {
@@ -479,21 +479,22 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 // the tool reply.
 func (s *toolSession) recordCheck(check explore.OutcomeCheck) string {
 	s.checks = append(s.checks, check)
-	s.checkScreens = append(s.checkScreens, s.current.Signature.Key())
+	s.checkSteps = append(s.checkSteps, len(s.steps))
 	if check.Met {
 		return "visible: " + check.Evidence
 	}
 	return "not visible: " + check.Evidence
 }
 
-// checksOnFinalScreen returns the checks measured on the screen the run
-// ended on. Handing the judge a check from an earlier screen invites a
-// pass on evidence that is no longer true.
+// checksOnFinalScreen returns the checks measured after the run's last
+// step. A check followed by a step -- even one that left the screen key
+// unchanged, since the key is an eight-hex digest prefix -- is evidence
+// about an earlier screen, and handing it to the judge invites a pass on
+// what is no longer true.
 func (s *toolSession) checksOnFinalScreen() []explore.OutcomeCheck {
 	var current []explore.OutcomeCheck
-	final := s.current.Signature.Key()
 	for i, check := range s.checks {
-		if s.checkScreens[i] == final {
+		if s.checkSteps[i] == len(s.steps) {
 			current = append(current, check)
 		}
 	}
