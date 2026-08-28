@@ -173,7 +173,37 @@ func (driver *Driver) LaunchApp(ctx context.Context, request device.LaunchAppReq
 		return err
 	}
 	driver.rememberLaunch(request.AppID)
-	return nil
+	return driver.waitForForeground(ctx, request.AppID)
+}
+
+// foregroundTimeout bounds how long a launched app may take to come to the
+// front. The runner's own launch route allows the same.
+const foregroundTimeout = 30 * time.Second
+
+// waitForForeground polls the runner until appID is the foreground app.
+// simctl returns as soon as the process starts, and a hierarchy asked for
+// before the app is in front is the springboard's: the runner answers with
+// the home screen for an app id that is not yet foreground. An explore
+// session took its start screen from the home screen that way.
+func (driver *Driver) waitForForeground(ctx context.Context, appID string) error {
+	deadline := time.Now().Add(foregroundTimeout)
+	for {
+		running, err := driver.client.RunningApp(ctx, []string{appID})
+		if err != nil {
+			return fmt.Errorf("waiting for %s to come to the foreground: %w", appID, err)
+		}
+		if running == appID {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s did not come to the foreground within %s", appID, foregroundTimeout)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 func (driver *Driver) StopApp(ctx context.Context, request device.AppRequest) error {

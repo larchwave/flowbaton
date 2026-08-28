@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -438,7 +439,7 @@ func TestLaunchAppGoesThroughSimctlWithItsArguments(t *testing.T) {
 	// only a bundle id. simctl is the half that can pass arguments, so it is the
 	// half that launches.
 	runner := &recordingRunner{}
-	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	driver := newTestDriverWithSimctl(t, foregroundAfter(t, "com.example.a", 0), runner)
 	err := driver.LaunchApp(context.Background(), device.LaunchAppRequest{
 		AppID: "com.example.a",
 		Arguments: []device.LaunchArgument{
@@ -690,6 +691,17 @@ type appIDRecorder struct {
 func (recorder *appIDRecorder) handler(t *testing.T) http.HandlerFunc {
 	t.Helper()
 	return func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/runningApp" {
+			// Whatever the driver launched is in front at once here.
+			var body struct {
+				AppIDs []string `json:"appIds"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil || len(body.AppIDs) == 0 {
+				t.Errorf("decoding %s: %v %v", request.URL.Path, err, body)
+			}
+			writeJSON(t, writer, map[string]string{"runningAppBundleId": body.AppIDs[0]})
+			return
+		}
 		if request.URL.Path == "/viewHierarchy" {
 			var body struct {
 				AppIDs []string `json:"appIds"`
@@ -1495,5 +1507,53 @@ func TestBoundsFloorAfterSinglePrecision(t *testing.T) {
 				t.Fatalf("bounds = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// foregroundAfter answers /runningApp with the springboard for the first
+// `polls` calls and with appID after that.
+func foregroundAfter(t *testing.T, appID string, polls int) http.HandlerFunc {
+	t.Helper()
+	var calls atomic.Int32
+	return func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/runningApp" {
+			return
+		}
+		running := "com.apple.springboard"
+		if int(calls.Add(1)) > polls {
+			running = appID
+		}
+		writeJSON(t, writer, map[string]string{"runningAppBundleId": running})
+	}
+}
+
+// simctl launch returns as soon as the process starts. Until the app is in
+// front, the runner serves the springboard's tree for its id, and a session
+// that observed right after the launch got the home screen as its start
+// screen. LaunchApp therefore returns only once the runner reports the app
+// as the foreground one.
+func TestLaunchAppWaitsForTheAppToComeToTheForeground(t *testing.T) {
+	t.Parallel()
+	var polls atomic.Int32
+	handler := foregroundAfter(t, "com.example.a", 3)
+	counting := func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/runningApp" {
+			polls.Add(1)
+		}
+		handler(writer, request)
+	}
+	driver := newTestDriverWithSimctl(t, counting, &recordingRunner{})
+	if err := driver.LaunchApp(context.Background(), device.LaunchAppRequest{AppID: "com.example.a"}); err != nil {
+		t.Fatalf("LaunchApp() error = %v", err)
+	}
+	if got := polls.Load(); got != 4 {
+		t.Fatalf("polled /runningApp %d times, want 4 (three springboard answers, then the app)", got)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
+	defer cancel()
+	never := newTestDriverWithSimctl(t, foregroundAfter(t, "com.example.a", 1<<30), &recordingRunner{})
+	if err := never.LaunchApp(ctx, device.LaunchAppRequest{AppID: "com.example.a"}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("LaunchApp() error = %v, want the context deadline", err)
 	}
 }
