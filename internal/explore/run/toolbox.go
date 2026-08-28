@@ -93,13 +93,15 @@ type toolSession struct {
 	steps   []explore.StepRecord
 	notes   []string
 	checks  []explore.OutcomeCheck
-	// checkSteps holds, per entry of checks, how many steps had run when it
-	// was measured; a check followed by any step says nothing about the
-	// screen the run ended on.
-	checkSteps []int
-	finish     *finishArgs
-	recording  []string
-	record     bool
+	// epoch counts every event after which the screen may differ from what
+	// a check measured: each mutating tool call, whether or not its
+	// re-observation succeeded, and each observation taken by observe.
+	epoch int
+	// checkEpochs holds, per entry of checks, the epoch it was measured in.
+	checkEpochs []int
+	finish      *finishArgs
+	recording   []string
+	record      bool
 }
 
 func newToolSession(deps toolDeps, start *explore.ScreenState) (*toolSession, error) {
@@ -177,6 +179,9 @@ func (s *toolSession) box() explore.ToolBox {
 // returned text carries the step status and, on success, the fresh element
 // table.
 func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.RawMessage, action explore.Action, execErr error) (string, error) {
+	// The device may have changed even when the call reports failure or the
+	// re-observation below cannot be taken, so the epoch moves on regardless.
+	s.epoch++
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -192,7 +197,7 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 			execErr = fmt.Errorf("observe after %s: %w", tool, obsErr)
 		} else {
 			step.After = observation.Signature
-			s.current = observation
+			s.replaceCurrent(observation)
 		}
 	}
 	switch {
@@ -423,8 +428,14 @@ func (s *toolSession) handleObserve(ctx context.Context, _ json.RawMessage) (str
 		}
 		return "", fmt.Errorf("observe: %w", err)
 	}
-	s.current = observation
+	s.replaceCurrent(observation)
 	return elementTable(observation), nil
+}
+
+// replaceCurrent installs a fresh observation and opens a new epoch.
+func (s *toolSession) replaceCurrent(observation *explore.ScreenState) {
+	s.current = observation
+	s.epoch++
 }
 
 func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessage) (string, error) {
@@ -479,22 +490,23 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 // the tool reply.
 func (s *toolSession) recordCheck(check explore.OutcomeCheck) string {
 	s.checks = append(s.checks, check)
-	s.checkSteps = append(s.checkSteps, len(s.steps))
+	s.checkEpochs = append(s.checkEpochs, s.epoch)
 	if check.Met {
 		return "visible: " + check.Evidence
 	}
 	return "not visible: " + check.Evidence
 }
 
-// checksOnFinalScreen returns the checks measured after the run's last
-// step. A check followed by a step -- even one that left the screen key
-// unchanged, since the key is an eight-hex digest prefix -- is evidence
-// about an earlier screen, and handing it to the judge invites a pass on
-// what is no longer true.
+// checksOnFinalScreen returns the checks measured in the current epoch:
+// nothing that could change the screen -- a mutating call, even one whose
+// re-observation failed, or a fresh observe -- happened after them. A
+// screen key is an eight-hex digest prefix and a step count misses
+// observe, so neither is the test; handing the judge an older check
+// invites a pass on what is no longer true.
 func (s *toolSession) checksOnFinalScreen() []explore.OutcomeCheck {
 	var current []explore.OutcomeCheck
 	for i, check := range s.checks {
-		if s.checkSteps[i] == len(s.steps) {
+		if s.checkEpochs[i] == s.epoch {
 			current = append(current, check)
 		}
 	}

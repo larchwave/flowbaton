@@ -162,26 +162,34 @@ func TestCheckVisibleAcceptsAnElementIndex(t *testing.T) {
 	}
 }
 
-// A check followed by a step is not evidence about the final screen, even
-// when the step brought the same screen key back: the judge gets only the
-// checks measured after the last step.
-func TestChecksOnFinalScreenDropAnythingBeforeTheLastStep(t *testing.T) {
+// A check followed by anything that could change the screen -- a mutating
+// call or a plain observe, neither of which need change the screen key --
+// is not evidence about the final screen: the judge gets only the checks
+// measured since the last such event.
+func TestChecksOnFinalScreenDropAnythingBeforeTheLastScreenEvent(t *testing.T) {
 	t.Parallel()
 	session, _ := inputSession(t, screen("Login", textField("user", false, false)))
-	if _, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":0}`)); err != nil {
+	check := func(args string) {
+		t.Helper()
+		if _, err := session.handleCheckVisible(context.Background(), json.RawMessage(args)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check(`{"eidx":0}`)
+	// observe records no step, yet replaces the screen.
+	if _, err := session.handleObserve(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
-	// A step that changes nothing on screen still moves the run on.
-	session.steps = append(session.steps, explore.StepRecord{})
-	if _, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":99}`)); err != nil {
-		t.Fatal(err)
-	}
+	check(`{"eidx":99}`)
 	final := session.checksOnFinalScreen()
 	if len(session.checks) != 2 || len(final) != 1 || final[0].Met {
-		t.Fatalf("all = %+v, final = %+v", session.checks, final)
+		t.Fatalf("after observe: all = %+v, final = %+v", session.checks, final)
 	}
-	session.steps = append(session.steps, explore.StepRecord{})
+	// A mutating call whose re-observation fails moves the run on too.
+	if _, err := session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed")); err != nil {
+		t.Fatal(err)
+	}
 	if got := session.checksOnFinalScreen(); len(got) != 0 {
-		t.Fatalf("a check before the last step reached the judge: %+v", got)
+		t.Fatalf("a check from before the last screen event reached the judge: %+v", got)
 	}
 }
