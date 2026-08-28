@@ -100,23 +100,29 @@ func truncate(value string, max int) string {
 	return value[:max] + "…"
 }
 
+// elementTableMarker is the exact start of a rendered table: the heading
+// followed by the quoted signature. A scenario name that merely contains the
+// heading words does not match it.
+const elementTableMarker = elementTableHeading + " \""
+
 // pruneElementTables replaces every element table except the newest with a
-// short placeholder, keeping the status line of each tool result. The input
-// slice is not mutated.
+// short placeholder, keeping the text before each table (a tool result's
+// status line, or the opening scenario text). Tables sit in tool results and
+// in the opening user message alike. The input slice is not mutated.
 func pruneElementTables(messages []explore.Message) []explore.Message {
 	last := -1
 	for index := len(messages) - 1; index >= 0; index-- {
-		if messages[index].Role == explore.RoleTool && strings.Contains(messages[index].Text, elementTableHeading) {
+		if strings.Contains(messages[index].Text, elementTableMarker) {
 			last = index
 			break
 		}
 	}
 	pruned := append([]explore.Message(nil), messages...)
 	for index := range pruned {
-		if index == last || pruned[index].Role != explore.RoleTool {
+		if index == last {
 			continue
 		}
-		if at := strings.Index(pruned[index].Text, elementTableHeading); at >= 0 {
+		if at := strings.Index(pruned[index].Text, elementTableMarker); at >= 0 {
 			pruned[index].Text = pruned[index].Text[:at] + "(element table pruned; call observe for a fresh one)"
 		}
 	}

@@ -38,3 +38,36 @@ func TestElementTableMarksTextInputsAndKeyboardFocus(t *testing.T) {
 		t.Fatalf("unfocused field row marks wrong: %q", lines[3])
 	}
 }
+
+func TestPruneElementTablesDropsTheOpeningTableOnceANewerOneExists(t *testing.T) {
+	// The opening user message embeds the first element table. Once a tool
+	// result carries a newer one, the opening table is stale like any other
+	// and must go, while the scenario text before it stays.
+	state := &explore.ScreenState{Elements: []explore.FlatElement{
+		{EIDX: 0, Node: device.TreeNode{Attributes: map[string]string{"text": "Title"}}},
+	}}
+	opening := "Scenario: elements on screen count\n\n" + elementTable(state)
+	messages := []explore.Message{
+		{Role: explore.RoleSystem, Text: "system"},
+		{Role: explore.RoleUser, Text: opening},
+	}
+	alone := pruneElementTables(messages)
+	if alone[1].Text != opening {
+		t.Fatalf("the only table was pruned: %q", alone[1].Text)
+	}
+
+	messages = append(messages,
+		explore.Message{Role: explore.RoleAssistant, Text: "tap"},
+		explore.Message{Role: explore.RoleTool, Text: "tap ok, screen changed\n\n" + elementTable(state)},
+	)
+	pruned := pruneElementTables(messages)
+	if got := pruned[1].Text; !strings.HasPrefix(got, "Scenario: elements on screen count\n") || strings.Contains(got, "e0 ") {
+		t.Fatalf("opening table not pruned or scenario text lost: %q", got)
+	}
+	if !strings.Contains(pruned[3].Text, "e0 ") {
+		t.Fatalf("newest table was pruned: %q", pruned[3].Text)
+	}
+	if messages[1].Text != opening {
+		t.Fatal("input slice was mutated")
+	}
+}
