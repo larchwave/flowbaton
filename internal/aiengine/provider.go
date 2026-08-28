@@ -3,6 +3,7 @@ package aiengine
 import (
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -130,7 +131,10 @@ func New(cfg Config) (*Engine, error) {
 		if model == "" {
 			model = defaultAnthropicModel
 		}
-		options := []anthropic.Option{anthropic.WithModel(model)}
+		options := []anthropic.Option{
+			anthropic.WithModel(model),
+			anthropic.WithHTTPClient(&http.Client{Transport: mergedTurns{next: http.DefaultTransport}}),
+		}
 		if cfg.APIKey != "" {
 			options = append(options, anthropic.WithToken(cfg.APIKey))
 		}
