@@ -298,3 +298,28 @@ func TestResearchFailsClosed(t *testing.T) {
 		}
 	})
 }
+
+// A vision model corrupts a reply now and then (a stray quote after a
+// two-digit index on a live session, 2026-08-28). Notes are enrichment, so
+// one retry is cheaper than losing the session; a second bad reply fails.
+func TestResearchVisionRetriesOnceOnAnUnreadableReply(t *testing.T) {
+	bad := `{"elements":[{"eidx":10","label":"","notes":"x"}]}`
+	good := `{"elements":[{"eidx":0,"label":"Save changes","notes":"green accent"}]}`
+	state := researchState(t, researchTree(), []byte("png"))
+
+	vision := &scriptedLLM{replies: []string{bad, good}}
+	researcher := &Researcher{Models: explore.ModelSet{Worker: &scriptedLLM{replies: []string{validSectionsJSON}}, Vision: vision}}
+	uiMap, err := researcher.Research(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vision.requests) != 2 || uiMap.Sections[0].Elements[0].Label != "Save changes" {
+		t.Fatalf("vision calls %d, save = %+v", len(vision.requests), uiMap.Sections[0].Elements[0])
+	}
+
+	vision = &scriptedLLM{replies: []string{bad, bad}}
+	researcher = &Researcher{Models: explore.ModelSet{Worker: &scriptedLLM{replies: []string{validSectionsJSON}}, Vision: vision}}
+	if _, err := researcher.Research(context.Background(), state); err == nil || !strings.Contains(err.Error(), "decode visual pass") {
+		t.Fatalf("second bad reply must fail the pass, got %v", err)
+	}
+}

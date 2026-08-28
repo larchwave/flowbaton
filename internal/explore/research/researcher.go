@@ -130,24 +130,40 @@ func (r *Researcher) proposeSections(ctx context.Context, state *explore.ScreenS
 	return dropUnknown(reply, known), nil
 }
 
+// askVision makes the vision call and decodes it, asking once more when the
+// reply does not decode: a vision model corrupts a reply now and then (a
+// stray quote after a two-digit index, seen live), and the notes it carries
+// are enrichment, not something worth losing the session over. A second
+// unreadable reply is the error.
+func (r *Researcher) askVision(ctx context.Context, state *explore.ScreenState, table string) (visionReply, error) {
+	var decodeErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		response, err := r.Models.Vision.Chat(ctx, explore.ChatRequest{Messages: []explore.Message{
+			{Role: explore.RoleSystem, Text: visionSystemPrompt},
+			{
+				Role:     explore.RoleUser,
+				Text:     visionTaskPrompt(table),
+				ImagePNG: state.ScreenshotPNG,
+			},
+		}})
+		if err != nil {
+			return visionReply{}, fmt.Errorf("research: visual pass: %w", err)
+		}
+		reply := visionReply{}
+		if decodeErr = explore.DecodeReply(response.Message.Text, &reply); decodeErr == nil {
+			return reply, nil
+		}
+	}
+	return visionReply{}, fmt.Errorf("research: decode visual pass: %w", decodeErr)
+}
+
 // mergeVisualNotes runs one vision call over the screenshot and merges the
 // per-element findings into the sections in place. Findings for unknown
 // element indexes are dropped.
 func (r *Researcher) mergeVisualNotes(ctx context.Context, state *explore.ScreenState, table string, sections []explore.Section) error {
-	response, err := r.Models.Vision.Chat(ctx, explore.ChatRequest{Messages: []explore.Message{
-		{Role: explore.RoleSystem, Text: visionSystemPrompt},
-		{
-			Role:     explore.RoleUser,
-			Text:     visionTaskPrompt(table),
-			ImagePNG: state.ScreenshotPNG,
-		},
-	}})
+	reply, err := r.askVision(ctx, state, table)
 	if err != nil {
-		return fmt.Errorf("research: visual pass: %w", err)
-	}
-	reply := visionReply{}
-	if err := explore.DecodeReply(response.Message.Text, &reply); err != nil {
-		return fmt.Errorf("research: decode visual pass: %w", err)
+		return err
 	}
 	byIndex := map[int]visionElement{}
 	for _, finding := range reply.Elements {
