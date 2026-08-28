@@ -193,3 +193,36 @@ func TestChecksOnFinalScreenDropAnythingBeforeTheLastScreenEvent(t *testing.T) {
 		t.Fatalf("a check from before the last screen event reached the judge: %+v", got)
 	}
 }
+
+// A failed call is followed by a fresh observation like any other: a
+// driver error does not prove the device did nothing. When that observation
+// cannot be taken, the table is known to be stale, and a check against it
+// is answered with a warning and kept from the judge until observe succeeds.
+func TestAFailedStepStillRefreshesTheScreenOrMarksItStale(t *testing.T) {
+	t.Parallel()
+	login := screen("Login", textField("user", false, false))
+	home := screen("Home", textField("search", false, false))
+	session, _ := inputSession(t, login)
+	session.deps.observer = &fakeObserver{
+		states: []*explore.ScreenState{makeState("app", home), makeState("app", login)},
+		errs:   []error{nil, errors.New("hierarchy unavailable")},
+	}
+
+	if _, err := session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed")); err != nil {
+		t.Fatal(err)
+	}
+	if !session.current.Signature.Same(makeState("app", home).Signature) {
+		t.Fatalf("failed step left the old screen in place: %+v", session.current.Signature)
+	}
+
+	if _, err := session.afterMutation(context.Background(), "tap", nil, explore.Action{Kind: explore.ActionTap}, errors.New("device: tap failed")); err != nil {
+		t.Fatal(err)
+	}
+	reply, err := session.handleCheckVisible(context.Background(), json.RawMessage(`{"eidx":0}`))
+	if err != nil || !strings.Contains(reply, "call observe") {
+		t.Fatalf("stale check reply = %q, err %v", reply, err)
+	}
+	if got := session.checksOnFinalScreen(); len(got) != 0 {
+		t.Fatalf("a check against a stale table reached the judge: %+v", got)
+	}
+}

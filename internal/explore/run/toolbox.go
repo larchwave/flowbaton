@@ -97,11 +97,16 @@ type toolSession struct {
 	// a check measured: each mutating tool call, whether or not its
 	// re-observation succeeded, and each observation taken by observe.
 	epoch int
-	// checkEpochs holds, per entry of checks, the epoch it was measured in.
+	// checkEpochs holds, per entry of checks, the epoch it was measured in;
+	// -1 marks a check taken while the table was known to be stale.
 	checkEpochs []int
-	finish      *finishArgs
-	recording   []string
-	record      bool
+	// stale is set when a step could not be followed by a fresh
+	// observation: current then describes an earlier screen, and checks
+	// against it are not evidence about the device until observe succeeds.
+	stale     bool
+	finish    *finishArgs
+	recording []string
+	record    bool
 }
 
 func newToolSession(deps toolDeps, start *explore.ScreenState) (*toolSession, error) {
@@ -187,18 +192,22 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	}
 	before := s.current.Signature
 	step := explore.StepRecord{Index: len(s.steps), Action: action, Before: before, After: before, At: s.deps.now()}
-	if execErr == nil {
-		s.settle(ctx)
-		observation, obsErr := s.deps.observer.Observe(ctx)
-		if obsErr != nil {
-			if err := ctx.Err(); err != nil {
-				return "", err
-			}
-			execErr = fmt.Errorf("observe after %s: %w", tool, obsErr)
-		} else {
-			step.After = observation.Signature
-			s.replaceCurrent(observation)
+	// Re-observe after a failed call too: a driver error does not prove
+	// the device did nothing, and the table must not describe a screen
+	// that may be gone.
+	s.settle(ctx)
+	observation, obsErr := s.deps.observer.Observe(ctx)
+	if obsErr != nil {
+		if err := ctx.Err(); err != nil {
+			return "", err
 		}
+		s.stale = true
+		if execErr == nil {
+			execErr = fmt.Errorf("observe after %s: %w", tool, obsErr)
+		}
+	} else {
+		step.After = observation.Signature
+		s.replaceCurrent(observation)
 	}
 	switch {
 	case execErr != nil:
@@ -435,6 +444,7 @@ func (s *toolSession) handleObserve(ctx context.Context, _ json.RawMessage) (str
 // replaceCurrent installs a fresh observation and opens a new epoch.
 func (s *toolSession) replaceCurrent(observation *explore.ScreenState) {
 	s.current = observation
+	s.stale = false
 	s.epoch++
 }
 
@@ -490,11 +500,17 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 // the tool reply.
 func (s *toolSession) recordCheck(check explore.OutcomeCheck) string {
 	s.checks = append(s.checks, check)
-	s.checkEpochs = append(s.checkEpochs, s.epoch)
-	if check.Met {
-		return "visible: " + check.Evidence
+	epoch := s.epoch
+	suffix := ""
+	if s.stale {
+		epoch = -1
+		suffix = " (measured on a table the last step could not refresh; call observe)"
 	}
-	return "not visible: " + check.Evidence
+	s.checkEpochs = append(s.checkEpochs, epoch)
+	if check.Met {
+		return "visible: " + check.Evidence + suffix
+	}
+	return "not visible: " + check.Evidence + suffix
 }
 
 // checksOnFinalScreen returns the checks measured in the current epoch:
