@@ -131,7 +131,7 @@ type targetArgs struct {
 // decodeTarget reads tool arguments that name one element. A row name
 // written into the id field (`{"id":"e5"}`) is read as that row unless an
 // element on the screen really carries that id; weak models mix the two
-// up and used to burn their step budget on the miss.
+// up and burned their step budget on the miss.
 func decodeTarget(args json.RawMessage, state *explore.ScreenState) (targetArgs, error) {
 	var in targetArgs
 	if err := strictjson.Decode(args, &in); err != nil {
