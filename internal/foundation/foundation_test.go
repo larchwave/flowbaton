@@ -390,8 +390,11 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 	// Lore requirement. The tenth does not: it was authored under the policy
 	// and shipped without the trailers, and by the time that was caught it was
 	// already on the remote, where correcting it would mean rewriting a
-	// published object. Keeping the list exact avoids that rewrite and makes
-	// any widening visible; a new entry here is a miss, not an exemption.
+	// published object. The next eight are dependency-update commits and
+	// their merges, made on the hosting side without trailers and published
+	// there; the last is the merge that brought them into this history.
+	// Keeping the list exact avoids that rewrite and makes any widening
+	// visible; a new entry here is a miss, not an exemption.
 	grandfathered := map[string]bool{
 		"9acd46adfc5889a46ddc029f78e1b389f25c66ac": false,
 		"3b3b22b886a27112eac6e2e712b8f86ee7d2d155": false,
@@ -403,9 +406,18 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 		"ba1a3b6004f7b5c1b28dc83f616b3649bd453e7e": false,
 		"153e578a81cd0ab23b343054ebfc5082bfc4324e": false,
 		"97697efbb587f9a9eb1175d5843c2cd98aea7c22": false,
+		"54ae4ec2e5ac880467f94a72a3c2ab31526f6fed": false,
+		"ff7e4af4161edbe60690140134745cc4ada0a5ff": false,
+		"91d22e052d81261627f8b91fed5cefa8907d9a41": false,
+		"26ed2a8a811ad557f1cc447f5ff2a283aca1ffe3": false,
+		"e66100052fc09295f664cb782aff6fb2c16efe62": false,
+		"e237bb6df7f132fb0bf495fa874956a6552c5818": false,
+		"882d77b27bdff082e246959060655c3cc5fde510": false,
+		"2b9bec310469f6a3175d2bf78b1db789f5669a7b": false,
+		"7bad373298249a1e3892b4fd688ae72a67d0d9bf": false,
 	}
-	if len(grandfathered) != 10 {
-		t.Fatalf("Lore grandfather set has %d entries, want exactly 10", len(grandfathered))
+	if len(grandfathered) != 19 {
+		t.Fatalf("Lore grandfather set has %d entries, want exactly 19", len(grandfathered))
 	}
 	hasGitMetadata, err := repositoryHasGitMetadata(repoRoot(t))
 	if err != nil {
