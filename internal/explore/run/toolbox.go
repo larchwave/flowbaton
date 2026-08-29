@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/larchwave/flowbaton/internal/device"
@@ -200,6 +202,9 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	if obsErr != nil {
 		if err := ctx.Err(); err != nil {
 			return "", err
+		}
+		if transportGone(obsErr) {
+			return "", fmt.Errorf("%w: observe after %s: %v", explore.ErrDeviceUnreachable, tool, obsErr)
 		}
 		s.stale = true
 		if execErr == nil {
@@ -448,10 +453,21 @@ func (s *toolSession) handleObserve(ctx context.Context, _ json.RawMessage) (str
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return "", ctxErr
 		}
+		if transportGone(err) {
+			return "", fmt.Errorf("%w: observe: %v", explore.ErrDeviceUnreachable, err)
+		}
 		return "", fmt.Errorf("observe: %w", err)
 	}
 	s.replaceCurrent(observation)
 	return elementTable(observation), nil
+}
+
+// transportGone reports whether err says the driver's endpoint is no longer
+// there at all -- a refused or failed dial -- as opposed to an endpoint that
+// answered with a failure.
+func transportGone(err error) bool {
+	var opErr *net.OpError
+	return errors.As(err, &opErr) || errors.Is(err, syscall.ECONNREFUSED)
 }
 
 // replaceCurrent installs a fresh observation and opens a new epoch.

@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/larchwave/flowbaton/internal/device"
@@ -250,5 +253,35 @@ func TestAFailedStepWithAnUnchangedSignatureStillSendsTheTable(t *testing.T) {
 	}
 	if !strings.Contains(reply, "the screen did not change") || !strings.Contains(reply, elementTableHeading) {
 		t.Fatalf("reply = %q, want the fresh table with the unchanged note", reply)
+	}
+}
+
+// A refused dial means the runner is gone; every later action fails the
+// same way, and a model told "tool failed" spent six steps on waits against
+// it (live, 2026-08-28). The step ends the loop with ErrDeviceUnreachable
+// instead; an endpoint that answered with a failure still just marks the
+// table stale.
+func TestATransportFailureEndsTheLoopAsDeviceUnreachable(t *testing.T) {
+	t.Parallel()
+	login := screen("Login", textField("user", false, false))
+	refused := &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}
+
+	session, _ := inputSession(t, login)
+	session.deps.observer = &fakeObserver{states: []*explore.ScreenState{makeState("app", login)}, errs: []error{fmt.Errorf("ios runner: /isScreenStatic: %w", refused)}}
+	_, err := session.afterMutation(context.Background(), "wait", nil, explore.Action{Kind: explore.ActionWait}, nil)
+	if !errors.Is(err, explore.ErrDeviceUnreachable) {
+		t.Fatalf("afterMutation error = %v, want ErrDeviceUnreachable", err)
+	}
+
+	session, _ = inputSession(t, login)
+	session.deps.observer = &fakeObserver{states: []*explore.ScreenState{makeState("app", login)}, errs: []error{fmt.Errorf("ios runner: /isScreenStatic: %w", refused)}}
+	if _, err := session.handleObserve(context.Background(), nil); !errors.Is(err, explore.ErrDeviceUnreachable) {
+		t.Fatalf("observe error = %v, want ErrDeviceUnreachable", err)
+	}
+
+	session, _ = inputSession(t, login)
+	session.deps.observer = &fakeObserver{states: []*explore.ScreenState{makeState("app", login)}, errs: []error{errors.New("hierarchy unavailable")}}
+	if _, err := session.afterMutation(context.Background(), "wait", nil, explore.Action{Kind: explore.ActionWait}, nil); err != nil || !session.stale {
+		t.Fatalf("an answered failure must mark stale, not end the loop: err %v stale %v", err, session.stale)
 	}
 }

@@ -305,3 +305,17 @@ func TestPlanNextAcceptsABareStringForASingleItemList(t *testing.T) {
 		t.Fatal("a number decoded as a step list")
 	}
 }
+
+// Live sessions (2026-08-28) planned "the count badge increments" and "the
+// placeholder is no longer shown", which no single final screen can show,
+// so the judge rightly failed runs whose goal was reached. The rule that
+// outcomes are judged on the final screen alone must reach the model.
+func TestPlanPromptForbidsOutcomesRelativeToAnEarlierScreen(t *testing.T) {
+	style, known := LookupStyle("normal")
+	prompt := buildPrompt(explore.PlanRequest{Map: &explore.UIMap{}, Budget: 1}, style, known, nil)
+	for _, want := range []string{"final screen alone", `"increments"`, `"is no longer shown"`, "Never copy a count"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt lacks %q", want)
+		}
+	}
+}

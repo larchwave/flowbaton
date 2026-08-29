@@ -10,6 +10,13 @@ import (
 // ErrStopRequested is returned by a tool handler to end the loop cleanly.
 var ErrStopRequested = errors.New("explore: stop requested")
 
+// ErrDeviceUnreachable is returned (wrapped) by a tool handler when the
+// driver's transport is gone -- the runner process died, the socket
+// refuses. It ends the loop as an error: every further action would fail
+// the same way, and a model told "tool failed" spends its whole budget on
+// waits and retries against a dead endpoint (seen live, 2026-08-28).
+var ErrDeviceUnreachable = errors.New("explore: device unreachable")
+
 // ToolHandler executes one tool call and returns the text shown to the
 // model. Returning ErrStopRequested (possibly wrapped) ends the loop with
 // Stopped set; any other error is reported to the model as a tool failure
@@ -98,7 +105,8 @@ func runToolCall(ctx context.Context, box ToolBox, call ToolCall) (string, error
 	if err == nil {
 		return text, nil
 	}
-	if errors.Is(err, ErrStopRequested) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if errors.Is(err, ErrStopRequested) || errors.Is(err, ErrDeviceUnreachable) ||
+		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return text, err
 	}
 	return fmt.Sprintf("tool %s failed: %v", call.Name, err), nil
