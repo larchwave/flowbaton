@@ -21,11 +21,13 @@ const (
 )
 
 // PointLocator answers the point locator value for a screen coordinate in
-// the "x,y" form the engine's tapOn point accepts: two base-10 integers,
-// so a half-pixel center rounds to the nearest pixel.
+// the "x,y" form the engine's tapOn point accepts: two base-10 integers.
+// A half-pixel center floors rather than rounds, so the point stays
+// inside the element's own bounds and never lands one pixel past an
+// edge of the screen.
 func PointLocator(point device.Point) string {
-	return strconv.FormatInt(int64(math.Round(point.X)), 10) + "," +
-		strconv.FormatInt(int64(math.Round(point.Y)), 10)
+	return strconv.FormatInt(int64(math.Floor(point.X)), 10) + "," +
+		strconv.FormatInt(int64(math.Floor(point.Y)), 10)
 }
 
 // Locator is one way to find an element on a screen.
