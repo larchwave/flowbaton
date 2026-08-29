@@ -140,10 +140,10 @@ func decodeTarget(args json.RawMessage, state *explore.ScreenState) (targetArgs,
 	if in.EIDX != nil || in.Text != "" || !rowName.MatchString(in.ID) {
 		return in, nil
 	}
-	for _, element := range state.Elements {
-		if elementID(element.Node) == in.ID {
-			return in, nil
-		}
+	// The whole tree, not the flattened table: the id selector searches
+	// the tree, and a node the table left out still answers to its id.
+	if treeCarriesID(state.Hierarchy, in.ID) {
+		return in, nil
 	}
 	index, err := strconv.Atoi(in.ID[1:])
 	if err != nil {
@@ -153,6 +153,18 @@ func decodeTarget(args json.RawMessage, state *explore.ScreenState) (targetArgs,
 }
 
 var rowName = regexp.MustCompile(`^e[0-9]+$`)
+
+func treeCarriesID(node device.TreeNode, id string) bool {
+	if elementID(node) == id {
+		return true
+	}
+	for _, child := range node.Children {
+		if treeCarriesID(child, id) {
+			return true
+		}
+	}
+	return false
+}
 
 func (a targetArgs) describe() string {
 	switch {

@@ -119,10 +119,17 @@ func TestDecodeTargetReadsARowNamePassedAsAnID(t *testing.T) {
 	// A weak model writes the table's row name into the id field
 	// (`{"id":"e5"}`); that is the row, not a resource id, unless some
 	// element on the screen really carries that id.
-	state := &explore.ScreenState{Elements: []explore.FlatElement{
-		{EIDX: 0, Node: device.TreeNode{Attributes: map[string]string{"text": "Title"}}},
-		{EIDX: 1, Node: device.TreeNode{Attributes: map[string]string{"resource-id": "e7"}}},
-	}}
+	// e7 sits only in the tree: the table left it out, and the id selector
+	// searches the tree, so it must still be read as a real id.
+	state := &explore.ScreenState{
+		Hierarchy: device.TreeNode{Children: []device.TreeNode{
+			{Attributes: map[string]string{"text": "Title"}},
+			{Children: []device.TreeNode{{Attributes: map[string]string{"resource-id": "e7"}}}},
+		}},
+		Elements: []explore.FlatElement{
+			{EIDX: 0, Node: device.TreeNode{Attributes: map[string]string{"text": "Title"}}},
+		},
+	}
 	got, err := decodeTarget([]byte(`{"id":"e0"}`), state)
 	if err != nil || got.EIDX == nil || *got.EIDX != 0 || got.ID != "" {
 		t.Fatalf("e0 as id -> %+v, %v", got, err)
