@@ -44,9 +44,12 @@ location, media, screenshots, and keychain reset. The runner owns hierarchy,
 gestures, typing, clipboard access, and other in-session UI operations.
 
 Managed startup builds or locates the XCTest bundle, starts the runner on a
-host-selected port, waits for readiness, and terminates only the process it
-started. Operator-started mode remains available when the host has no managed
-bundle.
+host-selected port with a fresh launch id (`FLOWBATON_RUNNER_ID`), waits for a
+`/status` answer that echoes that id in `runner`, and terminates only the
+process it started. A port that answers before the start, or answers with
+another id or none, belongs to someone else and is refused. Operator-started
+mode remains available when the host has no managed bundle; it checks health
+without an id.
 
 Hierarchy bounds and gesture coordinates use points. Screenshot crops convert
 point-space bounds to the captured pixel dimensions.

@@ -40,11 +40,13 @@ func (process *fakeRunnerProcess) exited() <-chan error { return process.exit }
 func TestOpenStartsTheRunnerWhenItOwnsOne(t *testing.T) {
 	t.Parallel()
 
-	// The port answers only once the child was started, as a real one does.
+	// The port answers only once the child was started, as a real one does,
+	// and echoes the id the child was launched with.
 	var started atomic.Bool
+	var launchedID atomic.Value
 	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/status" && started.Load() {
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			_, _ = w.Write([]byte(runnerStatusBody(launchedID.Load().(string))))
 			return
 		}
 		http.Error(w, "not yet", http.StatusServiceUnavailable)
@@ -54,6 +56,7 @@ func TestOpenStartsTheRunnerWhenItOwnsOne(t *testing.T) {
 	driver.startupPoll = time.Millisecond
 	driver.spawnRunner = func(_ context.Context, args, environment []string) (runnerProcess, error) {
 		process.args, process.environment = args, environment
+		launchedID.Store(launchedRunnerID(environment))
 		started.Store(true)
 		return process, nil
 	}
@@ -73,9 +76,13 @@ func TestOpenStartsTheRunnerWhenItOwnsOne(t *testing.T) {
 	// The runner reads its own configuration from the process it is launched
 	// with, and only TEST_RUNNER_-prefixed names survive the trip into the
 	// simulator — a plain PORT never arrives.
+	if id := launchedRunnerID(process.environment); len(id) != 16 || id != driver.runnerID {
+		t.Fatalf("runner id in the environment = %q, driver holds %q; want one fresh 16-hex id in both", id, driver.runnerID)
+	}
 	for _, wanted := range []string{
 		"TEST_RUNNER_FLOWBATON_RUNNER_SERVE=1",
 		"TEST_RUNNER_PORT=" + strconv.Itoa(driver.port),
+		"TEST_RUNNER_FLOWBATON_RUNNER_ID=" + driver.runnerID,
 	} {
 		if !slices.Contains(process.environment, wanted) {
 			// Only what this test is about. The child inherits the whole
@@ -218,15 +225,16 @@ func TestOpenRefusesAPortAnotherRunnerAlreadyHolds(t *testing.T) {
 
 // The probe before the spawn closes most of the window, not all of it: a
 // stranger can take the port after the probe, the child then loses the bind
-// and dies, and the stranger answers /status. An answer counts only while
-// the child is alive.
+// and dies, and the stranger answers /status — with its own id, or none.
+// Only an answer carrying the id this driver launched its child with is the
+// child.
 func TestOpenRejectsAStatusAnswerFromAfterTheChildDied(t *testing.T) {
 	t.Parallel()
 
 	var started atomic.Bool
 	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/status" && started.Load() {
-			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			_, _ = w.Write([]byte(`{"status":"ok","runner":"someone-elses"}`))
 			return
 		}
 		http.Error(w, "not yet", http.StatusServiceUnavailable)
@@ -241,7 +249,53 @@ func TestOpenRejectsAStatusAnswerFromAfterTheChildDied(t *testing.T) {
 	}
 
 	err := driver.Open(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "someone else") || !strings.Contains(err.Error(), "address already in use") {
+	if err == nil || !strings.Contains(err.Error(), "someone-elses") || !strings.Contains(err.Error(), "address already in use") {
 		t.Fatalf("Open() error = %v, want the dead child and the stranger named", err)
 	}
+}
+
+// The stranger need not have replaced a dead child: a runner from before ids
+// existed, or one another host started, answers ok without this driver's id
+// while the child is still coming up. That answer is not the child either.
+func TestOpenRejectsAStatusAnswerWithoutTheLaunchedID(t *testing.T) {
+	t.Parallel()
+
+	var started atomic.Bool
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" && started.Load() {
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	process := &fakeRunnerProcess{}
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		started.Store(true)
+		return process, nil
+	}
+
+	err := driver.Open(context.Background())
+	if err == nil || !strings.Contains(err.Error(), `runner ""`) || !strings.Contains(err.Error(), "still running") {
+		t.Fatalf("Open() error = %v, want the id-less answer refused", err)
+	}
+	if !process.stopped {
+		t.Fatal("the child was left running after its port went to someone else")
+	}
+}
+
+// launchedRunnerID reads the id the host handed the child.
+func launchedRunnerID(environment []string) string {
+	for _, entry := range environment {
+		if value, ok := strings.CutPrefix(entry, "TEST_RUNNER_FLOWBATON_RUNNER_ID="); ok {
+			return value
+		}
+	}
+	return ""
+}
+
+// runnerStatusBody is what a runner launched with an id answers.
+func runnerStatusBody(id string) string {
+	return `{"status":"ok","runner":"` + id + `"}`
 }

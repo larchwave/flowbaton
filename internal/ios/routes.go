@@ -269,6 +269,24 @@ func (client *Client) Status(ctx context.Context) error {
 	return nil
 }
 
+// Identity is the health check that also answers who is serving: the runner
+// echoes the id the host launched it with, so a driver that started a runner
+// can tell its own child from a stranger holding the same port. A healthy
+// runner launched without an id answers "".
+func (client *Client) Identity(ctx context.Context) (string, error) {
+	var response struct {
+		Status string `json:"status"`
+		Runner string `json:"runner"`
+	}
+	if _, err := client.do(ctx, http.MethodGet, "/status", "", nil, &response); err != nil {
+		return "", err
+	}
+	if response.Status != "ok" {
+		return "", fmt.Errorf("ios runner: status is %q, want ok", response.Status)
+	}
+	return response.Runner, nil
+}
+
 func (client *Client) KeyboardVisible(ctx context.Context, appIDs []string) (bool, error) {
 	request := struct {
 		AppIDs []string `json:"appIds"`

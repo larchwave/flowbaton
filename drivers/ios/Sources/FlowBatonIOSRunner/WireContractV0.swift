@@ -84,7 +84,7 @@ public enum IOSWireContractV0 {
   public static let schemaVersion = 1
   public static let contractVersion = "v0"
   public static let descriptorSHA256 =
-    "baa8d0c0217ff191632dc783483514c68e2f2e382ce1f0f422e59a2ca9a032c0"
+    "352b5136f165510a741cb2277e09cc5b3c4c540c5d32b3c2429d6bf07a721f3a"
   public static let semanticManifest = [
     "descriptor|1|v0",
     "transport|http|127.0.0.1|22087",
@@ -263,6 +263,7 @@ public enum IOSWireContractV0 {
     "schema-field|SetPermissionsRequest|permissions|object<additional-properties:string>",
     "schema|StatusResponse|object",
     "schema-required|StatusResponse|0|status",
+    "schema-field|StatusResponse|runner|string",
     "schema-field|StatusResponse|status|string{ok}",
     "schema|SwipeRequest|object",
     "schema-required|SwipeRequest|0|startX",
@@ -426,7 +427,8 @@ public enum IOSWireContractV0 {
       "ViewHierarchyResponse", "object", required: ["axElement", "depth"],
       fields: [field("axElement", "ref:AXElement"), field("depth", "integer")]),
     schema(
-      "StatusResponse", "object", required: ["status"], fields: [field("status", "string{ok}")]),
+      "StatusResponse", "object", required: ["status"],
+      fields: [field("runner", "string"), field("status", "string{ok}")]),
     schema(
       "KeyboardRequest", "object", required: ["appIds"], fields: [field("appIds", "array<string>")]),
     schema(

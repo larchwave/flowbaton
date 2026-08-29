@@ -17,14 +17,17 @@ public final class LoopbackHTTPServer: @unchecked Sendable {
   private let handler: @Sendable (HTTPRequest) -> HTTPResponse
 
   /// Serves only /status for hosts that need runner health without automation.
-  public convenience init(port: UInt16 = 22087) {
+  /// `runner` is the id the host launched this process with (`RunnerIdentity`).
+  public convenience init(port: UInt16 = 22087, runner: String? = nil) {
     self.init(port: port) { request in
-      StatusEndpoint.route(method: request.method, path: request.path)
+      StatusEndpoint.route(method: request.method, path: request.path, runner: runner)
     }
   }
 
-  public convenience init(port: UInt16 = 22087, automation: any DeviceAutomation) {
-    let router = RequestRouter(automation: automation)
+  public convenience init(
+    port: UInt16 = 22087, automation: any DeviceAutomation, runner: String? = nil
+  ) {
+    let router = RequestRouter(automation: automation, runner: runner)
     self.init(port: port) { router.route($0) }
   }
 

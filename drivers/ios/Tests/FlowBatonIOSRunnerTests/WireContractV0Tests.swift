@@ -7,7 +7,7 @@ final class WireContractV0Tests: XCTestCase {
     XCTAssertEqual(IOSWireContractV0.contractVersion, "v0")
     XCTAssertEqual(
       IOSWireContractV0.descriptorSHA256,
-      "baa8d0c0217ff191632dc783483514c68e2f2e382ce1f0f422e59a2ca9a032c0")
+      "352b5136f165510a741cb2277e09cc5b3c4c540c5d32b3c2429d6bf07a721f3a")
     XCTAssertEqual(IOSWireContractV0.bindHost, "127.0.0.1")
     XCTAssertEqual(IOSWireContractV0.defaultPort, 22_087)
     XCTAssertEqual(
@@ -129,7 +129,8 @@ final class WireContractV0Tests: XCTestCase {
           "ViewHierarchyResponse", "object", required: ["axElement", "depth"],
           fields: [field("axElement", "ref:AXElement"), field("depth", "integer")]),
         schema(
-          "StatusResponse", "object", required: ["status"], fields: [field("status", "string{ok}")]),
+          "StatusResponse", "object", required: ["status"],
+          fields: [field("runner", "string"), field("status", "string{ok}")]),
         schema(
           "KeyboardRequest", "object", required: ["appIds"],
           fields: [field("appIds", "array<string>")]),

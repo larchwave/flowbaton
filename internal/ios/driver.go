@@ -51,7 +51,10 @@ type Driver struct {
 	// base URL it talks to; a sharded run needs the number in failure messages.
 	port   int
 	client *Client
-	simctl DeviceTools
+	// runnerID is the id a managed runner was launched with and must echo in
+	// /status before this driver takes it for its own (managed_runner.go).
+	runnerID string
+	simctl   DeviceTools
 
 	// launchedMu guards launchedAppID, which the runner needs and only this
 	// driver knows. See defaultAppIDs.

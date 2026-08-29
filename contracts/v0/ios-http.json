@@ -120,7 +120,7 @@
       }
     },
     "ViewHierarchyResponse": {"kind":"object","required":["axElement","depth"],"fields":{"axElement":{"ref":"AXElement"},"depth":{"type":"integer"}}},
-    "StatusResponse": {"kind":"object","required":["status"],"fields":{"status":{"type":"string","enum":["ok"]}}},
+    "StatusResponse": {"kind":"object","required":["status"],"fields":{"status":{"type":"string","enum":["ok"]},"runner":{"type":"string"}}},
     "KeyboardRequest": {"kind":"object","required":["appIds"],"fields":{"appIds":{"type":"array","items":"string"}}},
     "KeyboardResponse": {"kind":"object","required":["isKeyboardVisible"],"fields":{"isKeyboardVisible":{"type":"boolean"}}},
     "LaunchAppRequest": {"kind":"object","required":["bundleId"],"fields":{"bundleId":{"type":"string"}}},

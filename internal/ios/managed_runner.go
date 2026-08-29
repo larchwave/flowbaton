@@ -3,6 +3,8 @@ package ios
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,6 +50,19 @@ const (
 // prefix stripped — a plain PORT never arrives.
 const runnerEnvPrefix = "TEST_RUNNER_"
 
+// runnerIDEnv carries the id a managed runner echoes in /status. A stranger
+// on the port — another driver's runner, or an older build — answers with a
+// different id or none, and the host does not take it for its own child.
+const runnerIDEnv = "FLOWBATON_RUNNER_ID"
+
+func newRunnerID() (string, error) {
+	raw := make([]byte, 8)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("runner id: %w", err)
+	}
+	return hex.EncodeToString(raw), nil
+}
+
 // runnerProcess is the xcodebuild child serving the wire. It is an interface so
 // a test drives the whole lifecycle without a simulator.
 type runnerProcess interface {
@@ -74,6 +89,7 @@ func (driver *Driver) runnerEnv() []string {
 	return append(os.Environ(),
 		runnerEnvPrefix+"FLOWBATON_RUNNER_SERVE=1",
 		runnerEnvPrefix+"PORT="+strconv.Itoa(driver.port),
+		runnerEnvPrefix+runnerIDEnv+"="+driver.runnerID,
 	)
 }
 
@@ -95,6 +111,9 @@ func (driver *Driver) openManagedRunner(ctx context.Context) error {
 		return fmt.Errorf(
 			"127.0.0.1:%d already answers as a runner before this driver started one for %s; another driver holds the port — stop it, or pass --driver-port",
 			driver.port, driver.udid)
+	}
+	if driver.runnerID, err = newRunnerID(); err != nil {
+		return err
 	}
 	spawn := driver.spawnRunner
 	if spawn == nil {
@@ -134,18 +153,23 @@ func (driver *Driver) awaitRunner(
 	deadline := time.Now().Add(timeout)
 	var lastErr error
 	for {
-		if lastErr = driver.client.Status(ctx); lastErr == nil {
-			// An answer counts only while the child is alive: a stranger who
-			// took the port after the probe answers /status just as well,
-			// and the child that lost the bind is gone by now.
-			select {
-			case reason := <-process.exited():
-				return fmt.Errorf(
-					"the runner for %s stopped before it answered; 127.0.0.1:%d answers for someone else: %v",
-					driver.udid, driver.port, reason)
-			default:
+		var identity string
+		if identity, lastErr = driver.client.Identity(ctx); lastErr == nil {
+			if identity == driver.runnerID {
 				return nil
 			}
+			// An answer without this driver's id is a stranger who took the
+			// port after the probe; the child that lost the bind is dying or
+			// dead, and its exit reason is the useful part when it is in.
+			reason := "the child is still running"
+			select {
+			case exit := <-process.exited():
+				reason = exit.Error()
+			default:
+			}
+			return fmt.Errorf(
+				"127.0.0.1:%d answers as runner %q, not the one started for %s; someone else holds the port: %s",
+				driver.port, identity, driver.udid, reason)
 		}
 		select {
 		case reason := <-process.exited():

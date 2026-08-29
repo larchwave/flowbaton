@@ -177,6 +177,13 @@ final class RequestRouterTests: XCTestCase {
     XCTAssertEqual(String(decoding: response.body, as: UTF8.self), #"{"status":"ok"}"#)
   }
 
+  func testStatusCarriesTheRunnerIdThroughTheRouter() throws {
+    let response = RequestRouter(automation: RecordingAutomation(), runner: "deadbeef")
+      .route(request("GET", "/status"))
+    XCTAssertEqual(
+      String(decoding: response.body, as: UTF8.self), #"{"status":"ok","runner":"deadbeef"}"#)
+  }
+
   // MARK: - Helpers
 
   func testAnEmptyAppFilterIsAcceptedAndNullIsNot() throws {

@@ -283,7 +283,7 @@ func expectedIOSShapes() map[string]completeExpectedShape {
 			"children": "array:ref:AXElement", "windowContextID": "number", "displayID": "integer",
 		}),
 		"ViewHierarchyResponse": object([]string{"axElement", "depth"}, map[string]string{"axElement": "ref:AXElement", "depth": "integer"}),
-		"StatusResponse":        object([]string{"status"}, map[string]string{"status": "string:enum=ok"}),
+		"StatusResponse":        object([]string{"status"}, map[string]string{"status": "string:enum=ok", "runner": "string"}),
 		"KeyboardRequest":       object([]string{"appIds"}, map[string]string{"appIds": "array:string"}),
 		"KeyboardResponse":      object([]string{"isKeyboardVisible"}, map[string]string{"isKeyboardVisible": "boolean"}),
 		"LaunchAppRequest":      object([]string{"bundleId"}, map[string]string{"bundleId": "string"}),

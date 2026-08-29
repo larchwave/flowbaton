@@ -7,8 +7,12 @@ import Foundation
 /// the router.
 public struct RequestRouter: Sendable {
   private let automation: any DeviceAutomation
+  private let runner: String?
 
-  public init(automation: any DeviceAutomation) {
+  /// `runner` is the id the host launched this process with; see
+  /// `RunnerIdentity`.
+  public init(automation: any DeviceAutomation, runner: String? = nil) {
+    self.runner = runner
     self.automation = automation
   }
 
@@ -42,7 +46,7 @@ public struct RequestRouter: Sendable {
   private func dispatch(_ name: String, _ request: HTTPRequest) throws -> HTTPResponse {
     switch name {
     case "status":
-      return Self.statusOK()
+      return StatusEndpoint.route(method: "GET", path: "/status", runner: runner)
 
     case "runningApp":
       let decoded: RunningAppRequest = try Self.decode(request)
@@ -169,13 +173,6 @@ public struct RequestRouter: Sendable {
     HTTPResponse(
       statusCode: 200, contentType: "application/json",
       body: try JSONEncoder().encode(value))
-  }
-
-  /// Health is a constant, not an encode: it has to answer even when
-  /// everything that could fail is failing.
-  private static func statusOK() -> HTTPResponse {
-    HTTPResponse(
-      statusCode: 200, contentType: "application/json", body: Data(#"{"status":"ok"}"#.utf8))
   }
 
   private static func empty() -> HTTPResponse {

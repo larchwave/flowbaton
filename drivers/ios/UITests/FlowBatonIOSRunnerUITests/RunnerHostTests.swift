@@ -50,16 +50,18 @@ final class RunnerHostTests: XCTestCase {
         "set \(Self.serveVariable)=1 to serve; this test is the runner, not an assertion")
     }
     let port = try RunnerPort.resolve(environment)
+    let runner = try RunnerIdentity.resolve(environment)
     let lifetime = Self.lifetime(environment)
 
-    let server = LoopbackHTTPServer(port: port, automation: XCUITestAutomation())
+    let server = LoopbackHTTPServer(
+      port: port, automation: XCUITestAutomation(), runner: runner)
     let bound = try server.start(timeout: 10)
     defer { server.stop() }
 
     // Printed, not just logged: the host reads the runner's output to know it is
     // up, and "which port did it actually get" is the first question when a
     // connection is refused.
-    print("flowbaton-runner listening on 127.0.0.1:\(bound)")
+    print("flowbaton-runner listening on 127.0.0.1:\(bound) as \(runner ?? "no id")")
     XCTAssertEqual(bound, port, "the runner bound a different port than the host was told")
 
     // Serving happens on the server's own thread; this one only has to stay
