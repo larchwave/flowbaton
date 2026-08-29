@@ -94,19 +94,11 @@ func flagCell(flag *bool) string {
 }
 
 func nodeRole(node device.TreeNode) string {
-	if role := node.Attributes["class"]; role != "" {
-		return role
-	}
-	return node.Attributes["type"]
+	return explore.ElementRole(node)
 }
 
 func nodeLabel(node device.TreeNode) string {
-	for _, key := range []string{"text", "label", "name"} {
-		if value := strings.TrimSpace(node.Attributes[key]); value != "" {
-			return value
-		}
-	}
-	return ""
+	return explore.ElementLabel(node)
 }
 
 func nodeID(node device.TreeNode) string {

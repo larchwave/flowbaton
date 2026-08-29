@@ -22,23 +22,11 @@ const maxTableRows = 60
 
 // elementLabel returns the human-visible label of a node.
 func elementLabel(node device.TreeNode) string {
-	for _, key := range []string{"text", "label", "name", "hintText", "accessibilityText"} {
-		if value := strings.TrimSpace(node.Attributes[key]); value != "" {
-			return value
-		}
-	}
-	return ""
+	return explore.ElementLabel(node)
 }
 
 func elementRole(node device.TreeNode) string {
-	role := node.Attributes["class"]
-	if role == "" {
-		role = node.Attributes["type"]
-	}
-	if dot := strings.LastIndex(role, "."); dot >= 0 {
-		role = role[dot+1:]
-	}
-	return role
+	return explore.ElementRole(node)
 }
 
 func elementID(node device.TreeNode) string {
