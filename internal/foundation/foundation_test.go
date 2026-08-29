@@ -392,9 +392,12 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 	// already on the remote, where correcting it would mean rewriting a
 	// published object. The next eight are dependency-update commits and
 	// their merges, made on the hosting side without trailers and published
-	// there; the last is the merge that brought them into this history.
-	// Keeping the list exact avoids that rewrite and makes any widening
-	// visible; a new entry here is a miss, not an exemption.
+	// there; the last is the merge that brought them into this history --
+	// made locally with --no-edit, so it could have carried the trailers
+	// and did not, and was noticed only after the push. Keeping the list
+	// exact avoids that rewrite and makes any widening visible; a new entry
+	// here is a miss, not an exemption. A merge made locally takes a
+	// trailered message.
 	grandfathered := map[string]bool{
 		"9acd46adfc5889a46ddc029f78e1b389f25c66ac": false,
 		"3b3b22b886a27112eac6e2e712b8f86ee7d2d155": false,
