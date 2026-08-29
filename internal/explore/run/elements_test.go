@@ -114,3 +114,28 @@ func TestEIDXLocatorClimbsTheExportLadder(t *testing.T) {
 		t.Fatalf("unknown eidx produced a locator: %+v", got)
 	}
 }
+
+func TestDecodeTargetReadsARowNamePassedAsAnID(t *testing.T) {
+	// A weak model writes the table's row name into the id field
+	// (`{"id":"e5"}`); that is the row, not a resource id, unless some
+	// element on the screen really carries that id.
+	state := &explore.ScreenState{Elements: []explore.FlatElement{
+		{EIDX: 0, Node: device.TreeNode{Attributes: map[string]string{"text": "Title"}}},
+		{EIDX: 1, Node: device.TreeNode{Attributes: map[string]string{"resource-id": "e7"}}},
+	}}
+	got, err := decodeTarget([]byte(`{"id":"e0"}`), state)
+	if err != nil || got.EIDX == nil || *got.EIDX != 0 || got.ID != "" {
+		t.Fatalf("e0 as id -> %+v, %v", got, err)
+	}
+	got, err = decodeTarget([]byte(`{"id":"e7"}`), state)
+	if err != nil || got.EIDX != nil || got.ID != "e7" {
+		t.Fatalf("a real id e7 was rewritten: %+v, %v", got, err)
+	}
+	got, err = decodeTarget([]byte(`{"id":"e9"}`), state)
+	if err != nil || got.EIDX == nil || *got.EIDX != 9 {
+		t.Fatalf("an unknown row keeps its index for the miss message: %+v, %v", got, err)
+	}
+	if _, err = decodeTarget([]byte(`{"idx":1}`), state); err == nil {
+		t.Fatal("unknown field accepted")
+	}
+}

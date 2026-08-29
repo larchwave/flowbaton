@@ -268,8 +268,8 @@ func recordLine(tool string, args json.RawMessage) string {
 }
 
 func (s *toolSession) handleTap(ctx context.Context, args json.RawMessage) (string, error) {
-	var in targetArgs
-	if err := strictjson.Decode(args, &in); err != nil {
+	in, err := decodeTarget(args, s.current)
+	if err != nil {
 		return "", fmt.Errorf("tap arguments: %w", err)
 	}
 	action := explore.Action{Kind: explore.ActionTap, Target: in.locator(s.current), Text: in.describe()}
@@ -281,8 +281,8 @@ func (s *toolSession) handleTap(ctx context.Context, args json.RawMessage) (stri
 }
 
 func (s *toolSession) handleLongPress(ctx context.Context, args json.RawMessage) (string, error) {
-	var in targetArgs
-	if err := strictjson.Decode(args, &in); err != nil {
+	in, err := decodeTarget(args, s.current)
+	if err != nil {
 		return "", fmt.Errorf("long_press arguments: %w", err)
 	}
 	action := explore.Action{Kind: explore.ActionLongPress, Target: in.locator(s.current), Text: in.describe()}
@@ -481,8 +481,8 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	var in targetArgs
-	if err := strictjson.Decode(args, &in); err != nil {
+	in, err := decodeTarget(args, s.current)
+	if err != nil {
 		return "", fmt.Errorf("check_visible arguments: %w", err)
 	}
 	check := explore.OutcomeCheck{Expected: "visible: " + in.describe()}

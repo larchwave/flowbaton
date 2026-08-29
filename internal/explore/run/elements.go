@@ -4,7 +4,10 @@
 package run
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/larchwave/flowbaton/internal/device"
@@ -12,6 +15,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/hierarchy"
 	"github.com/larchwave/flowbaton/internal/matching"
 	"github.com/larchwave/flowbaton/internal/model"
+	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
 // elementTableHeading marks tool results that carry an element table, so
@@ -123,6 +127,32 @@ type targetArgs struct {
 	Text string `json:"text,omitempty"`
 	ID   string `json:"id,omitempty"`
 }
+
+// decodeTarget reads tool arguments that name one element. A row name
+// written into the id field (`{"id":"e5"}`) is read as that row unless an
+// element on the screen really carries that id; weak models mix the two
+// up and used to burn their step budget on the miss.
+func decodeTarget(args json.RawMessage, state *explore.ScreenState) (targetArgs, error) {
+	var in targetArgs
+	if err := strictjson.Decode(args, &in); err != nil {
+		return targetArgs{}, err
+	}
+	if in.EIDX != nil || in.Text != "" || !rowName.MatchString(in.ID) {
+		return in, nil
+	}
+	for _, element := range state.Elements {
+		if elementID(element.Node) == in.ID {
+			return in, nil
+		}
+	}
+	index, err := strconv.Atoi(in.ID[1:])
+	if err != nil {
+		return in, nil
+	}
+	return targetArgs{EIDX: &index}, nil
+}
+
+var rowName = regexp.MustCompile(`^e[0-9]+$`)
 
 func (a targetArgs) describe() string {
 	switch {
