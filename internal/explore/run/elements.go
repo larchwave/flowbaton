@@ -140,9 +140,10 @@ func decodeTarget(args json.RawMessage, state *explore.ScreenState) (targetArgs,
 	if in.EIDX != nil || in.Text != "" || !rowName.MatchString(in.ID) {
 		return in, nil
 	}
-	// The whole tree, not the flattened table: the id selector searches
-	// the tree, and a node the table left out still answers to its id.
-	if treeCarriesID(state.Hierarchy, in.ID) {
+	// Ask the id selector itself, over the whole tree: it also matches the
+	// suffix after the last "/" (Android's "pkg:id/e5"), and a node the
+	// flattened table left out still answers to its id.
+	if idSelectsSomething(state, in.ID) {
 		return in, nil
 	}
 	index, err := strconv.Atoi(in.ID[1:])
@@ -154,16 +155,13 @@ func decodeTarget(args json.RawMessage, state *explore.ScreenState) (targetArgs,
 
 var rowName = regexp.MustCompile(`^e[0-9]+$`)
 
-func treeCarriesID(node device.TreeNode, id string) bool {
-	if elementID(node) == id {
+func idSelectsSomething(state *explore.ScreenState, id string) bool {
+	root, err := hierarchy.New(state.Hierarchy)
+	if err != nil {
 		return true
 	}
-	for _, child := range node.Children {
-		if treeCarriesID(child, id) {
-			return true
-		}
-	}
-	return false
+	found, err := matching.Find(root, model.ElementSelector{IDRegex: &id})
+	return err != nil || len(found) > 0
 }
 
 func (a targetArgs) describe() string {

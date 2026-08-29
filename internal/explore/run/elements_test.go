@@ -125,6 +125,8 @@ func TestDecodeTargetReadsARowNamePassedAsAnID(t *testing.T) {
 		Hierarchy: device.TreeNode{Children: []device.TreeNode{
 			{Attributes: map[string]string{"text": "Title"}},
 			{Children: []device.TreeNode{{Attributes: map[string]string{"resource-id": "e7"}}}},
+			// Android ids match on the suffix after the last "/".
+			{Attributes: map[string]string{"resource-id": "com.app:id/e8"}},
 		}},
 		Elements: []explore.FlatElement{
 			{EIDX: 0, Node: device.TreeNode{Attributes: map[string]string{"text": "Title"}}},
@@ -137,6 +139,10 @@ func TestDecodeTargetReadsARowNamePassedAsAnID(t *testing.T) {
 	got, err = decodeTarget([]byte(`{"id":"e7"}`), state)
 	if err != nil || got.EIDX != nil || got.ID != "e7" {
 		t.Fatalf("a real id e7 was rewritten: %+v, %v", got, err)
+	}
+	got, err = decodeTarget([]byte(`{"id":"e8"}`), state)
+	if err != nil || got.EIDX != nil || got.ID != "e8" {
+		t.Fatalf("an Android id suffix e8 was rewritten: %+v, %v", got, err)
 	}
 	got, err = decodeTarget([]byte(`{"id":"e9"}`), state)
 	if err != nil || got.EIDX == nil || *got.EIDX != 9 {
