@@ -51,7 +51,7 @@ type workerVerdict struct {
 // the run. Those results are facts the driver measured, not claims the
 // tester made, so the judge gets them next to the table. Any model failure
 // counts as not met.
-func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, final *explore.ScreenState, driverChecks []explore.OutcomeCheck) explore.OutcomeCheck {
+func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, final *explore.ScreenState, driverChecks []explore.OutcomeCheck, typed []string) explore.OutcomeCheck {
 	check := explore.OutcomeCheck{Expected: expected}
 	if llm == nil {
 		check.Evidence = "no model available for this check"
@@ -61,9 +61,9 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fin
 		"Judge one expected outcome of a mobile UI test against the final screen.\n"+
 			"Expected outcome: %s\n\n%s%s\n"+
 			"Reply with only a JSON object {\"met\": true|false, \"evidence\": \"one line\"}.",
-		expected, elementTable(final), driverCheckLines(driverChecks))
+		expected, elementTable(final), driverCheckLines(driverChecks)+typedLines(typed))
 	response, err := llm.Chat(ctx, explore.ChatRequest{Messages: []explore.Message{
-		{Role: explore.RoleSystem, Text: "You judge test outcomes strictly from the screen content and the driver checks given to you."},
+		{Role: explore.RoleSystem, Text: "You judge test outcomes strictly from the screen content and the driver checks given to you. An outcome that names a specific value or text is met only when exactly that value or text is on the screen; a different value is not met."},
 		{Role: explore.RoleUser, Text: prompt},
 	}})
 	if err != nil {
@@ -94,11 +94,37 @@ func driverCheckLines(checks []explore.OutcomeCheck) string {
 	return builder.String()
 }
 
+// typedLines renders the text the run typed, so an outcome phrased as
+// "the title that was entered" can be matched against the screen. Masked
+// inputs are not among them.
+func typedLines(typed []string) string {
+	if len(typed) == 0 {
+		return ""
+	}
+	builder := &strings.Builder{}
+	builder.WriteString("\nText typed during the run (driver facts):\n")
+	for _, text := range typed {
+		fmt.Fprintf(builder, "- %q\n", text)
+	}
+	return builder.String()
+}
+
+// typedTexts collects the unmasked input text of a run's steps in order.
+func typedTexts(steps []explore.StepRecord) []string {
+	var typed []string
+	for _, step := range steps {
+		if step.Action.Kind == explore.ActionInput && !step.Action.Masked && step.Action.Text != "" {
+			typed = append(typed, step.Action.Text)
+		}
+	}
+	return typed
+}
+
 // evaluateOutcomes checks every expected outcome: deterministic tree match
 // first, then one worker call, then a conservative merge with the model's
 // own finish outcomes. The model can never turn an unmet check into a met
 // one; a model claim of not-met always sticks.
-func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, final *explore.ScreenState, finish *finishArgs, driverChecks []explore.OutcomeCheck) []explore.OutcomeCheck {
+func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, final *explore.ScreenState, finish *finishArgs, driverChecks []explore.OutcomeCheck, typed []string) []explore.OutcomeCheck {
 	claims := map[string]finishOutcome{}
 	if finish != nil {
 		for _, outcome := range finish.Outcomes {
@@ -113,7 +139,7 @@ func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, f
 			check.Met = true
 			check.Evidence = evidence
 		} else {
-			check = askWorkerOutcome(ctx, llm, want, final, driverChecks)
+			check = askWorkerOutcome(ctx, llm, want, final, driverChecks, typed)
 		}
 		if claim, ok := claims[strings.ToLower(strings.TrimSpace(want))]; ok && !claim.Met {
 			check.Met = false

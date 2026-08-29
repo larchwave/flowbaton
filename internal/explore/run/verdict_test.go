@@ -17,7 +17,7 @@ func TestAskWorkerOutcomeReadsAFencedReply(t *testing.T) {
 		textReply("```json\n{\"met\": true, \"evidence\": \"the list is visible\"}\n```"),
 	}}
 	check := askWorkerOutcome(
-		context.Background(), llm, "the list is visible", &explore.ScreenState{}, nil)
+		context.Background(), llm, "the list is visible", &explore.ScreenState{}, nil, nil)
 	if !check.Met {
 		t.Fatalf("check = %+v, want met", check)
 	}
@@ -39,7 +39,7 @@ func TestAskWorkerOutcomeHandsDriverChecksToTheJudge(t *testing.T) {
 		{Expected: `visible: text "mmx7 morning reminder"`, Met: true, Evidence: `matched 1 element(s), first: "mmx7 morning reminder"`},
 		{Expected: `visible: text "No Reminders"`, Evidence: "no matching element in the current tree"},
 	}
-	askWorkerOutcome(context.Background(), llm, "the reminder is listed", &explore.ScreenState{}, checks)
+	askWorkerOutcome(context.Background(), llm, "the reminder is listed", &explore.ScreenState{}, checks, nil)
 	prompt := llm.requests[0].Messages[1].Text
 	for _, want := range []string{
 		"Driver checks measured on this final screen",
@@ -52,5 +52,27 @@ func TestAskWorkerOutcomeHandsDriverChecksToTheJudge(t *testing.T) {
 	}
 	if strings.Contains(strings.Split(prompt, "Driver checks")[0], "Reply with only") {
 		t.Fatalf("checks come after the reply instruction:\n%s", prompt)
+	}
+}
+
+// A planned outcome may say "the title that was entered" (live, 2026-08-28);
+// a judge that does not know what was typed denied a row that carried it.
+// The run's unmasked input text goes to the judge; masked text never does.
+func TestAskWorkerOutcomeHandsTypedTextToTheJudge(t *testing.T) {
+	t.Parallel()
+	steps := []explore.StepRecord{
+		{Action: explore.Action{Kind: explore.ActionTap}},
+		{Action: explore.Action{Kind: explore.ActionInput, Text: "mmx14 Test Reminder"}},
+		{Action: explore.Action{Kind: explore.ActionInput, Text: explore.MaskedText, Masked: true}},
+	}
+	typed := typedTexts(steps)
+	if len(typed) != 1 || typed[0] != "mmx14 Test Reminder" {
+		t.Fatalf("typed = %q", typed)
+	}
+	llm := &scriptedLLM{replies: []explore.Message{textReply(`{"met": true, "evidence": "ok"}`)}}
+	askWorkerOutcome(context.Background(), llm, "a row bearing the title that was entered", &explore.ScreenState{}, nil, typed)
+	prompt := llm.requests[0].Messages[1].Text
+	if !strings.Contains(prompt, "Text typed during the run") || !strings.Contains(prompt, `- "mmx14 Test Reminder"`) {
+		t.Fatalf("prompt lacks the typed text:\n%s", prompt)
 	}
 }
