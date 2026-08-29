@@ -212,13 +212,15 @@ func trailingCycle(steps []explore.StepRecord) int {
 	return count
 }
 
-// budgetWarningAt is how many steps are left when the model is reminded:
-// enough for one check_visible and the finish call, no more.
+// budgetWarningAt is how many replies are left when the model is reminded:
+// enough for one check_visible reply and the finish call, no more. The unit
+// is the reply, as in the loop above: one RunToolLoop per turn, every tool
+// call in that reply executed, a reply without one spent all the same.
 const budgetWarningAt = 2
 
 func budgetWarning(remaining int) string {
 	return fmt.Sprintf(
-		"Budget: %d steps left. A run that ends without finish is stopped, not passed. "+
+		"Budget: %d replies left. A run that ends without finish is stopped, not passed. "+
 			"Use them to check_visible what you can and call finish with the outcomes as they stand.",
 		remaining)
 }
@@ -270,7 +272,7 @@ func testerSystemText() string {
 func scenarioText(scenario explore.Scenario, sessionName string, budget int, start *explore.ScreenState) string {
 	builder := &strings.Builder{}
 	fmt.Fprintf(builder, "Scenario: %s\n", scenario.Name)
-	fmt.Fprintf(builder, "Budget: %d steps (every tool call counts); finish must be one of them.\n", budget)
+	fmt.Fprintf(builder, "Budget: %d replies. Every reply you send counts, whether it carries one tool call, several, or none; finish must come within them.\n", budget)
 	if len(scenario.Steps) > 0 {
 		builder.WriteString("Suggested steps (guidance, adapt to the live app):\n")
 		for _, step := range scenario.Steps {

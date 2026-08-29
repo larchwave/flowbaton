@@ -212,13 +212,13 @@ func TestRunScenarioTellsTheModelTheBudgetAndWarnsTwoStepsFromTheEnd(t *testing.
 	if len(worker.requests) != 4 {
 		t.Fatalf("worker calls %d", len(worker.requests))
 	}
-	if opening := worker.requests[0].Messages[1].Text; !strings.Contains(opening, "4 steps") {
+	if opening := worker.requests[0].Messages[1].Text; !strings.Contains(opening, "4 replies") {
 		t.Fatalf("the scenario text does not state the budget: %q", opening)
 	}
 	var warnedAt []int
 	for index, request := range worker.requests {
 		last := request.Messages[len(request.Messages)-1]
-		if last.Role == explore.RoleUser && strings.Contains(last.Text, "2 steps left") {
+		if last.Role == explore.RoleUser && strings.Contains(last.Text, "2 replies left") {
 			warnedAt = append(warnedAt, index)
 		}
 	}
