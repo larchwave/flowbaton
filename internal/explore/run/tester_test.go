@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -185,6 +186,44 @@ func TestRunScenarioStopsWhenStepBudgetRunsOut(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("notes %v", result.Notes)
+	}
+}
+
+// A model that does not know its budget spends it on the goal and never
+// calls finish, so a scenario it may well have completed ends as "stopped"
+// with no verdict. It hears the budget up front and again two steps from
+// the end, when the remaining steps are exactly enough to check and finish.
+func TestRunScenarioTellsTheModelTheBudgetAndWarnsTwoStepsFromTheEnd(t *testing.T) {
+	home := makeState("com.example.app", screen("Home", button("Login", "login_button", "[0,0][100,50]")))
+	driver := &fakeDriver{}
+	observer := &fakeObserver{states: []*explore.ScreenState{home}}
+	worker := &scriptedLLM{replies: []explore.Message{
+		toolCall("1", "note", `{"text":"one"}`),
+		toolCall("2", "note", `{"text":"two"}`),
+		toolCall("3", "note", `{"text":"three"}`),
+		toolCall("4", "note", `{"text":"four"}`),
+	}}
+	config := testConfig()
+	config.MaxStepsPerTest = 4
+	tester := newTester(driver, observer, worker, nil, config)
+	if _, err := tester.RunScenario(context.Background(), explore.Scenario{Name: "wander"}, home); err != nil {
+		t.Fatal(err)
+	}
+	if len(worker.requests) != 4 {
+		t.Fatalf("worker calls %d", len(worker.requests))
+	}
+	if opening := worker.requests[0].Messages[1].Text; !strings.Contains(opening, "4 steps") {
+		t.Fatalf("the scenario text does not state the budget: %q", opening)
+	}
+	var warnedAt []int
+	for index, request := range worker.requests {
+		last := request.Messages[len(request.Messages)-1]
+		if last.Role == explore.RoleUser && strings.Contains(last.Text, "2 steps left") {
+			warnedAt = append(warnedAt, index)
+		}
+	}
+	if !reflect.DeepEqual(warnedAt, []int{2}) {
+		t.Fatalf("budget warning seen before requests %v, want only the third", warnedAt)
 	}
 }
 

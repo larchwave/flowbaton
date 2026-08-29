@@ -70,7 +70,7 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 	result := &explore.TestResult{Scenario: scenario, Status: explore.TestStopped, Started: t.Config.Now()}
 	conversation := []explore.Message{
 		{Role: explore.RoleSystem, Text: testerSystemText()},
-		{Role: explore.RoleUser, Text: scenarioText(scenario, t.Config.SessionName, session.current)},
+		{Role: explore.RoleUser, Text: scenarioText(scenario, t.Config.SessionName, t.Config.MaxStepsPerTest, session.current)},
 	}
 	var supervisor *pilot
 	if t.Config.PilotEnabled && t.Models.Manager != nil {
@@ -82,6 +82,9 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 	stoppedByPilot := false
 
 	for turn := 0; turn < t.Config.MaxStepsPerTest && session.finish == nil && !stoppedByPilot; turn++ {
+		if remaining := t.Config.MaxStepsPerTest - turn; remaining == budgetWarningAt && turn > 0 {
+			conversation = append(conversation, explore.Message{Role: explore.RoleUser, Text: budgetWarning(remaining)})
+		}
 		loop, loopErr := explore.RunToolLoop(ctx, t.Models.Worker, conversation, box, 1)
 		conversation = pruneElementTables(loop.Messages)
 		if loopErr != nil {
@@ -209,6 +212,17 @@ func trailingCycle(steps []explore.StepRecord) int {
 	return count
 }
 
+// budgetWarningAt is how many steps are left when the model is reminded:
+// enough for one check_visible and the finish call, no more.
+const budgetWarningAt = 2
+
+func budgetWarning(remaining int) string {
+	return fmt.Sprintf(
+		"Budget: %d steps left. A run that ends without finish is stopped, not passed. "+
+			"Use them to check_visible what you can and call finish with the outcomes as they stand.",
+		remaining)
+}
+
 func cycleWarning(cycle int) string {
 	return fmt.Sprintf(
 		"Warning: the last %d steps only moved back and forth between two screens. "+
@@ -253,9 +267,10 @@ func testerSystemText() string {
 		"citing what you saw as evidence. Keep notes short."
 }
 
-func scenarioText(scenario explore.Scenario, sessionName string, start *explore.ScreenState) string {
+func scenarioText(scenario explore.Scenario, sessionName string, budget int, start *explore.ScreenState) string {
 	builder := &strings.Builder{}
 	fmt.Fprintf(builder, "Scenario: %s\n", scenario.Name)
+	fmt.Fprintf(builder, "Budget: %d steps (every tool call counts); finish must be one of them.\n", budget)
 	if len(scenario.Steps) > 0 {
 		builder.WriteString("Suggested steps (guidance, adapt to the live app):\n")
 		for _, step := range scenario.Steps {
