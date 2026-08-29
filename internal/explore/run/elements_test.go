@@ -87,6 +87,8 @@ func TestEIDXLocatorClimbsTheExportLadder(t *testing.T) {
 			"label": "Today", "bounds": "[0,0][10,10]"}}},
 		{EIDX: 4, Path: "0/4", Node: device.TreeNode{Attributes: map[string]string{
 			"elementType": "9"}}},
+		{EIDX: 5, Path: "0/5", Node: device.TreeNode{Attributes: map[string]string{
+			"bounds": "[0,0][11,11]"}}},
 	}}
 	want := []explore.Locator{
 		{Kind: explore.LocatorID, Value: "add"},
@@ -94,6 +96,9 @@ func TestEIDXLocatorClimbsTheExportLadder(t *testing.T) {
 		{Kind: explore.LocatorPoint, Value: "20,30"},
 		{Kind: explore.LocatorPoint, Value: "5,5"},
 		{Kind: explore.LocatorPath, Value: "0/4"},
+		// The engine's tapOn point takes integers only; a half-pixel
+		// center rounds instead of exporting a flow that fails at run time.
+		{Kind: explore.LocatorPoint, Value: "6,6"},
 	}
 	for eidx, expected := range want {
 		index := eidx

@@ -1,6 +1,7 @@
 package explore
 
 import (
+	"math"
 	"strconv"
 	"time"
 
@@ -19,11 +20,12 @@ const (
 	LocatorPoint LocatorKind = "point"
 )
 
-// PointLocator answers the point locator value for a screen coordinate, in
-// the "x,y" form flow selectors accept.
+// PointLocator answers the point locator value for a screen coordinate in
+// the "x,y" form the engine's tapOn point accepts: two base-10 integers,
+// so a half-pixel center rounds to the nearest pixel.
 func PointLocator(point device.Point) string {
-	return strconv.FormatFloat(point.X, 'f', -1, 64) + "," +
-		strconv.FormatFloat(point.Y, 'f', -1, 64)
+	return strconv.FormatInt(int64(math.Round(point.X)), 10) + "," +
+		strconv.FormatInt(int64(math.Round(point.Y)), 10)
 }
 
 // Locator is one way to find an element on a screen.
