@@ -71,3 +71,40 @@ func TestPruneElementTablesDropsTheOpeningTableOnceANewerOneExists(t *testing.T)
 		t.Fatal("input slice was mutated")
 	}
 }
+
+func TestEIDXLocatorClimbsTheExportLadder(t *testing.T) {
+	// An eidx target leaves the flow exporter with a selector it can
+	// write: an id, else a label unique on the screen, else the tap point.
+	// A tree path only survives when the element has no bounds.
+	state := &explore.ScreenState{Elements: []explore.FlatElement{
+		{EIDX: 0, Path: "0/0", Node: device.TreeNode{Attributes: map[string]string{
+			"resource-id": "add", "text": "Add", "bounds": "[0,0][10,10]"}}},
+		{EIDX: 1, Path: "0/1", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "New Reminder", "bounds": "[0,0][10,10]"}}},
+		{EIDX: 2, Path: "0/2", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "Today", "bounds": "[10,20][30,40]"}}},
+		{EIDX: 3, Path: "0/3", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "Today", "bounds": "[0,0][10,10]"}}},
+		{EIDX: 4, Path: "0/4", Node: device.TreeNode{Attributes: map[string]string{
+			"elementType": "9"}}},
+	}}
+	want := []explore.Locator{
+		{Kind: explore.LocatorID, Value: "add"},
+		{Kind: explore.LocatorText, Value: "New Reminder"},
+		{Kind: explore.LocatorPoint, Value: "20,30"},
+		{Kind: explore.LocatorPoint, Value: "5,5"},
+		{Kind: explore.LocatorPath, Value: "0/4"},
+	}
+	for eidx, expected := range want {
+		index := eidx
+		got := (targetArgs{EIDX: &index}).locator(state)
+		if got == nil || *got != expected {
+			t.Fatalf("e%d locator = %+v, want %+v", eidx, got, expected)
+		}
+	}
+	missing := 9
+	got := targetArgs{EIDX: &missing}.locator(state)
+	if got != nil {
+		t.Fatalf("unknown eidx produced a locator: %+v", got)
+	}
+}

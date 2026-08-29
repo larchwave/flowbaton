@@ -1,6 +1,11 @@
 package explore
 
-import "time"
+import (
+	"strconv"
+	"time"
+
+	"github.com/larchwave/flowbaton/internal/device"
+)
 
 // LocatorKind orders the locator ladder: stable identifiers first, visible
 // text second, tree path third, grid point last.
@@ -13,6 +18,13 @@ const (
 	LocatorPath  LocatorKind = "path"
 	LocatorPoint LocatorKind = "point"
 )
+
+// PointLocator answers the point locator value for a screen coordinate, in
+// the "x,y" form flow selectors accept.
+func PointLocator(point device.Point) string {
+	return strconv.FormatFloat(point.X, 'f', -1, 64) + "," +
+		strconv.FormatFloat(point.Y, 'f', -1, 64)
+}
 
 // Locator is one way to find an element on a screen.
 type Locator struct {

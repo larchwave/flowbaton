@@ -344,20 +344,29 @@ func TestExploreRunReportsASessionFailureAndStillClosesTheDriver(t *testing.T) {
 	}
 }
 
-func TestExploreRunFailsWhenAnExportCannotBeWritten(t *testing.T) {
+func TestExploreRunKeepsTheReportWhenAFlowCannotBeExported(t *testing.T) {
 	t.Parallel()
 
+	// A passed scenario the exporter cannot turn into a flow is a warning:
+	// the report already holds the evidence, so the session still succeeds.
 	fake := newExploreCrewFake()
 	fake.exportErr = errors.New("no selector survived validation")
 	runner := assembledExploreRunner(fake, permissiveDriver())
 
 	var stdout, stderr bytes.Buffer
-	args := exploreArgs(filepath.Join(t.TempDir(), "out"), t.TempDir())
-	if got := runner.Run(context.Background(), args, &stdout, &stderr); got != ExitFailure {
-		t.Fatalf("exit = %d, want %d; stderr: %s", got, ExitFailure, stderr.String())
+	outputDir := filepath.Join(t.TempDir(), "out")
+	args := exploreArgs(outputDir, t.TempDir())
+	if got := runner.Run(context.Background(), args, &stdout, &stderr); got != ExitOK {
+		t.Fatalf("exit = %d, want %d; stderr: %s", got, ExitOK, stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "no selector survived validation") {
 		t.Fatalf("the export failure was not surfaced: %q", stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "flows", "flow-01.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("a flow file was written for the failed export: %v", err)
+	}
+	if strings.Contains(stdout.String(), "flow-01.yaml") {
+		t.Fatalf("stdout lists a flow that was not written: %q", stdout.String())
 	}
 }
 

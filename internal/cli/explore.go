@@ -296,7 +296,10 @@ func writeExploreArtifacts(
 	for index, result := range passing {
 		data, err := crew.Exporter.ExportFlow(&result, options.AppID)
 		if err != nil {
-			return "", nil, fmt.Errorf("explore: exporting flow for %q: %w", result.Scenario.Name, err)
+			// The report already holds the passed scenario; a flow the
+			// exporter cannot express is a warning, not a session failure.
+			fmt.Fprintf(stderr, "explore: skipping flow export for %q: %v\n", result.Scenario.Name, err)
+			continue
 		}
 		path := filepath.Join(flowsDir, fmt.Sprintf("flow-%02d.yaml", index+1))
 		if err := os.WriteFile(path, data, 0o644); err != nil {

@@ -137,6 +137,10 @@ func (a targetArgs) describe() string {
 	}
 }
 
+// locator answers the selector the flow exporter will write for a target.
+// An eidx climbs the same ladder as the research map: an id, else a
+// label unique on this screen, else the tap point; a tree path only when
+// the element has no bounds, since no flow selector can express it.
 func (a targetArgs) locator(state *explore.ScreenState) *explore.Locator {
 	switch {
 	case a.Text != "":
@@ -146,11 +150,35 @@ func (a targetArgs) locator(state *explore.ScreenState) *explore.Locator {
 	case a.EIDX != nil:
 		for _, element := range state.Elements {
 			if element.EIDX == *a.EIDX {
-				return &explore.Locator{Kind: explore.LocatorPath, Value: element.Path}
+				return elementLocator(state, element)
 			}
 		}
 	}
 	return nil
+}
+
+func elementLocator(state *explore.ScreenState, element explore.FlatElement) *explore.Locator {
+	if id := elementID(element.Node); id != "" {
+		return &explore.Locator{Kind: explore.LocatorID, Value: id}
+	}
+	if label := elementLabel(element.Node); label != "" && labelCount(state, label) == 1 {
+		return &explore.Locator{Kind: explore.LocatorText, Value: label}
+	}
+	if bounds, ok := explore.ElementBounds(element.Node); ok {
+		center := hierarchy.Center(bounds)
+		return &explore.Locator{Kind: explore.LocatorPoint, Value: explore.PointLocator(center)}
+	}
+	return &explore.Locator{Kind: explore.LocatorPath, Value: element.Path}
+}
+
+func labelCount(state *explore.ScreenState, label string) int {
+	count := 0
+	for _, element := range state.Elements {
+		if elementLabel(element.Node) == label {
+			count++
+		}
+	}
+	return count
 }
 
 // resolvePoint finds the tap point for a target in the current observation.

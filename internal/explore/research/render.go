@@ -128,15 +128,10 @@ func elementLocators(element explore.FlatElement, labelCounts map[string]int) []
 		center := hierarchy.Center(bounds)
 		locators = append(locators, explore.Locator{
 			Kind:  explore.LocatorPoint,
-			Value: formatPoint(center),
+			Value: explore.PointLocator(center),
 		})
 	}
 	return locators
-}
-
-func formatPoint(point device.Point) string {
-	return strconv.FormatFloat(point.X, 'f', -1, 64) + "," +
-		strconv.FormatFloat(point.Y, 'f', -1, 64)
 }
 
 // renderMarkdown renders the researched map for downstream agent
