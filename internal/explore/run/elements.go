@@ -256,7 +256,7 @@ func generalizeCount(state *explore.ScreenState, label string) (string, bool) {
 //
 // Counting rows of the flattened table instead is strictly weaker in two
 // ways that both end with the flow tapping the wrong element: the table
-// drops nodes the matcher still searches, and it compares one attribute per
+// drops nodes the matcher still searches, and it reads one attribute per
 // node where the matcher tries text, hintText and accessibilityText
 // independently. A tree it cannot read answers -1, which reads as "not
 // unique" and keeps the literal label.
