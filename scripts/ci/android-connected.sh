@@ -68,4 +68,19 @@ while true; do
 done
 timeout --kill-after=2s 5s adb -s "$serial" shell input keyevent 82 || true
 
+# The run of 2026-08-30 (cb0a9b7) failed both InputTextTest cases with "no
+# focused text field appeared within 30000ms", and the hierarchy the test
+# dumps at the deadline says why: a "Pixel Launcher isn't responding" ANR
+# dialog (android:id/aerr_close, android:id/aerr_wait) held the screen, so
+# the activity under test could never take focus. A software-GPU emulator
+# on a cold boot is slow enough to ANR the launcher.
+#
+# HIDE_ERROR_DIALOGS is the whole switch: it suppresses every system error
+# dialog, crashes and background ANRs alike, and force-stops the app
+# instead. ANR_SHOW_BACKGROUND is the narrower one and lives in
+# Settings.Secure, not Global -- writing it here would land in the wrong
+# namespace and do nothing. Best effort: an image without the key still
+# writes it and loses nothing.
+timeout --kill-after=2s 5s adb -s "$serial" shell settings put global hide_error_dialogs 1 || true
+
 ANDROID_SERIAL="$serial" ./gradlew --no-daemon --dependency-verification strict connectedDebugAndroidTest
