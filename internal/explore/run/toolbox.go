@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -147,7 +148,7 @@ func (s *toolSession) box() explore.ToolBox {
 		{Name: "long_press", Description: "Press and hold one element addressed by eidx, text, or id.", Schema: targetSchema()},
 		{Name: "input_text", Description: "Type text into the field that holds keyboard focus. Tap a text-field row first; this fails while nothing on screen takes typed text.", Schema: json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}`)},
 		{Name: "erase_text", Description: "Erase characters from the field that holds keyboard focus. Tap a text-field row first; this fails while nothing on screen takes typed text.", Schema: json.RawMessage(`{"type":"object","properties":{"characters":{"type":"integer"}},"additionalProperties":false}`)},
-		{Name: "press_key", Description: "Press a named key, such as ENTER or HOME.", Schema: json.RawMessage(`{"type":"object","properties":{"key":{"type":"string"}},"required":["key"],"additionalProperties":false}`)},
+		{Name: "press_key", Description: "Press one keyboard key. Device buttons are not keyboard keys; use back to leave a screen.", Schema: pressKeySchema()},
 		{Name: "swipe", Description: "Swipe the screen in one direction.", Schema: directionSchema()},
 		{Name: "scroll", Description: "Scroll the screen up or down.", Schema: directionSchema()},
 		{Name: "back", Description: "Press the platform back control.", Schema: emptySchema()},
@@ -366,6 +367,25 @@ func (s *toolSession) handleEraseText(ctx context.Context, args json.RawMessage)
 	return s.afterMutation(ctx, "erase_text", args, action, s.deps.driver.EraseText(ctx, request))
 }
 
+// keyboardKeys is the press_key vocabulary: the keys of model.PressKeyCodes
+// that a keyboard actually has. The rest of that list are device buttons
+// (HOME, LOCK, VOLUME_*, the remote keys), which no driver serves through
+// pressKey -- session mmx26 spent a step discovering that after the tool
+// description offered HOME as an example. Canonical UPPER_SNAKE, so a
+// recorded step always exports into a flow the parser accepts.
+var keyboardKeys = []string{"ENTER", "BACKSPACE", "TAB"}
+
+func pressKeySchema() json.RawMessage {
+	keys, err := json.Marshal(keyboardKeys)
+	if err != nil {
+		// keyboardKeys is a literal slice of strings; this cannot happen,
+		// and a schema without the enum would quietly widen the vocabulary.
+		panic("explore/run: press_key schema: " + err.Error())
+	}
+	return json.RawMessage(`{"type":"object","properties":{"key":{"type":"string","enum":` +
+		string(keys) + `}},"required":["key"],"additionalProperties":false}`)
+}
+
 func (s *toolSession) handlePressKey(ctx context.Context, args json.RawMessage) (string, error) {
 	var in struct {
 		Key string `json:"key"`
@@ -376,8 +396,15 @@ func (s *toolSession) handlePressKey(ctx context.Context, args json.RawMessage) 
 	if strings.TrimSpace(in.Key) == "" {
 		return "", errors.New("press_key needs a key name")
 	}
-	action := explore.Action{Kind: explore.ActionPressKey, Text: in.Key}
-	request := device.PressKeyRequest{Code: device.KeyCode(in.Key), AppIDs: []string{s.deps.appID}}
+	// Refused before the driver call, so an unserved key costs a reply
+	// rather than a step: a handler error comes back to the model as text.
+	key := model.NormalizePressKey(strings.TrimSpace(in.Key))
+	if !slices.Contains(keyboardKeys, key) {
+		return "", fmt.Errorf("press_key has no key %q; the keyboard keys are %s",
+			in.Key, strings.Join(keyboardKeys, ", "))
+	}
+	action := explore.Action{Kind: explore.ActionPressKey, Text: key}
+	request := device.PressKeyRequest{Code: device.KeyCode(key), AppIDs: []string{s.deps.appID}}
 	return s.afterMutation(ctx, "press_key", args, action, s.deps.driver.PressKey(ctx, request))
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/explore"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func textField(id string, secure, focused bool) device.TreeNode {
@@ -283,5 +284,74 @@ func TestATransportFailureEndsTheLoopAsDeviceUnreachable(t *testing.T) {
 	session.deps.observer = &fakeObserver{states: []*explore.ScreenState{makeState("app", login)}, errs: []error{errors.New("hierarchy unavailable")}}
 	if _, err := session.afterMutation(context.Background(), "wait", nil, explore.Action{Kind: explore.ActionWait}, nil); err != nil || !session.stale {
 		t.Fatalf("an answered failure must mark stale, not end the loop: err %v stale %v", err, session.stale)
+	}
+}
+
+// The press_key description said "such as ENTER or HOME", and session mmx26
+// took it at its word: `pressKey "HOME"` came back `iOS has no key "HOME"`
+// and cost a step. HOME is a device button, not a keyboard key, and the tool
+// is press_key. A key the driver cannot serve must not be advertised, and a
+// key the flow language cannot express must never reach a recorded step --
+// the exporter would write a flow that does not parse.
+func TestPressKeyServesOnlyTheKeysAFlowCanExpress(t *testing.T) {
+	session, driver := inputSession(t, screen("Home"))
+
+	if _, err := session.handlePressKey(context.Background(), []byte(`{"key":"HOME"}`)); err == nil {
+		t.Fatal("press_key accepted HOME, which is a device button")
+	}
+	if _, err := session.handlePressKey(context.Background(), []byte(`{"key":"RETURN"}`)); err == nil {
+		t.Fatal("press_key accepted RETURN, which the flow language cannot express")
+	}
+	if slices.Contains(driver.calls, "PressKey") {
+		t.Fatalf("a refused key still reached the driver: %v", driver.calls)
+	}
+	if len(session.steps) != 0 {
+		t.Fatalf("a refused key was recorded as a step: %+v", session.steps)
+	}
+
+	// The keyboard keys the flow language carries are served, and recorded in
+	// the canonical spelling whatever the model wrote.
+	if _, err := session.handlePressKey(context.Background(), []byte(`{"key":"enter"}`)); err != nil {
+		t.Fatalf("press_key refused enter: %v", err)
+	}
+	if len(session.steps) != 1 || session.steps[0].Action.Text != "ENTER" {
+		t.Fatalf("steps = %+v, want one ENTER step", session.steps)
+	}
+
+	// The advertised vocabulary is the served one: a model told about a key
+	// it cannot use spends a step finding out.
+	var spec explore.ToolSpec
+	for _, candidate := range session.box().Specs {
+		if candidate.Name == "press_key" {
+			spec = candidate
+		}
+	}
+	if strings.Contains(spec.Description, "HOME") || strings.Contains(string(spec.Schema), "HOME") {
+		t.Fatalf("press_key still advertises HOME:\n%s\n%s", spec.Description, spec.Schema)
+	}
+	for _, want := range []string{"ENTER", "BACKSPACE", "TAB"} {
+		if !strings.Contains(string(spec.Schema), want) {
+			t.Fatalf("press_key schema does not offer %q:\n%s", want, spec.Schema)
+		}
+	}
+}
+
+// keyboardKeys is what a recorded pressKey step carries, and the exporter
+// writes it straight into the flow. A key outside the flow language would
+// export a flow the parser refuses, losing the whole run's flow over one
+// step, so the subset relation is the invariant -- not the three literals.
+func TestEveryPressKeyTheToolServesIsInTheFlowLanguage(t *testing.T) {
+	for _, key := range keyboardKeys {
+		canonical, ok := model.PressKeyCanonical(key)
+		if !ok {
+			t.Fatalf("press_key serves %q, which the flow language cannot express", key)
+		}
+		if canonical != key {
+			t.Fatalf("press_key serves %q, whose canonical form is %q", key, canonical)
+		}
+	}
+	// Negative control: the check can fail.
+	if _, ok := model.PressKeyCanonical("RETURN"); ok {
+		t.Fatal("the flow language accepts RETURN, so the check above cannot fail")
 	}
 }
