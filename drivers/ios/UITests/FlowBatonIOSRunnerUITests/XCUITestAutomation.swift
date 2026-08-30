@@ -158,7 +158,9 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   /// a connection refused on its next request (sessions mmx22 and mmx23,
   /// both right after hide_keyboard). Reproduced and pinned live.
   func pressKey(_ key: String, appIDs: [String]) throws {
-    guard let keyboardKey = Self.keyboardKeys[key] else {
+    guard let name = KeyboardKeyName.from(wire: key),
+      let keyboardKey = Self.keyboardKeys[name]
+    else {
       throw AutomationError.precondition("unsupported key \(key)")
     }
     try onMain {
@@ -433,12 +435,16 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
       .withOffset(CGVector(dx: x, dy: y))
   }
 
-  private static let keyboardKeys: [String: XCUIKeyboardKey] = [
-    "Enter": .return, "Return": .return, "return": .return,
-    "Backspace": .delete, "delete": .delete,
-    "Tab": .tab, "tab": .tab,
-    "Space": .space, "space": .space,
-    "Escape": .escape, "escape": .escape,
+  // Keyed on the contract vocabulary rather than on spellings: a string
+  // table drifts from the wire values one entry at a time, and every entry
+  // it misses is a request the runner refuses against its own contract.
+  private static let keyboardKeys: [KeyboardKeyName: XCUIKeyboardKey] = [
+    .delete: .delete,
+    .return: .return,
+    .enter: .return,
+    .tab: .tab,
+    .space: .space,
+    .escape: .escape,
   ]
 
   private static let orientations: [String: UIDeviceOrientation] = [

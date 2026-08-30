@@ -1603,3 +1603,40 @@ func TestHideKeyboardPressesReturnWhenTheKeyboardIsUp(t *testing.T) {
 		t.Fatalf("routes = %v, want the Return press", routes)
 	}
 }
+
+// The runner refuses a key outside the contract enum, so every value the
+// host is willing to put on the wire has to be inside it. Session mmx25
+// spent a scenario on `unsupported key enter (HTTP 400)`: "enter" is in the
+// contract and the runner's own table had missed it. Both sides now read
+// the contract, and this pins the host half against the file itself.
+func TestEveryKeyTheHostSendsIsInTheContractEnum(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "contracts", "v0", "ios-http.json"))
+	if err != nil {
+		t.Fatalf("read the iOS contract: %v", err)
+	}
+	var contract struct {
+		Schemas map[string]struct {
+			Fields map[string]struct {
+				Enum []string `json:"enum"`
+			} `json:"fields"`
+		} `json:"schemas"`
+	}
+	if err := json.Unmarshal(data, &contract); err != nil {
+		t.Fatalf("decode the iOS contract: %v", err)
+	}
+	allowed := contract.Schemas["PressKeyRequest"].Fields["key"].Enum
+	if len(allowed) == 0 {
+		t.Fatal("the contract declares no pressKey enum, so this test proves nothing")
+	}
+	for code, key := range keyCodes {
+		if !slices.Contains(allowed, string(key)) {
+			t.Fatalf("keyCodes[%q] sends %q, which the contract enum %v does not allow", code, key, allowed)
+		}
+	}
+	// Negative control: the check can fail.
+	if slices.Contains(allowed, "f13") {
+		t.Fatal("the contract allows a key it should not, so the check above cannot fail")
+	}
+}
