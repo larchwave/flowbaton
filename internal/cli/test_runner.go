@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -182,7 +183,9 @@ func (runner TestRunner) runOnce(
 
 	exitCode := reportResults(stdout, stderr, results)
 	if err != nil {
-		fmt.Fprintf(stderr, "flowbaton test: %s\n", err)
+		if !alreadyReported(err, results) {
+			fmt.Fprintf(stderr, "flowbaton test: %s\n", err)
+		}
 		exitCode = ExitFailure
 	}
 	// The report is written for a failing run too — that is the one anybody
@@ -371,6 +374,24 @@ func reportResults(stdout, stderr io.Writer, results []engine.FlowResult) int {
 		}
 	}
 	return exitCode
+}
+
+// alreadyReported reports whether the run's error is a flow failure the
+// per-flow lines have already shown.
+//
+// executeShards surfaces the first shard's error as the run's error, and a
+// flow that failed is one of those. A run with two failing flows therefore
+// printed both FAIL lines and then one of the two errors again, chosen by
+// shard order, standing in for the whole run. A device that never came up
+// is a different thing: it has no flow line of its own, and suppressing it
+// would leave the run with no reason at all.
+func alreadyReported(err error, results []engine.FlowResult) bool {
+	for _, result := range results {
+		if productError := result.ProductError(); productError != nil && errors.Is(err, productError) {
+			return true
+		}
+	}
+	return false
 }
 
 // failedCommandPrefix locates the failure in the flow that caused it.

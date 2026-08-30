@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -258,4 +259,50 @@ func TestAFailedFlowNamesTheCommandThatFailed(t *testing.T) {
 			t.Errorf("failure line %q is missing %q", line, want)
 		}
 	}
+}
+
+// A run that ends with two failing flows printed both FAIL lines and then
+// "flowbaton test: element not found" -- one of the two errors, chosen by
+// shard order, standing in for the whole run. With per-flow lines carrying
+// the file and command, repeating one of them says nothing and names the
+// wrong flow as often as the right one.
+func TestTheRunSummaryDoesNotRepeatAFailureTheFlowLinesAlreadyCarry(t *testing.T) {
+	t.Parallel()
+
+	notFound := errors.New("element not found")
+	results := []engine.FlowResult{failedFlowResult(t, "flow-03.yaml", notFound)}
+
+	if !alreadyReported(notFound, results) {
+		t.Error("a flow's own failure was treated as an unreported run error")
+	}
+	if !alreadyReported(fmt.Errorf("shard 2: %w", notFound), results) {
+		t.Error("the shard wrapper hid a failure the flow line already carries")
+	}
+	// A device that never came up is not a flow failure and has no line of
+	// its own; losing it would leave the run with no reason at all.
+	if alreadyReported(errors.New("no device matched the selector"), results) {
+		t.Error("a run error with no flow behind it was suppressed")
+	}
+	if alreadyReported(notFound, nil) {
+		t.Error("an error was called reported with no results to report it")
+	}
+}
+
+// failedFlowResult builds one finished, failing flow through the engine's
+// own timeline, because a FlowResult cannot be constructed from outside it.
+func failedFlowResult(t *testing.T, path string, failure error) engine.FlowResult {
+	t.Helper()
+	timeline, err := engine.NewTimeline(enginetest.NewFakeClock(time.Unix(0, 0)))
+	if err != nil {
+		t.Fatalf("NewTimeline: %v", err)
+	}
+	span, _, err := timeline.BeginFlow(path, "", 0)
+	if err != nil {
+		t.Fatalf("BeginFlow: %v", err)
+	}
+	flow, _, err := span.Finish(engine.Failed, failure, nil)
+	if err != nil {
+		t.Fatalf("FlowSpan.Finish: %v", err)
+	}
+	return flow
 }
