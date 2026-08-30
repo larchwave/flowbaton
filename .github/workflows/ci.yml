@@ -155,6 +155,19 @@ jobs:
           sudo chmod 666 /dev/kvm
       - name: Execute connected instrumentation tests
         run: ../../scripts/ci/android-connected.sh
+      # The Gradle console prints only the first lines of a failed assertion,
+      # so four InputTextTest failures in a row said nothing about why the
+      # launch failed. The XML and HTML reports carry the whole message.
+      - name: Keep the instrumentation reports of a failed run
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-instrumentation-reports
+          path: |
+            drivers/android/agent/build/reports/androidTests/connected/
+            drivers/android/agent/build/outputs/androidTest-results/connected/
+          retention-days: 7
+          if-no-files-found: warn
 
   ios:
     needs: repository-language
