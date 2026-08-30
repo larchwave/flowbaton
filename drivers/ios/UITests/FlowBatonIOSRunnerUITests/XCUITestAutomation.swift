@@ -377,10 +377,15 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   /// XCUIApplication and XCUIElement instances from escaping the main actor,
   /// which is the mistake this helper exists to prevent.
   private func onMain<T: Sendable>(_ work: @MainActor () throws -> T) throws -> T {
-    if Thread.isMainThread {
-      return try MainActor.assumeIsolated(work)
+    // Every XCUITest call in this file goes through here, which makes it the
+    // one place that can turn an issue XCUITest recorded into the error of
+    // the command that caused it. See AutomationIssues.
+    try AutomationIssues.shared.capture {
+      if Thread.isMainThread {
+        return try MainActor.assumeIsolated(work)
+      }
+      return try DispatchQueue.main.sync { try MainActor.assumeIsolated(work) }
     }
-    return try DispatchQueue.main.sync { try MainActor.assumeIsolated(work) }
   }
 
   /// foregroundApp resolves which app a request is about.

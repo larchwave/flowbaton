@@ -212,6 +212,12 @@ func hierarchyDepth(of element: WireAXElement) -> Int {
 /// screen geometry is not the signal for this question. What is needed is
 /// real keyboard focus, which the public attributes do not carry -- an iOS
 /// text field with the keyboard open reports `hasFocus` false.
+///
+/// The hole is no longer fatal: AutomationIssues catches what XCUITest
+/// records when typing lands nowhere and returns it as the command's error,
+/// so a gate that guesses wrong costs a failed command rather than the
+/// serving process. This check stays because it says something more useful
+/// than XCUITest does about what to do next.
 public func canReceiveTyping(in snapshot: any AccessibilitySnapshot) -> Bool {
   if snapshot.focused || snapshot.isKeyboard {
     return true

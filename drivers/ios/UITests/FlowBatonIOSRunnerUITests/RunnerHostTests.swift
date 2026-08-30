@@ -43,6 +43,25 @@ final class RunnerHostTests: XCTestCase {
     continueAfterFailure = true
   }
 
+  /// XCTest funnels every recorded failure through here, which is the only
+  /// place a serving runner can see one: XCUITest records an issue instead of
+  /// throwing, so the command that caused it returns normally and answers 200
+  /// for work that never happened.
+  ///
+  /// The issue is handed to AutomationIssues and NOT passed to super. This
+  /// process is the product, not an assertion: its job is to serve the wire
+  /// and report each command's outcome, and a recorded failure here would end
+  /// the run that the next command needs. Real assertions live in the unit
+  /// tests, which do not run in this bundle. Skips still go to super -- a
+  /// runner that was never asked to serve must report as skipped, not passed.
+  override func record(_ issue: XCTIssue) {
+    guard issue.type != .thrownError || !(issue.associatedError is XCTSkip) else {
+      super.record(issue)
+      return
+    }
+    AutomationIssues.shared.record(issue.compactDescription)
+  }
+
   func testServeTheWireUntilTheHostIsDone() throws {
     let environment = ProcessInfo.processInfo.environment
     guard environment[Self.serveVariable] == "1" else {
