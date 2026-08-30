@@ -1559,9 +1559,9 @@ func TestLaunchAppWaitsForTheAppToComeToTheForeground(t *testing.T) {
 }
 
 // HideKeyboard presses Return, and the runner refuses to type when nothing on
-// screen accepts text (session mmx23: that refusal used to take the runner's
-// whole process with it). Hiding a keyboard that is not up is already done,
-// so the press must not be made at all.
+// screen accepts text (session mmx23: that refusal took the runner's whole
+// process with it). Hiding a keyboard that is not up is already done, so the
+// press must not be made at all.
 func TestHideKeyboardDoesNothingWhenNoKeyboardIsUp(t *testing.T) {
 	t.Parallel()
 
