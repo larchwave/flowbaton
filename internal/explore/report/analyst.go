@@ -108,8 +108,10 @@ func render(headline string, session *explore.SessionReport, agg aggregation) st
 	builder.WriteString("\n")
 	builder.WriteString("\n## Coverage\n\n")
 	fmt.Fprintf(builder,
-		"%d scenario runs against %s on %s: %d passed, %d failed, %d with execution problems.\n",
-		agg.total, session.AppID, session.Platform, len(agg.passed), len(agg.failed), len(agg.issues))
+		"%d scenario runs against %s on %s: %d passed, %d failed, %d with execution problems, "+
+			"%d with expectations the app never promised.\n",
+		agg.total, session.AppID, session.Platform,
+		len(agg.passed), len(agg.failed), len(agg.issues), len(agg.unsure))
 	if len(agg.passed) > 0 {
 		builder.WriteString("\n## What works\n\n")
 		for _, name := range agg.passed {
@@ -127,6 +129,13 @@ func render(headline string, session *explore.SessionReport, agg aggregation) st
 				}
 			}
 			fmt.Fprintf(builder, "  Evidence: %s\n", f.evidence)
+		}
+	}
+	if len(agg.unsure) > 0 {
+		builder.WriteString("\n## Unconfirmed expectations\n\n")
+		builder.WriteString("The app never promised these, so they are scenario wording to fix, not defects.\n\n")
+		for _, item := range agg.unsure {
+			fmt.Fprintf(builder, "- `%s`: %s\n  Evidence: %s\n", item.test, item.expected, item.evidence)
 		}
 	}
 	if len(agg.issues) > 0 {

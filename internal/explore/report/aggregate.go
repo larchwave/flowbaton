@@ -23,12 +23,21 @@ type execIssue struct {
 	reason string
 }
 
+// unconfirmed is one run whose only unmet outcomes the app never promised.
+// It is feedback for planning, not a defect anyone can fix in the app.
+type unconfirmed struct {
+	test     string
+	expected string
+	evidence string
+}
+
 type aggregation struct {
 	total    int
 	passed   []string
 	failed   []string
 	findings []finding
 	issues   []execIssue
+	unsure   []unconfirmed
 }
 
 // aggregate walks every result once. Runs that ended stopped or with a
@@ -51,8 +60,16 @@ func aggregate(session *explore.SessionReport) aggregation {
 			agg.issues = append(agg.issues, execIssue{test: name, reason: reason})
 			continue
 		}
-		unmet := firstUnmet(result)
+		unmet := firstUnmet(result, false)
 		if unmet == nil {
+			if skipped := firstUnmet(result, true); skipped != nil {
+				agg.unsure = append(agg.unsure, unconfirmed{
+					test:     name,
+					expected: findingTitle(skipped.Expected),
+					evidence: evidenceLine(result, skipped),
+				})
+				continue
+			}
 			agg.issues = append(agg.issues, execIssue{
 				test:   name,
 				reason: "ended without a product verdict",
@@ -116,9 +133,12 @@ func endedOnAFailedStep(result explore.TestResult) (string, bool) {
 	return "driver error: " + truncate(last.ErrText, 120), true
 }
 
-func firstUnmet(result explore.TestResult) *explore.OutcomeCheck {
+// firstUnmet returns the first unmet outcome whose applicability matches
+// inapplicable. Scanning for an applicable one first keeps a real defect
+// visible even when an expectation the app never promised precedes it.
+func firstUnmet(result explore.TestResult, inapplicable bool) *explore.OutcomeCheck {
 	for i := range result.Outcomes {
-		if !result.Outcomes[i].Met {
+		if !result.Outcomes[i].Met && result.Outcomes[i].Inapplicable == inapplicable {
 			check := result.Outcomes[i]
 			return &check
 		}

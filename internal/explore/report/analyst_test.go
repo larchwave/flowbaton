@@ -268,3 +268,60 @@ func TestARunEndingOnAMissedTargetIsNeitherADefectNorADriverError(t *testing.T) 
 		t.Errorf("a missed target must not be blamed on the driver:\n%s", markdown)
 	}
 }
+
+// An expectation the app never promised is a planning artifact, not a
+// product defect: session mmx21 filed "Completed tile visible and selected"
+// as [High] although iOS tiles carry no selected state.
+func TestInapplicableOutcomeIsNotADefect(t *testing.T) {
+	result := failedResult("complete a reminder", explore.PriorityCritical, "the Completed tile is selected")
+	result.Outcomes[0].Inapplicable = true
+	result.Outcomes[0].Evidence = "no tile carries a selected state"
+	session := &explore.SessionReport{
+		AppID:    "com.apple.reminders",
+		Platform: "ios",
+		Results:  []explore.TestResult{result},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if strings.Contains(markdown, "## Defects") {
+		t.Fatalf("inapplicable outcome filed as a defect:\n%s", markdown)
+	}
+	if !strings.Contains(markdown, "## Unconfirmed expectations") {
+		t.Fatalf("want an unconfirmed-expectations section:\n%s", markdown)
+	}
+	for _, want := range []string{"complete a reminder", "the Completed tile is selected", "no tile carries a selected state"} {
+		if !strings.Contains(markdown, want) {
+			t.Errorf("unconfirmed entry lacks %q:\n%s", want, markdown)
+		}
+	}
+	if !strings.Contains(markdown, "0 defect findings") {
+		t.Errorf("headline still counts a defect:\n%s", markdown)
+	}
+}
+
+// One inapplicable outcome must not hide a real defect recorded after it.
+func TestARealDefectSurvivesAnInapplicableOutcomeBeforeIt(t *testing.T) {
+	result := failedResult("save a reminder", explore.PriorityCritical, "the Completed tile is selected")
+	result.Outcomes[0].Inapplicable = true
+	result.Outcomes = append(result.Outcomes, explore.OutcomeCheck{
+		Expected: "the new reminder is listed",
+		Evidence: "the list is unchanged",
+	})
+	session := &explore.SessionReport{
+		AppID:    "com.apple.reminders",
+		Platform: "ios",
+		Results:  []explore.TestResult{result},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if !strings.Contains(markdown, "- [High] the new reminder is listed") {
+		t.Fatalf("want the applicable unmet outcome as the finding:\n%s", markdown)
+	}
+	if strings.Contains(markdown, "## Unconfirmed expectations") {
+		t.Fatalf("a run with a real defect should not also be listed as unconfirmed:\n%s", markdown)
+	}
+}

@@ -76,3 +76,28 @@ func TestAskWorkerOutcomeHandsTypedTextToTheJudge(t *testing.T) {
 		t.Fatalf("prompt lacks the typed text:\n%s", prompt)
 	}
 }
+
+// A weak planner writes outcomes the app never promises ("Completed tile
+// visible and selected" on iOS tiles, session mmx21). The judge says so with
+// an explicit flag; a reply without the flag stays a defect.
+func TestAskWorkerOutcomeMarksAnInapplicableExpectation(t *testing.T) {
+	t.Parallel()
+
+	llm := &scriptedLLM{replies: []explore.Message{
+		textReply(`{"met": false, "inapplicable": true, "evidence": "no tile carries a selected state"}`),
+		textReply(`{"met": false, "evidence": "the row still says Not Done"}`),
+	}}
+	marked := askWorkerOutcome(
+		context.Background(), llm, "the Completed tile is selected", &explore.ScreenState{}, nil, nil)
+	if marked.Met || !marked.Inapplicable {
+		t.Fatalf("check = %+v, want unmet and inapplicable", marked)
+	}
+	plain := askWorkerOutcome(
+		context.Background(), llm, "the row reads Done", &explore.ScreenState{}, nil, nil)
+	if plain.Met || plain.Inapplicable {
+		t.Fatalf("check = %+v, want unmet and applicable", plain)
+	}
+	if !strings.Contains(llm.requests[0].Messages[1].Text, "inapplicable") {
+		t.Fatalf("prompt never asks for the flag:\n%s", llm.requests[0].Messages[1].Text)
+	}
+}

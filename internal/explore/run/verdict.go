@@ -44,6 +44,10 @@ func foldedTreeMatch(texts []string, expected string) (string, bool) {
 type workerVerdict struct {
 	Met      bool   `json:"met"`
 	Evidence string `json:"evidence"`
+	// Inapplicable is set only when the model says the expectation does
+	// not apply to this app at all. A reply that omits it leaves an unmet
+	// outcome a defect, which is the safe direction.
+	Inapplicable bool `json:"inapplicable"`
 }
 
 // askWorkerOutcome poses one expected outcome to the worker model against
@@ -60,7 +64,11 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fin
 	prompt := fmt.Sprintf(
 		"Judge one expected outcome of a mobile UI test against the final screen.\n"+
 			"Expected outcome: %s\n\n%s%s\n"+
-			"Reply with only a JSON object {\"met\": true|false, \"evidence\": \"one line\"}.",
+			"Reply with only a JSON object "+
+			"{\"met\": true|false, \"inapplicable\": true|false, \"evidence\": \"one line\"}.\n"+
+			"Set inapplicable only when this app has no such feature or the screen "+
+			"cannot express the expectation at all; an outcome the app should have "+
+			"produced and did not is applicable.",
 		expected, elementTable(final), driverCheckLines(driverChecks)+typedLines(typed))
 	response, err := llm.Chat(ctx, explore.ChatRequest{Messages: []explore.Message{
 		{Role: explore.RoleSystem, Text: "You judge test outcomes strictly from the screen content and the driver checks given to you. An outcome that names a specific value or text is met only when exactly that value or text is on the screen; a different value is not met."},
@@ -77,6 +85,7 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fin
 	}
 	check.Met = verdict.Met
 	check.Evidence = verdict.Evidence
+	check.Inapplicable = !verdict.Met && verdict.Inapplicable
 	return check
 }
 

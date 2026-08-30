@@ -89,6 +89,11 @@ type OutcomeCheck struct {
 	Expected string
 	Met      bool
 	Evidence string
+	// Inapplicable marks an unmet outcome the app never promised: the
+	// feature does not exist or the screen cannot express the
+	// expectation at all. Such a check is a planning artifact, not a
+	// product defect, and the report keeps it out of the defect list.
+	Inapplicable bool
 }
 
 // TestStatus is the final verdict for one scenario run.
