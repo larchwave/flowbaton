@@ -177,12 +177,23 @@ func (runner ExploreRunner) executeSession(
 	}
 	if err := errors.Join(sessionErr, closeErr); err != nil {
 		// The session loop hands back what it has with every error, and a run
-		// that died mid-scenario is exactly when its steps are worth reading.
-		// A log that cannot be written must not replace the failure itself.
-		if path, logErr := writeStepLog(report, options); logErr != nil {
-			fmt.Fprintf(stderr, "explore: the step log could not be written: %v\n", logErr)
-		} else if path != "" {
-			fmt.Fprintf(stderr, "explore: steps up to the failure are in %s\n", path)
+		// that died mid-scenario is exactly when its evidence is worth
+		// keeping: session mmx22 lost a scenario that had already passed,
+		// and its exportable flow, because the simulator's runner died two
+		// scenarios later. Artifacts that cannot be written must not replace
+		// the failure itself, so their own errors only reach stderr.
+		// The report goes to the file, not to stdout: a caller reading a
+		// failed run's stdout must not receive a report as if the session
+		// had finished.
+		_, flowPaths, artifactErr := writeExploreArtifacts(report, crew, options, io.Discard, stderr)
+		if artifactErr != nil {
+			fmt.Fprintf(stderr,
+				"explore: the artifacts of the failed session could not be written: %v\n", artifactErr)
+		}
+		fmt.Fprintf(stderr, "explore: what ran before the failure is in %s\n", options.OutputDir)
+		if len(flowPaths) > 0 {
+			fmt.Fprintf(stderr, "explore: flows exported from the runs that passed: %s\n",
+				strings.Join(flowPaths, ", "))
 		}
 		return "", nil, err
 	}

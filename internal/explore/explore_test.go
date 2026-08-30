@@ -107,12 +107,14 @@ func TestRunToolLoopStopRequestAndBounds(t *testing.T) {
 }
 
 type fakeCrew struct {
-	state    *ScreenState
-	plans    [][]Scenario
-	planCall int
-	ran      []string
-	outcomes []OutcomeCheck
-	requests []PlanRequest
+	state      *ScreenState
+	plans      [][]Scenario
+	planCall   int
+	ran        []string
+	outcomes   []OutcomeCheck
+	requests   []PlanRequest
+	failAfter  int
+	reportFail bool
 }
 
 func (f *fakeCrew) Observe(context.Context) (*ScreenState, error) { return f.state, nil }
@@ -130,6 +132,9 @@ func (f *fakeCrew) PlanNext(_ context.Context, request PlanRequest) ([]Scenario,
 }
 func (f *fakeCrew) RunScenario(_ context.Context, s Scenario, _ *ScreenState) (*TestResult, error) {
 	f.ran = append(f.ran, s.Name)
+	if f.failAfter > 0 && len(f.ran) > f.failAfter {
+		return &TestResult{Scenario: s, Status: TestStopped}, errors.New("device unreachable")
+	}
 	return &TestResult{Scenario: s, Status: TestPassed, Outcomes: f.outcomes}, nil
 }
 func (f *fakeCrew) EnsureReady(context.Context) (*ScreenState, error) { return f.state, nil }
@@ -137,6 +142,9 @@ func (f *fakeCrew) Reach(context.Context, string) (*ScreenState, error) {
 	return f.state, nil
 }
 func (f *fakeCrew) Report(_ context.Context, r *SessionReport) (string, error) {
+	if f.reportFail {
+		return "", errors.New("no model")
+	}
 	return "report", nil
 }
 
@@ -213,5 +221,60 @@ func TestRunSessionCarriesUnpromisedExpectationsBackToThePlanner(t *testing.T) {
 	got := fake.requests[1].Unpromised
 	if len(got) != 1 || got[0] != "the Completed tile is selected" {
 		t.Fatalf("Unpromised = %v, want only the inapplicable scenario outcome", got)
+	}
+}
+
+// mmx22 (2026-08-30, live): the first scenario passed, the simulator's
+// runner then died in the second, and the whole session came back with an
+// error and no report -- the passed run's evidence went with it.
+func TestRunSessionReportsWhatRanWhenAScenarioAborts(t *testing.T) {
+	fake := &fakeCrew{
+		state: &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		plans: [][]Scenario{{
+			{Name: "create a reminder", Priority: PriorityNormal},
+			{Name: "rename a list", Priority: PriorityNormal},
+		}},
+		failAfter: 1,
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	config := Config{AppID: "app", MaxTests: 2, Styles: []string{"normal"}}
+	report, err := RunSession(context.Background(), config, crew)
+	if err == nil {
+		t.Fatal("want the device failure surfaced")
+	}
+	if report == nil {
+		t.Fatal("want the partial report")
+	}
+	if len(report.Results) != 2 || report.Results[0].Status != TestPassed {
+		t.Fatalf("results = %+v, want the passed run and the aborted one", report.Results)
+	}
+	if report.Markdown != "report" {
+		t.Fatalf("markdown = %q, want the analyst's report over what ran", report.Markdown)
+	}
+}
+
+// A report the analyst cannot write must never replace the failure that
+// ended the session.
+func TestAnAnalystFailureDoesNotMaskTheSessionFailure(t *testing.T) {
+	fake := &fakeCrew{
+		state:      &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		plans:      [][]Scenario{{{Name: "a", Priority: PriorityNormal}, {Name: "b", Priority: PriorityNormal}}},
+		failAfter:  1,
+		reportFail: true,
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	config := Config{AppID: "app", MaxTests: 2, Styles: []string{"normal"}}
+	report, err := RunSession(context.Background(), config, crew)
+	if err == nil || !strings.Contains(err.Error(), "device unreachable") {
+		t.Fatalf("err = %v, want the device failure", err)
+	}
+	if report == nil || len(report.Results) != 2 {
+		t.Fatalf("want the partial report anyway, got %+v", report)
 	}
 }

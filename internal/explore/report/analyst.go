@@ -93,7 +93,7 @@ func headlineDigest(session *explore.SessionReport, agg aggregation) string {
 		}
 	}
 	if len(agg.issues) > 0 {
-		fmt.Fprintf(builder, "Automation problems kept %d runs from a verdict.\n", len(agg.issues))
+		fmt.Fprintf(builder, "Automation problems kept %s from a verdict.\n", count(len(agg.issues), "run"))
 	}
 	return builder.String()
 }

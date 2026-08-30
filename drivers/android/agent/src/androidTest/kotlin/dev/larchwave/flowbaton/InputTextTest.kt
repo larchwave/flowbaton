@@ -40,7 +40,13 @@ class InputTextTest {
             "${instrumentation.context.packageName}/${TextEntryActivity::class.java.name}"
         val descriptor =
             instrumentation.uiAutomation.executeShellCommand("am start -W -n $component")
-        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
+        // -W prints Status/Error; discarding it turned a failed launch into the
+        // misleading "no focused text field appeared" on CI, with nothing to
+        // read. The launch report goes into the assertion instead.
+        val launch =
+            ParcelFileDescriptor.AutoCloseInputStream(descriptor).use {
+                String(it.readBytes()).trim()
+            }
 
         val deadline = SystemClock.uptimeMillis() + 10_000
         var focused: AccessibilityNodeInfo? = null
@@ -49,7 +55,13 @@ class InputTextTest {
             if (focused != null) break
             SystemClock.sleep(100)
         }
-        assertNotNull("no focused text field appeared", focused)
+        assertNotNull(
+            "no focused text field appeared within 10s.\nam start -W said:\n$launch" +
+                "\nwindows: " + instrumentation.uiAutomation.windows.joinToString {
+                    "${it.title} focused=${it.isFocused}"
+                },
+            focused,
+        )
 
         // Unique per run: inputText appends to whatever the field holds, so a
         // rerun against a still-open activity must not pass on stale text. The

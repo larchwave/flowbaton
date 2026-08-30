@@ -32,6 +32,7 @@ func fakeModelSet() explore.ModelSet {
 type exploreCrewFake struct {
 	state     *explore.ScreenState
 	planned   bool
+	scenarios []explore.Scenario
 	tester    func(explore.Scenario) (*explore.TestResult, error)
 	report    string
 	flowYAML  []byte
@@ -62,6 +63,9 @@ func (f *exploreCrewFake) PlanNext(context.Context, explore.PlanRequest) ([]expl
 		return nil, nil
 	}
 	f.planned = true
+	if len(f.scenarios) > 0 {
+		return f.scenarios, nil
+	}
 	return []explore.Scenario{{Name: "login works", Priority: explore.PriorityNormal}}, nil
 }
 
@@ -602,5 +606,54 @@ func TestExploreRunReplacesAStepLogWithoutAProvider(t *testing.T) {
 	}
 	if strings.Contains(string(logBytes), "Ghost") {
 		t.Fatalf("the earlier run's log survived a refused run:\n%s", logBytes)
+	}
+}
+
+// mmx22 (2026-08-30, live): the first scenario passed and exported cleanly,
+// the simulator's runner died in the second, and the run wrote only a step
+// log -- the passed flow was lost with the session.
+func TestExploreRunKeepsTheArtifactsOfAFailedSession(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "run-output")
+	fake := newExploreCrewFake()
+	fake.scenarios = []explore.Scenario{
+		{Name: "create a reminder", Priority: explore.PriorityNormal},
+		{Name: "rename a list", Priority: explore.PriorityNormal},
+	}
+	calls := 0
+	fake.tester = func(s explore.Scenario) (*explore.TestResult, error) {
+		calls++
+		if calls == 1 {
+			return &explore.TestResult{
+				Scenario: s,
+				Status:   explore.TestPassed,
+				Steps: []explore.StepRecord{{
+					Index:  0,
+					Action: explore.Action{Kind: explore.ActionTap, Target: &explore.Locator{Kind: explore.LocatorText, Value: "New"}},
+					Status: explore.StepOK,
+				}},
+			}, nil
+		}
+		return &explore.TestResult{Scenario: s, Status: explore.TestStopped},
+			errors.New("device unreachable")
+	}
+	runner := assembledExploreRunner(fake, permissiveDriver())
+
+	var stdout, stderr bytes.Buffer
+	args := exploreArgs(outputDir, t.TempDir(), "--session-name", "mmx22", "--max-tests", "2")
+	if got := runner.Run(context.Background(), args, &stdout, &stderr); got != ExitFailure {
+		t.Fatalf("exit = %d, want %d; stderr: %s", got, ExitFailure, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "report-mmx22.md")); err != nil {
+		t.Fatalf("the report of a failed session is missing: %v", err)
+	}
+	flows, err := filepath.Glob(filepath.Join(outputDir, "flows", "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(flows) != 1 {
+		t.Fatalf("flows = %v, want the passed scenario exported; stderr: %s", flows, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(outputDir, "steps-mmx22.md")); err != nil {
+		t.Fatalf("the step log is missing: %v", err)
 	}
 }

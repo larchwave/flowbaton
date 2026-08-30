@@ -84,12 +84,12 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 		if state == nil {
 			state, err = crew.Observer.Observe(ctx)
 			if err != nil {
-				return finishReport(report, config), fmt.Errorf("explore: observe: %w", err)
+				return abortReport(ctx, crew, report, config), fmt.Errorf("explore: observe: %w", err)
 			}
 		}
 		uiMap, err := crew.Researcher.Research(ctx, state)
 		if err != nil {
-			return finishReport(report, config), fmt.Errorf("explore: research: %w", err)
+			return abortReport(ctx, crew, report, config), fmt.Errorf("explore: research: %w", err)
 		}
 		scenarios, err := crew.Planner.PlanNext(ctx, PlanRequest{
 			Map:        uiMap,
@@ -99,7 +99,7 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			Budget:     config.MaxTests - executed,
 		})
 		if err != nil {
-			return finishReport(report, config), fmt.Errorf("explore: plan: %w", err)
+			return abortReport(ctx, crew, report, config), fmt.Errorf("explore: plan: %w", err)
 		}
 		if len(scenarios) == 0 {
 			dryRounds++
@@ -119,7 +119,8 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 				unpromised = collectUnpromised(unpromised, *result)
 			}
 			if err != nil {
-				return finishReport(report, config), fmt.Errorf("explore: scenario %q: %w", scenario.Name, err)
+				return abortReport(ctx, crew, report, config),
+					fmt.Errorf("explore: scenario %q: %w", scenario.Name, err)
 			}
 			executed++
 			state = nil
@@ -132,6 +133,21 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 	}
 	report.Markdown = markdown
 	return finishReport(report, config), nil
+}
+
+// abortReport finishes a report for a session that ended early. The runs
+// that did complete are the evidence the operator came for -- a device
+// that died in the third scenario must not take the first one's passing
+// flow with it (session mmx22, 2026-08-30). Writing the prose is
+// best-effort: a report the analyst cannot produce must never replace the
+// failure that ended the session.
+func abortReport(ctx context.Context, crew Crew, report *SessionReport, config Config) *SessionReport {
+	if len(report.Results) > 0 && crew.Analyst != nil {
+		if markdown, err := crew.Analyst.Report(ctx, report); err == nil {
+			report.Markdown = markdown
+		}
+	}
+	return finishReport(report, config)
 }
 
 func finishReport(report *SessionReport, config Config) *SessionReport {
