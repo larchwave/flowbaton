@@ -37,7 +37,7 @@ func TestEnsureReadyRetriesWithKillAndRelaunchOnce(t *testing.T) {
 		t.Fatalf("state %+v", state)
 	}
 	joined := strings.Join(driver.calls, ",")
-	if !strings.Contains(joined, "LaunchApp:com.example.app,Settle,KillApp:com.example.app,LaunchApp:com.example.app") {
+	if !strings.Contains(joined, "KillApp:com.example.app,LaunchApp:com.example.app,Settle,KillApp:com.example.app,LaunchApp:com.example.app") {
 		t.Fatalf("driver calls %v", driver.calls)
 	}
 }
@@ -131,5 +131,45 @@ func TestReachStopsOnCancellationMidLoop(t *testing.T) {
 	navigator := newNavigator(driver, observer, worker, nil)
 	if _, err := navigator.Reach(ctx, "nowhere"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err %v", err)
+	}
+}
+
+// A session runs its scenarios back to back, so scenario N began wherever
+// N-1 left the app before this change. That cost twice: the planner writes scenarios
+// against the UI map of the START screen, and the exported flow records the
+// actions without the screen they began on, so only the first scenario's
+// flow could replay (measured on mmx36: 1 of 4 standalone).
+//
+// Killing first is what makes "prepares the app from any state" true. It
+// resets navigation and not data: an app relaunched still holds whatever
+// earlier scenarios created, which is what the later ones need.
+func TestEnsureReadyStartsFromTheAppsOwnStartScreen(t *testing.T) {
+	home := makeState("com.example.app", screen("Home", button("Open", "open_button", "[0,0][100,50]")))
+	driver := &fakeDriver{}
+	observer := &fakeObserver{states: []*explore.ScreenState{home}}
+	navigator := newNavigator(driver, observer, &scriptedLLM{}, nil)
+	if _, err := navigator.EnsureReady(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(driver.calls, ",")
+	if !strings.HasPrefix(joined, "KillApp:com.example.app,LaunchApp:com.example.app") {
+		t.Fatalf("driver calls %v, want the app killed before it is launched", driver.calls)
+	}
+}
+
+// An app that was not running has nothing to kill, and the platforms differ
+// on whether that is an error. It never is one here: the point of the kill
+// is the state after it, and the app is already in that state.
+func TestEnsureReadyIgnoresAKillThatHadNothingToStop(t *testing.T) {
+	home := makeState("com.example.app", screen("Home", button("Open", "open_button", "[0,0][100,50]")))
+	driver := &fakeDriver{killErr: errors.New("no matching processes")}
+	observer := &fakeObserver{states: []*explore.ScreenState{home}}
+	navigator := newNavigator(driver, observer, &scriptedLLM{}, nil)
+	state, err := navigator.EnsureReady(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureReady: %v", err)
+	}
+	if state == nil || !state.Signature.Same(home.Signature) {
+		t.Fatalf("state %+v", state)
 	}
 }

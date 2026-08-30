@@ -52,7 +52,8 @@ name: "login works"
 tags:
   - explored
 ---
-- launchApp
+- launchApp:
+    stopApp: true
 - tapOn:
     id: "login_button"
 - tapOn:
@@ -138,10 +139,16 @@ func TestSkippedStepsStayOut(t *testing.T) {
 	if got := strings.Count(text, "launchApp"); got != 1 {
 		t.Errorf("want exactly one launchApp, got %d:\n%s", got, text)
 	}
-	for _, absent := range []string{"stopApp", "Broken", "wait"} {
+	for _, absent := range []string{"Broken", "wait"} {
 		if strings.Contains(text, absent) {
 			t.Errorf("skipped step leaked %q into the output:\n%s", absent, text)
 		}
+	}
+	// stopApp appears once, as the leading launchApp's own argument. What
+	// must not appear is a stop step of its own; testing for the bare word
+	// stopped telling those two apart the moment the launch grew it.
+	if strings.Count(text, "stopApp") != 1 || strings.Contains(text, "- stopApp") {
+		t.Errorf("a skipped stop step became a command of its own:\n%s", text)
 	}
 	if !strings.Contains(text, "\"Keep\"") {
 		t.Errorf("surviving step is missing:\n%s", text)
@@ -258,5 +265,35 @@ func TestExportedCountSelectorSurvivesTheYAMLRoundTrip(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("no text selector survived the round trip:\n%s", data)
+	}
+}
+
+// The session now returns the app to its start screen before every
+// scenario, so the run an exported flow records begins on a freshly
+// launched app. A bare launchApp resumes whatever is already running, so
+// replaying the flow would begin somewhere else -- which is how mmx36's
+// flows failed at step 2 on selectors that were never the problem.
+func TestExportedFlowLaunchesTheAppTheWayTheSessionDid(t *testing.T) {
+	data, err := Exporter{}.ExportFlow(&explore.TestResult{
+		Scenario: explore.Scenario{Name: "Open a list"},
+		Status:   explore.TestPassed,
+		Steps: []explore.StepRecord{{
+			Index:  0,
+			Status: explore.StepOK,
+			Action: explore.Action{
+				Kind:   explore.ActionTap,
+				Target: &explore.Locator{Kind: explore.LocatorText, Value: "Reminders"},
+			},
+		}},
+	}, "com.example.app")
+	if err != nil {
+		t.Fatalf("ExportFlow: %v", err)
+	}
+	body := string(data)
+	if !strings.Contains(body, "stopApp: true") {
+		t.Fatalf("exported flow does not stop the app before launching it:\n%s", body)
+	}
+	if strings.Contains(body, "clearState") {
+		t.Fatalf("exported flow clears state, which would destroy the data it needs:\n%s", body)
 	}
 }

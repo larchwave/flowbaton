@@ -120,6 +120,9 @@ type fakeCrew struct {
 	failAfter   int
 	failVerdict string
 	reportFail  bool
+	readyCalls  int
+	// starts records the state each scenario was handed.
+	starts []*ScreenState
 }
 
 func (f *fakeCrew) Observe(context.Context) (*ScreenState, error) { return f.state, nil }
@@ -135,15 +138,19 @@ func (f *fakeCrew) PlanNext(_ context.Context, request PlanRequest) ([]Scenario,
 	f.planCall++
 	return scenarios, nil
 }
-func (f *fakeCrew) RunScenario(_ context.Context, s Scenario, _ *ScreenState) (*TestResult, error) {
+func (f *fakeCrew) RunScenario(_ context.Context, s Scenario, start *ScreenState) (*TestResult, error) {
 	f.ran = append(f.ran, s.Name)
+	f.starts = append(f.starts, start)
 	if f.failAfter > 0 && len(f.ran) > f.failAfter {
 		return &TestResult{Scenario: s, Status: TestStopped, Verdict: f.failVerdict},
 			errors.New("device unreachable")
 	}
 	return &TestResult{Scenario: s, Status: TestPassed, Outcomes: f.outcomes}, nil
 }
-func (f *fakeCrew) EnsureReady(context.Context) (*ScreenState, error) { return f.state, nil }
+func (f *fakeCrew) EnsureReady(context.Context) (*ScreenState, error) {
+	f.readyCalls++
+	return f.state, nil
+}
 func (f *fakeCrew) Reach(context.Context, string) (*ScreenState, error) {
 	return f.state, nil
 }
@@ -328,5 +335,39 @@ func TestAnAbortedScenarioKeepsAVerdictItAlreadyHas(t *testing.T) {
 	aborted := report.Results[len(report.Results)-1]
 	if aborted.Verdict != "pilot stop: the run left the app" {
 		t.Fatalf("verdict = %q, want the tester's own", aborted.Verdict)
+	}
+}
+
+// Scenarios run back to back, so before this each one began wherever the
+// last finished. The planner writes them against the UI map of the start screen,
+// and an exported flow records the actions without the screen they began on
+// -- measured on mmx36, only the first scenario's flow replayed standalone.
+// Every scenario now starts where the first one did.
+func TestRunSessionStartsEveryScenarioFromTheAppsStartScreen(t *testing.T) {
+	start := &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "start"}}
+	fake := &fakeCrew{
+		state: start,
+		plans: [][]Scenario{{{Name: "a", Priority: PriorityNormal}, {Name: "b", Priority: PriorityNormal}}},
+	}
+	crew := Crew{Observer: fake, Researcher: fake, Planner: fake, Tester: fake, Navigator: fake, Analyst: fake}
+	clock := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	config := Config{AppID: "app", MaxTests: 2, Styles: []string{"normal"}, Clock: func() time.Time { return clock }}
+	if _, err := RunSession(context.Background(), config, crew); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.starts) != 2 {
+		t.Fatalf("ran %d scenarios, want 2", len(fake.starts))
+	}
+	for index, state := range fake.starts {
+		if state == nil || !state.Signature.Same(start.Signature) {
+			t.Fatalf("scenario %d started from %+v, want the app's start screen", index+1, state)
+		}
+	}
+	// Once at the session's start and once between the two scenarios. Not a
+	// third time: with the budget spent there is nothing left to prepare
+	// for, and a reset that failed there would fail a session whose work is
+	// already done and whose flows are already exportable.
+	if fake.readyCalls != 2 {
+		t.Fatalf("EnsureReady ran %d times, want one per scenario start and none after the last", fake.readyCalls)
 	}
 }

@@ -132,7 +132,26 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 					fmt.Errorf("explore: scenario %q: %w", scenario.Name, err)
 			}
 			executed++
-			state = nil
+			if executed >= config.MaxTests {
+				// Nothing left to prepare for. A reset here could only fail
+				// a session whose work is already done.
+				break
+			}
+			// Put the app back where the first scenario found it. Without
+			// this the next scenario begins on whatever screen this one
+			// finished on, while the planner wrote it against the UI map of
+			// the start screen -- and the flow exported from it records the
+			// actions without the screen they began on, so it can only
+			// replay by accident (mmx36: 1 of 4 replayed standalone).
+			//
+			// EnsureReady kills and relaunches, which resets navigation and
+			// keeps data: the reminders an earlier scenario created are
+			// still there for a later one that needs them.
+			state, err = crew.Navigator.EnsureReady(ctx)
+			if err != nil {
+				return abortReport(ctx, crew, report, config),
+					fmt.Errorf("explore: return to the start screen after %q: %w", scenario.Name, err)
+			}
 		}
 	}
 

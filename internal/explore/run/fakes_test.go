@@ -106,6 +106,7 @@ type fakeDriver struct {
 	tapped   []device.Point
 	backErr  error
 	inputErr error
+	killErr  error
 }
 
 func (f *fakeDriver) log(name string) { f.calls = append(f.calls, name) }
@@ -131,7 +132,7 @@ func (f *fakeDriver) StopApp(_ context.Context, request device.AppRequest) error
 
 func (f *fakeDriver) KillApp(_ context.Context, request device.AppRequest) error {
 	f.log("KillApp:" + request.AppID)
-	return nil
+	return f.killErr
 }
 
 func (f *fakeDriver) ClearAppState(_ context.Context, request device.AppRequest) error {

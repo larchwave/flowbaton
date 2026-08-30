@@ -52,14 +52,30 @@ func (n *Navigator) deps() toolDeps {
 	}.withDefaults()
 }
 
-// EnsureReady launches the app, settles, and observes. One failed
-// observation earns one kill-and-relaunch retry before giving up.
+// EnsureReady puts the app at its own start screen, settles, and observes.
+// One failed observation earns one kill-and-relaunch retry before giving up.
+//
+// It kills before launching, which is what makes "from any state" true: a
+// launch alone resumes an app wherever it was left. A session runs its
+// scenarios back to back, so without this scenario N begins on whatever
+// screen N-1 finished on -- while the planner writes scenarios against the
+// UI map of the start screen, and the exported flow records the actions
+// without the screen they began on. Measured on mmx36: 1 of 4 exported
+// flows replayed standalone.
+//
+// The kill resets navigation and not data. An app relaunched still holds
+// whatever earlier scenarios created, which is what the later ones need;
+// clearing state would take that with it.
 func (n *Navigator) EnsureReady(ctx context.Context) (*explore.ScreenState, error) {
 	deps := n.deps()
 	if err := deps.validate(); err != nil {
 		return nil, err
 	}
 	launch := func() error {
+		// An app that was not running has nothing to stop, and the platforms
+		// differ on whether that is an error. It never is one here: the point
+		// of the kill is the state after it, and a stopped app is in it.
+		_ = n.Driver.KillApp(ctx, device.AppRequest{AppID: deps.appID})
 		return n.Driver.LaunchApp(ctx, device.LaunchAppRequest{AppID: deps.appID})
 	}
 	if err := launch(); err != nil {
@@ -74,9 +90,9 @@ func (n *Navigator) EnsureReady(ctx context.Context) (*explore.ScreenState, erro
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return nil, ctxErr
 	}
-	if killErr := n.Driver.KillApp(ctx, device.AppRequest{AppID: deps.appID}); killErr != nil {
-		return nil, fmt.Errorf("explore/run: recover %s after failed observation: %w", deps.appID, killErr)
-	}
+	// launch kills first, so the retry is already the kill-and-relaunch it
+	// was written to be; a second explicit kill here would only stop an app
+	// that launch is about to stop anyway.
 	if launchErr := launch(); launchErr != nil {
 		return nil, fmt.Errorf("explore/run: relaunch %s: %w", deps.appID, launchErr)
 	}

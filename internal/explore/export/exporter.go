@@ -33,7 +33,17 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 	if result.Status != explore.TestPassed {
 		return nil, fmt.Errorf("export: only passing runs export, run status is %q", result.Status)
 	}
-	commands := []*yaml.Node{plain("launchApp")}
+	// stopApp, because the session records from a freshly launched app: the
+	// navigator kills and relaunches before every scenario. A bare launchApp
+	// resumes whatever is already running, so the flow would replay from a
+	// screen the run never started on -- which is how mmx36's flows failed
+	// at step 2 on selectors that were never wrong.
+	//
+	// Not clearState: the kill resets navigation and keeps data, and a run
+	// often depends on what an earlier scenario created.
+	commands := []*yaml.Node{
+		keyed("launchApp", mapNode(plain("stopApp"), plain("true"))),
+	}
 	secrets := 0
 	for _, step := range result.Steps {
 		// A masked input holds no replayable text. Export it as an env
