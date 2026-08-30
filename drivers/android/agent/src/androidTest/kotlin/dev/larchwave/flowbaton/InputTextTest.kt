@@ -7,8 +7,8 @@ import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -89,16 +89,21 @@ class InputTextTest {
             if (focused != null) break
             SystemClock.sleep(100)
         }
-        assertNotNull(
-            "no focused text field appeared within ${FOCUS_TIMEOUT_MS}ms.\n" +
-                "am start -W said:\n$launch\n" +
-                // The production dump, not uiAutomation.windows: that list is
-                // empty unless flagRetrieveInteractiveWindows is set, and
-                // viewHierarchy() is the path that sets it. An empty list said
-                // nothing about the screen, only about the flag.
-                "screen at the deadline:\n" + handlers.viewHierarchy(),
-            focused,
-        )
+        // Built only on the failing branch: an assertNotNull message is an
+        // eager argument, so dumping the screen there ran a full hierarchy
+        // pass on every green run, and a dump that threw would have failed
+        // the test for something other than what it tests.
+        if (focused == null) {
+            fail(
+                "no focused text field appeared within ${FOCUS_TIMEOUT_MS}ms.\n" +
+                    "am start -W said:\n$launch\n" +
+                    // The production dump, not uiAutomation.windows: that list
+                    // is empty unless flagRetrieveInteractiveWindows is set,
+                    // and viewHierarchy() is the path that sets it. An empty
+                    // list said nothing about the screen, only about the flag.
+                    "screen at the deadline:\n" + handlers.viewHierarchy(),
+            )
+        }
 
         // Unique per run: inputText appends to whatever the field holds, so a
         // rerun against a still-open activity must not pass on stale text. The

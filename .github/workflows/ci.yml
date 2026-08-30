@@ -163,9 +163,13 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-instrumentation-reports
+          # connectedDebugAndroidTest runs from the root, so it covers every
+          # module that grows an androidTest source set. Only agent has one
+          # today; naming it alone would drop the report of the next module
+          # to get one, on the run where that report is the whole point.
           path: |
-            drivers/android/agent/build/reports/androidTests/connected/
-            drivers/android/agent/build/outputs/androidTest-results/connected/
+            drivers/android/*/build/reports/androidTests/connected/
+            drivers/android/*/build/outputs/androidTest-results/connected/
           retention-days: 7
           if-no-files-found: warn
 
