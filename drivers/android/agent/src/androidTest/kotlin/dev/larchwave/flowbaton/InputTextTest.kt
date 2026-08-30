@@ -1,5 +1,7 @@
 package dev.larchwave.flowbaton
 
+import android.app.Instrumentation
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
@@ -30,6 +32,46 @@ class InputTextTest {
         typeAndRequireExactTail("ascii text")
     }
 
+    private companion object {
+        /**
+         * A cold activity launch on a swiftshader emulator is not a fast thing, and the previous
+         * 10s deadline failed on CI while passing on a rerun. Waiting longer costs nothing when
+         * the launch is quick.
+         */
+        const val FOCUS_TIMEOUT_MS = 30_000L
+    }
+
+    /**
+     * Runs a shell command and answers everything it printed.
+     *
+     * `executeShellCommand` hands back stdout ALONE, and `am` reports a failed launch on stderr —
+     * so on the one run where the report was worth reading it came back empty, three times over
+     * on CI. The Rwe form carries both streams; below API 31 there is only stdout, which is what
+     * this always had.
+     *
+     * Drains stdout fully before stderr, which would deadlock on a command that fills the stderr
+     * pipe buffer first. `am start -W` prints a few lines, far under it. A command that can say
+     * more needs a reader thread per stream.
+     */
+    private fun launchReport(instrumentation: Instrumentation, command: String): String {
+        fun read(descriptor: ParcelFileDescriptor?): String =
+            descriptor?.let {
+                ParcelFileDescriptor.AutoCloseInputStream(it).use { stream ->
+                    String(stream.readBytes()).trim()
+                }
+            }.orEmpty()
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return read(instrumentation.uiAutomation.executeShellCommand(command))
+        }
+        val streams = instrumentation.uiAutomation.executeShellCommandRwe(command)
+        // executeShellCommandRwe answers [stdout, stdin, stderr].
+        streams.getOrNull(1)?.close()
+        val out = read(streams.getOrNull(0))
+        val err = read(streams.getOrNull(2))
+        return listOf("stdout: $out", "stderr: $err").joinToString("\n")
+    }
+
     private fun typeAndRequireExactTail(prefix: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val handlers = AndroidDriverHandlers(instrumentation)
@@ -38,17 +80,9 @@ class InputTextTest {
         // a background process, which is what the instrumented process is.
         val component =
             "${instrumentation.context.packageName}/${TextEntryActivity::class.java.name}"
-        val descriptor =
-            instrumentation.uiAutomation.executeShellCommand("am start -W -n $component")
-        // -W prints Status/Error; discarding it turned a failed launch into the
-        // misleading "no focused text field appeared" on CI, with nothing to
-        // read. The launch report goes into the assertion instead.
-        val launch =
-            ParcelFileDescriptor.AutoCloseInputStream(descriptor).use {
-                String(it.readBytes()).trim()
-            }
+        val launch = launchReport(instrumentation, "am start -W -n $component")
 
-        val deadline = SystemClock.uptimeMillis() + 10_000
+        val deadline = SystemClock.uptimeMillis() + FOCUS_TIMEOUT_MS
         var focused: AccessibilityNodeInfo? = null
         while (SystemClock.uptimeMillis() < deadline) {
             focused = instrumentation.uiAutomation.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
@@ -56,10 +90,13 @@ class InputTextTest {
             SystemClock.sleep(100)
         }
         assertNotNull(
-            "no focused text field appeared within 10s.\nam start -W said:\n$launch" +
-                "\nwindows: " + instrumentation.uiAutomation.windows.joinToString {
-                    "${it.title} focused=${it.isFocused}"
-                },
+            "no focused text field appeared within ${FOCUS_TIMEOUT_MS}ms.\n" +
+                "am start -W said:\n$launch\n" +
+                // The production dump, not uiAutomation.windows: that list is
+                // empty unless flagRetrieveInteractiveWindows is set, and
+                // viewHierarchy() is the path that sets it. An empty list said
+                // nothing about the screen, only about the flag.
+                "screen at the deadline:\n" + handlers.viewHierarchy(),
             focused,
         )
 
