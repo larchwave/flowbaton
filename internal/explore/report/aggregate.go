@@ -119,9 +119,13 @@ func aggregate(session *explore.SessionReport) aggregation {
 	return agg
 }
 
+// stoppedReason words why a run produced nothing, without stuttering at the
+// operator: the tester's own verdict for a spent budget already opens with
+// "stopped:", and every mmx34 and mmx35 report read "run stopped: stopped:".
 func stoppedReason(result explore.TestResult) string {
-	if result.Verdict != "" {
-		return "run stopped: " + result.Verdict
+	verdict := strings.TrimSpace(strings.TrimPrefix(result.Verdict, "stopped:"))
+	if verdict != "" {
+		return "run stopped: " + verdict
 	}
 	return "run stopped before a verdict"
 }
