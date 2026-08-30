@@ -66,7 +66,7 @@ func TestClusteringGroupsFailuresOnTheSameControl(t *testing.T) {
 		}
 	}
 	// Highest priority in the cluster is critical, so the tag is High.
-	if !strings.Contains(markdown, "- [High] the Save toast appears") {
+	if !strings.Contains(markdown, "- [High] not observed: the Save toast appears") {
 		t.Errorf("want a single High finding titled by the first unmet outcome:\n%s", markdown)
 	}
 	if !strings.Contains(markdown, "Evidence: screen kept the old value") {
@@ -318,7 +318,7 @@ func TestARealDefectSurvivesAnInapplicableOutcomeBeforeIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Report: %v", err)
 	}
-	if !strings.Contains(markdown, "- [High] the new reminder is listed") {
+	if !strings.Contains(markdown, "- [High] not observed: the new reminder is listed") {
 		t.Fatalf("want the applicable unmet outcome as the finding:\n%s", markdown)
 	}
 	if strings.Contains(markdown, "## Unconfirmed expectations") {
@@ -484,7 +484,53 @@ func TestADefectOutranksAnUnjudgedOutcome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Report: %v", err)
 	}
-	if !strings.Contains(markdown, "- [High] the new reminder is listed") {
+	if !strings.Contains(markdown, "- [High] not observed: the new reminder is listed") {
 		t.Fatalf("want the confirmed defect:\n%s", markdown)
 	}
+}
+
+// Session mmx34 filed a High defect reading "The 'mmx16 Test Reminder' row
+// no longer appears in the Reminders list", directly above its own evidence
+// line saying the row still appears. The title was the EXPECTATION, printed
+// as though the app had done it, so the report contradicted itself and an
+// operator had to read the evidence to learn which way round it goes.
+func TestADefectSaysTheExpectationWasNotObservedRatherThanRestatingIt(t *testing.T) {
+	expectation := "the row no longer appears in the list"
+	session := &explore.SessionReport{
+		AppID:    "com.example.app",
+		Platform: "ios",
+		Results: []explore.TestResult{
+			failedResult("mark complete", explore.PriorityCritical, expectation),
+		},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	line := defectLine(t, markdown)
+	if !strings.Contains(line, expectation) {
+		t.Fatalf("the defect dropped what was expected: %q", line)
+	}
+	if strings.HasPrefix(line, "- [High] "+expectation) {
+		t.Fatalf("the defect still reads as a claim about the app: %q", line)
+	}
+	if !strings.Contains(line, "not observed") {
+		t.Fatalf("the defect does not say the expectation went unobserved: %q", line)
+	}
+}
+
+// defectLine returns the first entry of the report's Defects section.
+func defectLine(t *testing.T, markdown string) string {
+	t.Helper()
+	_, after, found := strings.Cut(markdown, "## Defects\n")
+	if !found {
+		t.Fatalf("the report has no Defects section:\n%s", markdown)
+	}
+	for _, line := range strings.Split(after, "\n") {
+		if strings.HasPrefix(line, "- [") {
+			return line
+		}
+	}
+	t.Fatalf("the Defects section lists nothing:\n%s", markdown)
+	return ""
 }

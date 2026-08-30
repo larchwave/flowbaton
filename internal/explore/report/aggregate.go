@@ -175,12 +175,17 @@ func normalizeOutcome(text string) string {
 	return strings.TrimRight(folded, ".!?")
 }
 
+// findingTitle words a defect as the miss it is. Printing the expectation on
+// its own made the report contradict itself: mmx34 filed "the row no longer
+// appears in the list" one line above evidence saying the row was still
+// there. The expectation is what was asked for, never a report of what the
+// app did.
 func findingTitle(expected string) string {
 	title := strings.Join(strings.Fields(expected), " ")
 	if title == "" {
-		return "expected outcome not met"
+		return "an expected outcome was not observed"
 	}
-	return title
+	return "not observed: " + title
 }
 
 func severity(priority explore.Priority) string {
