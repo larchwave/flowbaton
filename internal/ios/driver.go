@@ -87,6 +87,10 @@ type Driver struct {
 	// take it down. See managed_runner.go.
 	runner  *RunnerBundle
 	process runnerProcess
+	// derivedData is the throwaway directory xcodebuild writes its run logs
+	// into. Without one it mints a fresh hashed directory under Xcode's
+	// DerivedData on every launch and never reclaims it.
+	derivedData string
 	// spawnRunner is the same kind of seam as spawnRecorder; nil spawns for
 	// real. startupPoll and startupTimeout pace Open's reachability wait.
 	spawnRunner    func(ctx context.Context, args, environment []string) (runnerProcess, error)

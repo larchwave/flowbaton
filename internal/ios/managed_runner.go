@@ -82,6 +82,13 @@ func (driver *Driver) runnerArgs() []string {
 		"-xctestrun", driver.runner.XCTestRun,
 		"-destination", "platform=iOS Simulator,id=" + driver.udid,
 		"-only-testing:" + runnerServeTest,
+		// The host ends this runner, so xcodebuild reads every session as a
+		// failed test and would collect a whole simulator sysdiagnose --
+		// 168M of system log archive -- into the directory below.
+		"-collect-test-diagnostics", "never",
+		// Somewhere this driver can delete. The default is a new hashed
+		// directory under Xcode's DerivedData per launch, kept forever.
+		"-derivedDataPath", driver.derivedData,
 	}
 }
 
@@ -115,12 +122,16 @@ func (driver *Driver) openManagedRunner(ctx context.Context) error {
 	if driver.runnerID, err = newRunnerID(); err != nil {
 		return err
 	}
+	if driver.derivedData, err = os.MkdirTemp("", "flowbaton-ios-runner-"); err != nil {
+		return fmt.Errorf("creating a derived-data directory for the runner: %w", err)
+	}
 	spawn := driver.spawnRunner
 	if spawn == nil {
 		spawn = realRunnerSpawn
 	}
 	process, err := spawn(ctx, driver.runnerArgs(), driver.runnerEnv())
 	if err != nil {
+		driver.removeDerivedData()
 		return fmt.Errorf("starting the runner for %s: %w", driver.udid, err)
 	}
 	driver.process = process
@@ -194,7 +205,21 @@ func (driver *Driver) stopRunnerProcess() error {
 		return nil
 	}
 	driver.process = nil
+	// After the child, so xcodebuild is not still writing into it.
+	defer driver.removeDerivedData()
 	return process.stopRunner()
+}
+
+// removeDerivedData discards the runner's throwaway log directory. Its loss is
+// not worth failing a session over: the tail of what xcodebuild said is
+// already carried in the error, and a directory left behind costs disk, not
+// correctness.
+func (driver *Driver) removeDerivedData() {
+	if driver.derivedData == "" {
+		return
+	}
+	_ = os.RemoveAll(driver.derivedData)
+	driver.derivedData = ""
 }
 
 // xcodebuildRunner is the real child.

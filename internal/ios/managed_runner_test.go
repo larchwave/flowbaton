@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"reflect"
 	"slices"
 	"strconv"
@@ -64,14 +65,17 @@ func TestOpenStartsTheRunnerWhenItOwnsOne(t *testing.T) {
 	if err := driver.Open(context.Background()); err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
+	// What the runner is asked to run. The rest of the invocation is about
+	// where xcodebuild puts its leavings, and is pinned by
+	// TestTheManagedRunnerLeavesNoDerivedDataBehind.
 	want := []string{
 		"test-without-building",
 		"-xctestrun", "/built/Runner.xctestrun",
 		"-destination", "platform=iOS Simulator,id=UDID-1",
 		"-only-testing:" + runnerServeTest,
 	}
-	if !reflect.DeepEqual(process.args, want) {
-		t.Fatalf("xcodebuild args = %#v, want %#v", process.args, want)
+	if len(process.args) < len(want) || !reflect.DeepEqual(process.args[:len(want)], want) {
+		t.Fatalf("xcodebuild args = %#v, want them to begin %#v", process.args, want)
 	}
 	// The runner reads its own configuration from the process it is launched
 	// with, and only TEST_RUNNER_-prefixed names survive the trip into the
@@ -298,4 +302,57 @@ func launchedRunnerID(environment []string) string {
 // runnerStatusBody is what a runner launched with an id answers.
 func runnerStatusBody(id string) string {
 	return `{"status":"ok","runner":"` + id + `"}`
+}
+
+// A managed runner is a transport, not a test run: the host always ends it, so
+// xcodebuild counts every session as a failed test and collects a whole
+// simulator sysdiagnose -- 168M of system log archive per session on
+// 2026-08-30 -- into a fresh derived-data directory under
+// ~/Library/Developer/Xcode/DerivedData that nothing ever removes. Four
+// sessions filled this host's disk to 159Mi free and blocked every tool. The
+// runner wants neither the diagnostics nor the directory.
+func TestTheManagedRunnerLeavesNoDerivedDataBehind(t *testing.T) {
+	t.Parallel()
+
+	var started atomic.Bool
+	var launchedID atomic.Value
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" && started.Load() {
+			_, _ = w.Write([]byte(runnerStatusBody(launchedID.Load().(string))))
+			return
+		}
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	process := &fakeRunnerProcess{}
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	driver.spawnRunner = func(_ context.Context, args, environment []string) (runnerProcess, error) {
+		process.args = args
+		launchedID.Store(launchedRunnerID(environment))
+		started.Store(true)
+		return process, nil
+	}
+	if err := driver.Open(context.Background()); err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	if index := slices.Index(process.args, "-collect-test-diagnostics"); index < 0 ||
+		index+1 >= len(process.args) || process.args[index+1] != "never" {
+		t.Fatalf("xcodebuild args = %#v, want -collect-test-diagnostics never", process.args)
+	}
+	index := slices.Index(process.args, "-derivedDataPath")
+	if index < 0 || index+1 >= len(process.args) {
+		t.Fatalf("xcodebuild args = %#v, want a -derivedDataPath the driver owns", process.args)
+	}
+	derivedData := process.args[index+1]
+	if _, err := os.Stat(derivedData); err != nil {
+		t.Fatalf("derived-data directory %q is not there while the runner runs: %v", derivedData, err)
+	}
+
+	if err := driver.Close(context.Background()); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if _, err := os.Stat(derivedData); !os.IsNotExist(err) {
+		t.Fatalf("Close left %q behind: %v", derivedData, err)
+	}
 }
