@@ -668,7 +668,7 @@ func TestExploreRunKeepsTheArtifactsOfAFailedSession(t *testing.T) {
 
 // A session that dies before it has a report hands the abort path a nil one,
 // and the path wrote to it without looking: `flowbaton explore` against
-// com.apple.mobilenotes crashed with a nil dereference at
+// com.apple.mobilenotes crashed on a nil pointer at
 // writeExploreArtifacts instead of naming the failure. The crash also buried
 // the real cause, which is the thing an operator needed.
 func TestExploreRunReportsAFailureThatCameBeforeAnyReport(t *testing.T) {
@@ -677,7 +677,7 @@ func TestExploreRunReportsAFailureThatCameBeforeAnyReport(t *testing.T) {
 	fake := newExploreCrewFake()
 	// An app that never comes to the foreground is the earliest failure a
 	// real session hits, and the one that crashed: `flowbaton explore` on an
-	// app the simulator does not carry died on a nil dereference inside
+	// app the simulator does not carry died on a nil pointer inside
 	// writeExploreArtifacts instead of naming the failure, burying the very
 	// cause an operator needed.
 	fake.readyErr = errors.New("prepare app: the app never came to the foreground")
