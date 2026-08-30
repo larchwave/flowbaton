@@ -182,11 +182,14 @@ extension ViewHierarchyWireTests {
     // public attributes carry no per-node keyboard focus. Reading the flag
     // alone refuses every typing command on the platform.
     let tree = TestSnapshot(
-      identifier: "app", label: "Reminders",
+      identifier: "app", frameSize: (402, 874), label: "Reminders",
       children: [
-        TestSnapshot(identifier: "field", label: "Search", elementTypeCode: 45),
         TestSnapshot(
-          label: "keyboard", elementTypeCode: 19, isKeyboard: true,
+          identifier: "field", frameOrigin: (0, 100), frameSize: (402, 40),
+          label: "Search", elementTypeCode: 45),
+        TestSnapshot(
+          frameOrigin: (0, 641), frameSize: (402, 233), label: "keyboard",
+          elementTypeCode: 19, isKeyboard: true,
           children: [TestSnapshot(label: "Q")]),
       ])
     XCTAssertTrue(canReceiveTyping(in: tree))

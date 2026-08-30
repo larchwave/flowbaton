@@ -123,13 +123,40 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   @MainActor
   static func typingTarget(among appIDs: [String]) throws -> XCUIApplication {
     let app = try foregroundApp(among: appIDs)
-    _ = app.keyboards.firstMatch.waitForExistence(timeout: keyboardWaitSeconds)
-    guard canReceiveTyping(in: SnapshotAdapter(try app.snapshot())) else {
+    guard try waitUntil({ canReceiveTyping(in: SnapshotAdapter(try app.snapshot())) }) else {
       throw AutomationError.precondition(
         "nothing on screen accepts typed text and no keyboard is open, so there "
           + "is nowhere to type; tap a text field first")
     }
     return app
+  }
+
+  /// pollSeconds is how often a settle condition is re-read while waiting.
+  static let pollSeconds: TimeInterval = 0.05
+
+  /// waitUntil polls a condition until keyboardWaitSeconds have passed.
+  ///
+  /// waitForExistence on the keyboard element cannot do this job: the element
+  /// exists before, during and after the animation -- that is the whole
+  /// finding this file is built on -- so it returns at once and measures
+  /// nothing. A tap that focuses a field returns before the keyboard has
+  /// finished animating in, and reading the frame right then says the
+  /// keyboard is still parked, refusing a command that was about to be valid.
+  @MainActor
+  static func waitUntil(_ condition: () throws -> Bool) rethrows -> Bool {
+    let deadline = Date().addingTimeInterval(keyboardWaitSeconds)
+    while true {
+      if try condition() {
+        return true
+      }
+      if Date() >= deadline {
+        return false
+      }
+      // An expectation nobody fulfills is the sanctioned XCUITest pause; it
+      // keeps the main run loop turning instead of blocking it.
+      _ = XCTWaiter().wait(
+        for: [XCTestExpectation(description: "settle")], timeout: pollSeconds)
+    }
   }
 
   /// keyboardIsUp answers the question the route's name asks. Existence is
@@ -165,8 +192,7 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     }
     try onMain {
       let app = try Self.foregroundApp(among: appIDs)
-      _ = app.keyboards.firstMatch.waitForExistence(timeout: Self.keyboardWaitSeconds)
-      guard Self.keyboardIsUp(in: app) else {
+      guard try Self.waitUntil({ Self.keyboardIsUp(in: app) }) else {
         throw AutomationError.precondition(
           "no keyboard is on screen, so there is no key to press; focus a text field first")
       }

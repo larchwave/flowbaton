@@ -201,6 +201,17 @@ func hierarchyDepth(of element: WireAXElement) -> Int {
 /// So the check happens first, here, where it is a value a request handler can
 /// refuse on. It lives in the framework rather than beside the XCUITest code
 /// because that makes it testable without a simulator.
+///
+/// KNOWN HOLE, and one wrong way to close it. A dismissed keyboard stays in
+/// the hierarchy parked below the screen, so `isKeyboard` is true on every
+/// screen and this gate is open even where nothing can take typed text.
+/// Gating it on the keyboard's geometry -- the fix that works for /keyboard
+/// and pressKey -- REFUSED EVERY TYPING COMMAND on the Simulator, measured
+/// across two apps (sessions mmx27 and mmx31): the software keyboard does
+/// not present there, while typeText still reaches the focused field. So
+/// screen geometry is not the signal for this question. What is needed is
+/// real keyboard focus, which the public attributes do not carry -- an iOS
+/// text field with the keyboard open reports `hasFocus` false.
 public func canReceiveTyping(in snapshot: any AccessibilitySnapshot) -> Bool {
   if snapshot.focused || snapshot.isKeyboard {
     return true
