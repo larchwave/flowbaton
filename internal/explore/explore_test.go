@@ -46,9 +46,13 @@ func TestPlanPendingOrdersByPriorityThenInsertion(t *testing.T) {
 type scriptedLLM struct {
 	replies []Message
 	calls   int
+	// seen keeps every request as sent, so a test can assert what the
+	// second attempt of a retry actually carried.
+	seen []ChatRequest
 }
 
-func (s *scriptedLLM) Chat(_ context.Context, _ ChatRequest) (ChatResponse, error) {
+func (s *scriptedLLM) Chat(_ context.Context, request ChatRequest) (ChatResponse, error) {
+	s.seen = append(s.seen, request)
 	if s.calls >= len(s.replies) {
 		return ChatResponse{}, errors.New("script exhausted")
 	}

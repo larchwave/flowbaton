@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -51,13 +52,13 @@ func (p *pilot) review(ctx context.Context, logLines []string, final bool) (pilo
 	}
 	text := "Newest steps:\n" + strings.Join(logLines, "\n") + "\n\n" + question
 	request := explore.ChatRequest{Messages: append(append([]explore.Message(nil), p.messages...), explore.Message{Role: explore.RoleUser, Text: text})}
-	response, err := p.llm.Chat(ctx, request)
+	order := pilotOrder{}
+	response, err := explore.ChatJSON(ctx, p.llm, request, &order)
+	if errors.Is(err, explore.ErrUnreadableReply) {
+		return pilotOrder{}, fmt.Errorf("pilot reply: %w", err)
+	}
 	if err != nil {
 		return pilotOrder{}, fmt.Errorf("pilot review: %w", err)
-	}
-	order := pilotOrder{}
-	if err := explore.DecodeReply(response.Message.Text, &order); err != nil {
-		return pilotOrder{}, fmt.Errorf("pilot reply: %w", err)
 	}
 	if order.Decision != "continue" && order.Decision != "stop" {
 		return pilotOrder{}, fmt.Errorf("pilot decision must be continue or stop, got %q", order.Decision)

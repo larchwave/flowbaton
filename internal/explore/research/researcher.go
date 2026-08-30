@@ -104,13 +104,11 @@ func (r *Researcher) proposeSections(ctx context.Context, state *explore.ScreenS
 		{Role: explore.RoleSystem, Text: workerSystemPrompt},
 		{Role: explore.RoleUser, Text: workerTaskPrompt(state.Signature.Key(), table)},
 	}
-	response, err := r.Models.Worker.Chat(ctx, explore.ChatRequest{Messages: messages})
+	reply := sectionsReply{}
+	response, err := explore.ChatJSON(
+		ctx, r.Models.Worker, explore.ChatRequest{Messages: messages}, &reply)
 	if err != nil {
 		return sectionsReply{}, fmt.Errorf("research: section proposal: %w", err)
-	}
-	reply := sectionsReply{}
-	if err := explore.DecodeReply(response.Message.Text, &reply); err != nil {
-		return sectionsReply{}, fmt.Errorf("research: decode section proposal: %w", err)
 	}
 	unknown := unknownIndexes(reply, known)
 	if len(unknown) == 0 {
@@ -120,41 +118,31 @@ func (r *Researcher) proposeSections(ctx context.Context, state *explore.ScreenS
 		Role: explore.RoleUser,
 		Text: correctionPrompt(unknown),
 	})
-	response, err = r.Models.Worker.Chat(ctx, explore.ChatRequest{Messages: messages})
-	if err != nil {
+	if _, err := explore.ChatJSON(
+		ctx, r.Models.Worker, explore.ChatRequest{Messages: messages}, &reply); err != nil {
 		return sectionsReply{}, fmt.Errorf("research: section correction: %w", err)
-	}
-	if err := explore.DecodeReply(response.Message.Text, &reply); err != nil {
-		return sectionsReply{}, fmt.Errorf("research: decode section correction: %w", err)
 	}
 	return dropUnknown(reply, known), nil
 }
 
-// askVision makes the vision call and decodes it, asking once more when the
-// reply does not decode: a vision model corrupts a reply now and then (a
-// stray quote after a two-digit index, seen live), and the notes it carries
-// are enrichment, not something worth losing the session over. A second
-// unreadable reply is the error.
+// askVision makes the vision call and decodes it. A vision model corrupts a
+// reply now and then (a stray quote after a two-digit index, seen live), and
+// the notes it carries are enrichment, not something worth losing the
+// session over -- which is what explore.ChatJSON does for every model call.
 func (r *Researcher) askVision(ctx context.Context, state *explore.ScreenState, table string) (visionReply, error) {
-	var decodeErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		response, err := r.Models.Vision.Chat(ctx, explore.ChatRequest{Messages: []explore.Message{
-			{Role: explore.RoleSystem, Text: visionSystemPrompt},
-			{
-				Role:     explore.RoleUser,
-				Text:     visionTaskPrompt(table),
-				ImagePNG: state.ScreenshotPNG,
-			},
-		}})
-		if err != nil {
-			return visionReply{}, fmt.Errorf("research: visual pass: %w", err)
-		}
-		reply := visionReply{}
-		if decodeErr = explore.DecodeReply(response.Message.Text, &reply); decodeErr == nil {
-			return reply, nil
-		}
+	reply := visionReply{}
+	_, err := explore.ChatJSON(ctx, r.Models.Vision, explore.ChatRequest{Messages: []explore.Message{
+		{Role: explore.RoleSystem, Text: visionSystemPrompt},
+		{
+			Role:     explore.RoleUser,
+			Text:     visionTaskPrompt(table),
+			ImagePNG: state.ScreenshotPNG,
+		},
+	}}, &reply)
+	if err != nil {
+		return visionReply{}, fmt.Errorf("research: visual pass: %w", err)
 	}
-	return visionReply{}, fmt.Errorf("research: decode visual pass: %w", decodeErr)
+	return reply, nil
 }
 
 // mergeVisualNotes runs one vision call over the screenshot and merges the

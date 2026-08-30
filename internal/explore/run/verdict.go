@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -73,19 +74,21 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 		expected, elementTable(facts.Final),
 		driverCheckLines(facts.DriverChecks)+typedLines(facts.Typed),
 		sessionTagLine(facts.SessionTag))
-	response, err := llm.Chat(ctx, explore.ChatRequest{Messages: []explore.Message{
+	verdict := workerVerdict{}
+	_, err := explore.ChatJSON(ctx, llm, explore.ChatRequest{Messages: []explore.Message{
 		{Role: explore.RoleSystem, Text: "You judge test outcomes strictly from the screen content and the driver checks given to you. An outcome that names a specific value or text is met only when exactly that value or text is on the screen; a different value is not met."},
 		{Role: explore.RoleUser, Text: prompt},
-	}})
+	}}, &verdict)
 	if err != nil {
 		check.Missed = explore.MissUnjudged
-		check.Evidence = "outcome check unavailable: " + err.Error()
-		return check
-	}
-	verdict := workerVerdict{}
-	if err := explore.DecodeReply(response.Message.Text, &verdict); err != nil {
-		check.Missed = explore.MissUnjudged
-		check.Evidence = "unreadable outcome reply: " + err.Error()
+		// The report is all an operator gets, and a model that answered
+		// nonsense sends them somewhere different from one that never
+		// answered at all.
+		if errors.Is(err, explore.ErrUnreadableReply) {
+			check.Evidence = "unreadable outcome reply: " + err.Error()
+		} else {
+			check.Evidence = "outcome check unavailable: " + err.Error()
+		}
 		return check
 	}
 	check.Met = verdict.Met

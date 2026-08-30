@@ -319,7 +319,11 @@ func TestResearchVisionRetriesOnceOnAnUnreadableReply(t *testing.T) {
 
 	vision = &scriptedLLM{replies: []string{bad, bad}}
 	researcher = &Researcher{Models: explore.ModelSet{Worker: &scriptedLLM{replies: []string{validSectionsJSON}}, Vision: vision}}
-	if _, err := researcher.Research(context.Background(), state); err == nil || !strings.Contains(err.Error(), "decode visual pass") {
-		t.Fatalf("second bad reply must fail the pass, got %v", err)
+	// Quoting the rejected reply is what separates an unreadable answer from
+	// a provider that is down; a transport failure never carries one. That is
+	// the fact worth pinning, rather than the wrapper's wording.
+	_, err = researcher.Research(context.Background(), state)
+	if err == nil || !strings.Contains(err.Error(), "reply begins") {
+		t.Fatalf("second bad reply must fail the pass with the reply quoted, got %v", err)
 	}
 }

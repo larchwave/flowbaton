@@ -92,6 +92,10 @@ func (p *Planner) matchHints(ctx context.Context, screen explore.ScreenSignature
 // converse invokes the model and decodes the reply, continuing the same
 // conversation once with the decode complaint before giving up.
 func (p *Planner) converse(ctx context.Context, messages []explore.Message) (planReply, error) {
+	// This loop reads like explore.ChatJSON and is deliberately not it: the
+	// retry here also covers an empty scenarios list, which decodes fine.
+	// A planning error aborts the whole session (crew.go), so that second
+	// chance is what keeps an empty plan from ending the run.
 	response, err := p.LLM.Chat(ctx, explore.ChatRequest{Messages: messages})
 	if err != nil {
 		return planReply{}, fmt.Errorf("planning: chat: %w", err)

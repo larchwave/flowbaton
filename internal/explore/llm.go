@@ -3,6 +3,7 @@ package explore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -104,13 +105,62 @@ func UnfencedJSON(text string) string {
 // replyExcerptLimit bounds how much of a rejected reply a decode error quotes.
 const replyExcerptLimit = 240
 
-// DecodeReply unfences a model reply and decodes it strictly into target. A
-// decode failure quotes the start of the reply, because the syntax error
-// alone ("invalid character after object key") says nothing about what the
-// model actually sent. Every model-reply decode goes through here.
+// ChatJSON asks the model once, and asks again when the reply does not
+// decode -- carrying the rejected reply and the error, since the model is
+// the only one who can see what it cut off. A transport failure is returned
+// as it is: that is a provider to wait on, not a reply to correct. A reply
+// that decodes into the wrong answer is the model's answer and is returned
+// too; only unreadable ones are worth a second call.
+func ChatJSON(ctx context.Context, llm LLM, request ChatRequest, target any) (ChatResponse, error) {
+	if llm == nil {
+		return ChatResponse{}, errors.New("explore: nil llm")
+	}
+	response, err := llm.Chat(ctx, request)
+	if err != nil {
+		return ChatResponse{}, err
+	}
+	decodeErr := DecodeReply(response.Message.Text, target)
+	if decodeErr == nil {
+		return response, nil
+	}
+	// The model is the only one who can see why its own reply did not
+	// parse, so the second attempt carries the reply and the error rather
+	// than repeating the question blind. Appending to a fresh slice keeps
+	// the caller's request untouched for a caller that reuses it.
+	retry := ChatRequest{Messages: append(append([]Message(nil), request.Messages...),
+		response.Message,
+		Message{
+			Role: RoleUser,
+			Text: fmt.Sprintf("That reply did not decode: %v. Answer again with only the JSON object in the required shape.", decodeErr),
+		})}
+	response, err = llm.Chat(ctx, retry)
+	if err != nil {
+		return ChatResponse{}, err
+	}
+	if decodeErr = DecodeReply(response.Message.Text, target); decodeErr != nil {
+		return response, decodeErr
+	}
+	return response, nil
+}
+
+// ErrUnreadableReply marks a failure to decode what a model sent, as
+// opposed to a failure to reach it at all. Callers that fold both into one
+// message -- the outcome judge writes the reason into the report -- need to
+// tell an operator which of the two happened.
+var ErrUnreadableReply = errors.New("unreadable model reply")
+
+// unreadableReply carries the mark without printing it: the decode error and
+// the rejected reply are already the whole message, and this text is fed back
+// to the model on a retry.
+type unreadableReply struct{ err error }
+
+func (u unreadableReply) Error() string        { return u.err.Error() }
+func (u unreadableReply) Unwrap() error        { return u.err }
+func (u unreadableReply) Is(target error) bool { return target == ErrUnreadableReply }
+
 func DecodeReply(text string, target any) error {
 	if err := strictjson.Decode([]byte(UnfencedJSON(text)), target); err != nil {
-		return fmt.Errorf("%w; reply begins %q", err, replyExcerpt(text))
+		return unreadableReply{fmt.Errorf("%w; reply begins %q", err, replyExcerpt(text))}
 	}
 	return nil
 }
