@@ -101,3 +101,45 @@ func TestAskWorkerOutcomeMarksAnInapplicableExpectation(t *testing.T) {
 		t.Fatalf("prompt never asks for the flag:\n%s", llm.requests[0].Messages[1].Text)
 	}
 }
+
+// The tester's own finish claim of not-met is a product-failure claim. It
+// must not stay dressed as an expectation the app never promised.
+func TestAFinishClaimOfNotMetClearsInapplicable(t *testing.T) {
+	t.Parallel()
+
+	llm := &scriptedLLM{replies: []explore.Message{
+		textReply(`{"met": false, "inapplicable": true, "evidence": "no such control"}`),
+	}}
+	checks := evaluateOutcomes(
+		context.Background(), llm, []string{"the new reminder is listed"},
+		&explore.ScreenState{},
+		&finishArgs{Outcomes: []finishOutcome{{
+			Expected: "the new reminder is listed",
+			Evidence: "the list still shows No Reminders",
+		}}},
+		nil, nil)
+	if len(checks) != 1 {
+		t.Fatalf("checks = %+v, want one", checks)
+	}
+	if checks[0].Met || checks[0].Inapplicable {
+		t.Fatalf("check = %+v, want unmet and applicable", checks[0])
+	}
+}
+
+// An expectation the app never promised is not an unmet outcome the run
+// failed; the verdict must not count it as one.
+func TestUnmetCountIgnoresInapplicableChecks(t *testing.T) {
+	t.Parallel()
+
+	checks := []explore.OutcomeCheck{
+		{Expected: "a", Met: true},
+		{Expected: "b", Inapplicable: true},
+		{Expected: "c"},
+	}
+	if got := unmetCount(checks); got != 1 {
+		t.Fatalf("unmetCount = %d, want 1", got)
+	}
+	if got := inapplicableCount(checks); got != 1 {
+		t.Fatalf("inapplicableCount = %d, want 1", got)
+	}
+}

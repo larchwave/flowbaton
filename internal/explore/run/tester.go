@@ -140,7 +140,7 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 		result.Verdict = fmt.Sprintf("passed: all %d expected outcome(s) met", len(checks))
 	case session.finish.Status == "passed":
 		result.Status = explore.TestFailed
-		result.Verdict = fmt.Sprintf("failed: %d of %d expected outcome(s) unmet", unmetCount(checks), len(checks))
+		result.Verdict = failedVerdict(checks)
 	default:
 		result.Status = explore.TestFailed
 		result.Verdict = "failed: the model reported failure"
@@ -249,14 +249,37 @@ func stallWarning(steps []explore.StepRecord, streak int) string {
 		streak, failed, unchanged)
 }
 
+// unmetCount counts outcomes the app was expected to produce and did not.
+// An expectation the app never promised is not one of them.
 func unmetCount(checks []explore.OutcomeCheck) int {
 	count := 0
 	for _, check := range checks {
-		if !check.Met {
+		if !check.Met && !check.Inapplicable {
 			count++
 		}
 	}
 	return count
+}
+
+func inapplicableCount(checks []explore.OutcomeCheck) int {
+	count := 0
+	for _, check := range checks {
+		if !check.Met && check.Inapplicable {
+			count++
+		}
+	}
+	return count
+}
+
+// failedVerdict words the two ways a run can miss its outcomes so the step
+// log does not contradict the report, which files them under different
+// headings.
+func failedVerdict(checks []explore.OutcomeCheck) string {
+	verdict := fmt.Sprintf("failed: %d of %d expected outcome(s) unmet", unmetCount(checks), len(checks))
+	if unpromised := inapplicableCount(checks); unpromised > 0 {
+		verdict += fmt.Sprintf(", %d the app never promised", unpromised)
+	}
+	return verdict
 }
 
 func testerSystemText() string {

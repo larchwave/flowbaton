@@ -152,6 +152,9 @@ func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, f
 		}
 		if claim, ok := claims[strings.ToLower(strings.TrimSpace(want))]; ok && !claim.Met {
 			check.Met = false
+			// The tester claims the app failed to do it, which is a product
+			// claim: it outranks the judge's "this app never offers that".
+			check.Inapplicable = false
 			if claim.Evidence != "" {
 				check.Evidence = "model: " + claim.Evidence
 			}

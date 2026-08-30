@@ -23,11 +23,12 @@ type execIssue struct {
 	reason string
 }
 
-// unconfirmed is one run whose only unmet outcomes the app never promised.
-// It is feedback for planning, not a defect anyone can fix in the app.
+// unconfirmed clusters runs whose only unmet outcomes the app never
+// promised. They are feedback for planning, not defects anyone can fix in
+// the app.
 type unconfirmed struct {
-	test     string
 	expected string
+	tests    []string
 	evidence string
 }
 
@@ -46,6 +47,7 @@ type aggregation struct {
 func aggregate(session *explore.SessionReport) aggregation {
 	agg := aggregation{total: len(session.Results)}
 	byKey := map[string]int{}
+	byUnsureKey := map[string]int{}
 	for _, result := range session.Results {
 		name := result.Scenario.Name
 		if result.Status == explore.TestPassed {
@@ -63,10 +65,16 @@ func aggregate(session *explore.SessionReport) aggregation {
 		unmet := firstUnmet(result, false)
 		if unmet == nil {
 			if skipped := firstUnmet(result, true); skipped != nil {
+				key := normalizeOutcome(skipped.Expected)
+				if index, seen := byUnsureKey[key]; seen {
+					agg.unsure[index].tests = append(agg.unsure[index].tests, name)
+					continue
+				}
+				byUnsureKey[key] = len(agg.unsure)
 				agg.unsure = append(agg.unsure, unconfirmed{
-					test:     name,
 					expected: findingTitle(skipped.Expected),
-					evidence: evidenceLine(result, skipped),
+					tests:    []string{name},
+					evidence: judgeEvidence(skipped),
 				})
 				continue
 			}
@@ -133,11 +141,16 @@ func endedOnAFailedStep(result explore.TestResult) (string, bool) {
 	return "driver error: " + truncate(last.ErrText, 120), true
 }
 
-// firstUnmet returns the first unmet outcome whose applicability matches
-// inapplicable. Scanning for an applicable one first keeps a real defect
-// visible even when an expectation the app never promised precedes it.
+// firstUnmet returns the first unmet scenario outcome whose applicability
+// matches inapplicable. Scanning for an applicable one first keeps a real
+// defect visible even when an expectation the app never promised precedes
+// it; skipping the run's own check_visible probes keeps a failed probe from
+// becoming the finding once that scan walks past the scenario outcomes.
 func firstUnmet(result explore.TestResult, inapplicable bool) *explore.OutcomeCheck {
 	for i := range result.Outcomes {
+		if result.Outcomes[i].Driver {
+			continue
+		}
 		if !result.Outcomes[i].Met && result.Outcomes[i].Inapplicable == inapplicable {
 			check := result.Outcomes[i]
 			return &check
@@ -248,6 +261,16 @@ func describeTarget(locator *explore.Locator) string {
 	default:
 		return "the element at path " + locator.Value
 	}
+}
+
+// judgeEvidence quotes only what the judge said. An unconfirmed
+// expectation must not borrow a driver error from the step log: that
+// sentence reads as a defect under a heading that says there is none.
+func judgeEvidence(check *explore.OutcomeCheck) string {
+	if check.Evidence == "" {
+		return "the judge recorded no evidence"
+	}
+	return truncate(check.Evidence, 160)
 }
 
 func evidenceLine(result explore.TestResult, unmet *explore.OutcomeCheck) string {

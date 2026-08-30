@@ -94,6 +94,10 @@ type OutcomeCheck struct {
 	// expectation at all. Such a check is a planning artifact, not a
 	// product defect, and the report keeps it out of the defect list.
 	Inapplicable bool
+	// Driver marks a check_visible probe the run made along the way. It is
+	// evidence for the judge, never the scenario's verdict, so the report
+	// never files one as a finding.
+	Driver bool
 }
 
 // TestStatus is the final verdict for one scenario run.

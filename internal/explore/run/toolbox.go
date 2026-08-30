@@ -528,6 +528,7 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 // recordCheck keeps one check_visible result for the verdict and renders
 // the tool reply.
 func (s *toolSession) recordCheck(check explore.OutcomeCheck) string {
+	check.Driver = true
 	s.checks = append(s.checks, check)
 	epoch := s.epoch
 	suffix := ""

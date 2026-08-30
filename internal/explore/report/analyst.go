@@ -86,6 +86,12 @@ func headlineDigest(session *explore.SessionReport, agg aggregation) string {
 			fmt.Fprintf(builder, "- [%s] %s\n", f.severity, f.title)
 		}
 	}
+	if len(agg.unsure) > 0 {
+		builder.WriteString("Expectations this app never promised (scenario wording, not defects):\n")
+		for _, item := range agg.unsure {
+			fmt.Fprintf(builder, "- %s\n", item.expected)
+		}
+	}
 	if len(agg.issues) > 0 {
 		fmt.Fprintf(builder, "Automation problems kept %d runs from a verdict.\n", len(agg.issues))
 	}
@@ -96,10 +102,14 @@ func deterministicHeadline(session *explore.SessionReport, agg aggregation) stri
 	if agg.total == 0 {
 		return fmt.Sprintf("No scenarios ran against %s.", session.AppID)
 	}
-	return fmt.Sprintf(
-		"%s on %s: %d of %d scenarios passed, %d defect findings, %d runs with execution problems.",
+	headline := fmt.Sprintf(
+		"%s on %s: %d of %d scenarios passed, %d defect findings, %d runs with execution problems",
 		session.AppID, session.Platform, len(agg.passed), agg.total, len(agg.findings), len(agg.issues),
 	)
+	if len(agg.unsure) > 0 {
+		headline += fmt.Sprintf(", %d with an expectation the app never promised", len(agg.unsure))
+	}
+	return headline + "."
 }
 
 func render(headline string, session *explore.SessionReport, agg aggregation) string {
@@ -135,7 +145,8 @@ func render(headline string, session *explore.SessionReport, agg aggregation) st
 		builder.WriteString("\n## Unconfirmed expectations\n\n")
 		builder.WriteString("The app never promised these, so they are scenario wording to fix, not defects.\n\n")
 		for _, item := range agg.unsure {
-			fmt.Fprintf(builder, "- `%s`: %s\n  Evidence: %s\n", item.test, item.expected, item.evidence)
+			fmt.Fprintf(builder, "- %s (tests: %s)\n  Evidence: %s\n",
+				item.expected, backticked(item.tests), item.evidence)
 		}
 	}
 	if len(agg.issues) > 0 {

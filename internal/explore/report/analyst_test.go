@@ -325,3 +325,82 @@ func TestARealDefectSurvivesAnInapplicableOutcomeBeforeIt(t *testing.T) {
 		t.Fatalf("a run with a real defect should not also be listed as unconfirmed:\n%s", markdown)
 	}
 }
+
+// The run's own check_visible probes ride along in Outcomes. Scanning past
+// an inapplicable scenario outcome must not land on a failed probe and file
+// it as the defect -- that reopens the false [High] this section closed.
+func TestADriverProbeIsNeverTheDefect(t *testing.T) {
+	result := failedResult("complete a reminder", explore.PriorityCritical, "the Completed tile is selected")
+	result.Outcomes[0].Inapplicable = true
+	result.Outcomes = append(result.Outcomes, explore.OutcomeCheck{
+		Expected: `visible: text "Completed"`,
+		Evidence: "no matching element in the current tree",
+		Driver:   true,
+	})
+	session := &explore.SessionReport{
+		AppID:    "com.apple.reminders",
+		Platform: "ios",
+		Results:  []explore.TestResult{result},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if strings.Contains(markdown, "## Defects") {
+		t.Fatalf("a driver probe became the defect:\n%s", markdown)
+	}
+	if !strings.Contains(markdown, "## Unconfirmed expectations") {
+		t.Fatalf("want the run under unconfirmed expectations:\n%s", markdown)
+	}
+}
+
+// Several scenarios carrying the same unpromised expectation are one line,
+// the way defects on the same outcome cluster.
+func TestUnconfirmedExpectationsClusterOnTheOutcome(t *testing.T) {
+	session := &explore.SessionReport{AppID: "com.apple.reminders", Platform: "ios"}
+	for _, name := range []string{"complete from list", "complete from detail"} {
+		result := failedResult(name, explore.PriorityNormal, "the Completed tile is selected")
+		result.Outcomes[0].Inapplicable = true
+		session.Results = append(session.Results, result)
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if count := strings.Count(markdown, "the Completed tile is selected"); count != 1 {
+		t.Fatalf("want one clustered entry, got %d:\n%s", count, markdown)
+	}
+	for _, name := range []string{"complete from list", "complete from detail"} {
+		if !strings.Contains(markdown, "`"+name+"`") {
+			t.Errorf("entry is missing test %q:\n%s", name, markdown)
+		}
+	}
+}
+
+// The headline is the only line many readers see; a run that is neither a
+// pass, a defect, nor an execution problem must still be counted there, and
+// the manager model must see it in its digest.
+func TestUnconfirmedRunsReachTheHeadlineAndTheDigest(t *testing.T) {
+	result := failedResult("complete a reminder", explore.PriorityNormal, "the Completed tile is selected")
+	result.Outcomes[0].Inapplicable = true
+	session := &explore.SessionReport{
+		AppID:    "com.apple.reminders",
+		Platform: "ios",
+		Results:  []explore.TestResult{result, passedResult("open the list")},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if !strings.Contains(markdown, "1 with an expectation the app never promised") {
+		t.Errorf("headline drops the unconfirmed run:\n%s", markdown)
+	}
+	llm := &scriptedLLM{reply: explore.ChatResponse{Message: explore.Message{Text: "prose"}}}
+	if _, err := (Analyst{Manager: llm}).Report(context.Background(), session); err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	digest := llm.requests[0].Messages[1].Text
+	if !strings.Contains(digest, "the Completed tile is selected") {
+		t.Errorf("digest never mentions the unconfirmed expectation:\n%s", digest)
+	}
+}
