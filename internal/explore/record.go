@@ -84,16 +84,32 @@ func (e TargetMissError) Error() string {
 	return e.Reason
 }
 
+// MissReason says why an expected outcome was not met. It is meaningful
+// only on an unmet check, and its zero value is a product defect: a judge
+// that cannot classify a miss must not talk the report out of reporting
+// one.
+type MissReason string
+
+// Reasons an expected outcome went unmet.
+const (
+	// MissDefect: the app was expected to produce the outcome and did not.
+	MissDefect MissReason = ""
+	// MissUnpromised: the app has no such feature, or the screen cannot
+	// express the expectation at all. Scenario wording, not a defect.
+	MissUnpromised MissReason = "unpromised"
+	// MissUnjudged: no verdict was reached, because the judge model failed
+	// or answered unreadably. An automation problem, not a product one.
+	MissUnjudged MissReason = "unjudged"
+)
+
 // OutcomeCheck is one expected outcome with its verification result.
 type OutcomeCheck struct {
 	Expected string
 	Met      bool
 	Evidence string
-	// Inapplicable marks an unmet outcome the app never promised: the
-	// feature does not exist or the screen cannot express the
-	// expectation at all. Such a check is a planning artifact, not a
-	// product defect, and the report keeps it out of the defect list.
-	Inapplicable bool
+	// Missed classifies an unmet outcome so the report can separate a
+	// product defect from a planning artifact and from a missing verdict.
+	Missed MissReason
 	// Driver marks a check_visible probe the run made along the way. It is
 	// evidence for the judge, never the scenario's verdict, so the report
 	// never files one as a finding.

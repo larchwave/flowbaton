@@ -145,7 +145,7 @@ func finishReport(report *SessionReport, config Config) *SessionReport {
 // already listed is dropped.
 func collectUnpromised(known []string, result TestResult) []string {
 	for _, check := range result.Outcomes {
-		if check.Met || !check.Inapplicable || check.Driver {
+		if check.Met || check.Missed != MissUnpromised || check.Driver {
 			continue
 		}
 		if slices.Contains(known, check.Expected) {

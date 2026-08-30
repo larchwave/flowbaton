@@ -274,7 +274,7 @@ func TestARunEndingOnAMissedTargetIsNeitherADefectNorADriverError(t *testing.T) 
 // as [High] although iOS tiles carry no selected state.
 func TestInapplicableOutcomeIsNotADefect(t *testing.T) {
 	result := failedResult("complete a reminder", explore.PriorityCritical, "the Completed tile is selected")
-	result.Outcomes[0].Inapplicable = true
+	result.Outcomes[0].Missed = explore.MissUnpromised
 	result.Outcomes[0].Evidence = "no tile carries a selected state"
 	session := &explore.SessionReport{
 		AppID:    "com.apple.reminders",
@@ -304,7 +304,7 @@ func TestInapplicableOutcomeIsNotADefect(t *testing.T) {
 // One inapplicable outcome must not hide a real defect recorded after it.
 func TestARealDefectSurvivesAnInapplicableOutcomeBeforeIt(t *testing.T) {
 	result := failedResult("save a reminder", explore.PriorityCritical, "the Completed tile is selected")
-	result.Outcomes[0].Inapplicable = true
+	result.Outcomes[0].Missed = explore.MissUnpromised
 	result.Outcomes = append(result.Outcomes, explore.OutcomeCheck{
 		Expected: "the new reminder is listed",
 		Evidence: "the list is unchanged",
@@ -331,7 +331,7 @@ func TestARealDefectSurvivesAnInapplicableOutcomeBeforeIt(t *testing.T) {
 // it as the defect -- that reopens the false [High] this section closed.
 func TestADriverProbeIsNeverTheDefect(t *testing.T) {
 	result := failedResult("complete a reminder", explore.PriorityCritical, "the Completed tile is selected")
-	result.Outcomes[0].Inapplicable = true
+	result.Outcomes[0].Missed = explore.MissUnpromised
 	result.Outcomes = append(result.Outcomes, explore.OutcomeCheck{
 		Expected: `visible: text "Completed"`,
 		Evidence: "no matching element in the current tree",
@@ -360,7 +360,7 @@ func TestUnconfirmedExpectationsClusterOnTheOutcome(t *testing.T) {
 	session := &explore.SessionReport{AppID: "com.apple.reminders", Platform: "ios"}
 	for _, name := range []string{"complete from list", "complete from detail"} {
 		result := failedResult(name, explore.PriorityNormal, "the Completed tile is selected")
-		result.Outcomes[0].Inapplicable = true
+		result.Outcomes[0].Missed = explore.MissUnpromised
 		session.Results = append(session.Results, result)
 	}
 	markdown, err := Analyst{}.Report(context.Background(), session)
@@ -382,7 +382,7 @@ func TestUnconfirmedExpectationsClusterOnTheOutcome(t *testing.T) {
 // the manager model must see it in its digest.
 func TestUnconfirmedRunsReachTheHeadlineAndTheDigest(t *testing.T) {
 	result := failedResult("complete a reminder", explore.PriorityNormal, "the Completed tile is selected")
-	result.Outcomes[0].Inapplicable = true
+	result.Outcomes[0].Missed = explore.MissUnpromised
 	session := &explore.SessionReport{
 		AppID:    "com.apple.reminders",
 		Platform: "ios",
@@ -440,5 +440,51 @@ func TestCountsAreWordedForOneAndForMany(t *testing.T) {
 		if !strings.Contains(markdown, want) {
 			t.Errorf("want %q in:\n%s", want, markdown)
 		}
+	}
+}
+
+// A judge that never answered leaves no product verdict. Filing the
+// outcome as a defect blames the app for the provider being down.
+func TestAnUnjudgedOutcomeIsAnExecutionProblem(t *testing.T) {
+	result := failedResult("create a reminder", explore.PriorityCritical, "the new reminder is listed")
+	result.Outcomes[0].Missed = explore.MissUnjudged
+	result.Outcomes[0].Evidence = "outcome check unavailable: context deadline exceeded"
+	session := &explore.SessionReport{
+		AppID:    "com.apple.reminders",
+		Platform: "ios",
+		Results:  []explore.TestResult{result},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if strings.Contains(markdown, "## Defects") || strings.Contains(markdown, "## Unconfirmed") {
+		t.Fatalf("an unjudged outcome became a product finding:\n%s", markdown)
+	}
+	if !strings.Contains(markdown, "## Execution issues") ||
+		!strings.Contains(markdown, "context deadline exceeded") {
+		t.Fatalf("want the judge failure under execution issues:\n%s", markdown)
+	}
+}
+
+// A confirmed defect outranks an unjudged outcome in the same run: the
+// signal is real, the missing verdict is not.
+func TestADefectOutranksAnUnjudgedOutcome(t *testing.T) {
+	result := failedResult("create a reminder", explore.PriorityCritical, "the toast appears")
+	result.Outcomes[0].Missed = explore.MissUnjudged
+	result.Outcomes = append(result.Outcomes, explore.OutcomeCheck{
+		Expected: "the new reminder is listed",
+		Evidence: "the list is unchanged",
+	})
+	session := &explore.SessionReport{
+		AppID: "com.apple.reminders", Platform: "ios",
+		Results: []explore.TestResult{result},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), session)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if !strings.Contains(markdown, "- [High] the new reminder is listed") {
+		t.Fatalf("want the confirmed defect:\n%s", markdown)
 	}
 }

@@ -191,9 +191,9 @@ func TestRunSessionCarriesUnpromisedExpectationsBackToThePlanner(t *testing.T) {
 			{{Name: "b", Priority: PriorityNormal}},
 		},
 		outcomes: []OutcomeCheck{
-			{Expected: "the Completed tile is selected", Inapplicable: true},
+			{Expected: "the Completed tile is selected", Missed: MissUnpromised},
 			{Expected: "the list is empty"},
-			{Expected: `visible: text "Completed"`, Inapplicable: true, Driver: true},
+			{Expected: `visible: text "Completed"`, Missed: MissUnpromised, Driver: true},
 		},
 	}
 	crew := Crew{

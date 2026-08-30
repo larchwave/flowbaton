@@ -89,12 +89,12 @@ func TestAskWorkerOutcomeMarksAnInapplicableExpectation(t *testing.T) {
 	}}
 	marked := askWorkerOutcome(
 		context.Background(), llm, "the Completed tile is selected", &explore.ScreenState{}, nil, nil)
-	if marked.Met || !marked.Inapplicable {
+	if marked.Met || marked.Missed != explore.MissUnpromised {
 		t.Fatalf("check = %+v, want unmet and inapplicable", marked)
 	}
 	plain := askWorkerOutcome(
 		context.Background(), llm, "the row reads Done", &explore.ScreenState{}, nil, nil)
-	if plain.Met || plain.Inapplicable {
+	if plain.Met || plain.Missed != explore.MissDefect {
 		t.Fatalf("check = %+v, want unmet and applicable", plain)
 	}
 	if !strings.Contains(llm.requests[0].Messages[1].Text, "inapplicable") {
@@ -121,7 +121,7 @@ func TestAFinishClaimOfNotMetClearsInapplicable(t *testing.T) {
 	if len(checks) != 1 {
 		t.Fatalf("checks = %+v, want one", checks)
 	}
-	if checks[0].Met || checks[0].Inapplicable {
+	if checks[0].Met || checks[0].Missed != explore.MissDefect {
 		t.Fatalf("check = %+v, want unmet and applicable", checks[0])
 	}
 }
@@ -133,13 +133,39 @@ func TestUnmetCountIgnoresInapplicableChecks(t *testing.T) {
 
 	checks := []explore.OutcomeCheck{
 		{Expected: "a", Met: true},
-		{Expected: "b", Inapplicable: true},
+		{Expected: "b", Missed: explore.MissUnpromised},
 		{Expected: "c"},
 	}
 	if got := unmetCount(checks); got != 1 {
 		t.Fatalf("unmetCount = %d, want 1", got)
 	}
-	if got := inapplicableCount(checks); got != 1 {
-		t.Fatalf("inapplicableCount = %d, want 1", got)
+	if got := missCount(checks, explore.MissUnpromised); got != 1 {
+		t.Fatalf("missCount(unpromised) = %d, want 1", got)
+	}
+}
+
+// A provider failure and an unreadable reply are automation problems. The
+// check must say so instead of leaving a plain unmet outcome the report
+// files as a defect.
+func TestAJudgeThatCannotAnswerMarksTheOutcomeUnjudged(t *testing.T) {
+	t.Parallel()
+
+	// An empty script errors on the first call, the way a dead provider does.
+	broken := &scriptedLLM{}
+	check := askWorkerOutcome(
+		context.Background(), broken, "the new reminder is listed", &explore.ScreenState{}, nil, nil)
+	if check.Met || check.Missed != explore.MissUnjudged {
+		t.Fatalf("check = %+v, want unjudged", check)
+	}
+	garbled := &scriptedLLM{replies: []explore.Message{textReply("I think it worked")}}
+	check = askWorkerOutcome(
+		context.Background(), garbled, "the new reminder is listed", &explore.ScreenState{}, nil, nil)
+	if check.Met || check.Missed != explore.MissUnjudged {
+		t.Fatalf("check = %+v, want unjudged", check)
+	}
+	absent := askWorkerOutcome(
+		context.Background(), nil, "the new reminder is listed", &explore.ScreenState{}, nil, nil)
+	if absent.Missed != explore.MissUnjudged {
+		t.Fatalf("check = %+v, want unjudged", absent)
 	}
 }

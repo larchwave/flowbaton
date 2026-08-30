@@ -58,6 +58,7 @@ type workerVerdict struct {
 func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, final *explore.ScreenState, driverChecks []explore.OutcomeCheck, typed []string) explore.OutcomeCheck {
 	check := explore.OutcomeCheck{Expected: expected}
 	if llm == nil {
+		check.Missed = explore.MissUnjudged
 		check.Evidence = "no model available for this check"
 		return check
 	}
@@ -75,17 +76,21 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fin
 		{Role: explore.RoleUser, Text: prompt},
 	}})
 	if err != nil {
+		check.Missed = explore.MissUnjudged
 		check.Evidence = "outcome check unavailable: " + err.Error()
 		return check
 	}
 	verdict := workerVerdict{}
 	if err := explore.DecodeReply(response.Message.Text, &verdict); err != nil {
+		check.Missed = explore.MissUnjudged
 		check.Evidence = "unreadable outcome reply: " + err.Error()
 		return check
 	}
 	check.Met = verdict.Met
 	check.Evidence = verdict.Evidence
-	check.Inapplicable = !verdict.Met && verdict.Inapplicable
+	if !verdict.Met && verdict.Inapplicable {
+		check.Missed = explore.MissUnpromised
+	}
 	return check
 }
 
@@ -153,8 +158,9 @@ func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, f
 		if claim, ok := claims[strings.ToLower(strings.TrimSpace(want))]; ok && !claim.Met {
 			check.Met = false
 			// The tester claims the app failed to do it, which is a product
-			// claim: it outranks the judge's "this app never offers that".
-			check.Inapplicable = false
+			// claim: it outranks the judge's "this app never offers that"
+			// and its silence alike.
+			check.Missed = explore.MissDefect
 			if claim.Evidence != "" {
 				check.Evidence = "model: " + claim.Evidence
 			}

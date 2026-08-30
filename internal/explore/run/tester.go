@@ -252,19 +252,14 @@ func stallWarning(steps []explore.StepRecord, streak int) string {
 // unmetCount counts outcomes the app was expected to produce and did not.
 // An expectation the app never promised is not one of them.
 func unmetCount(checks []explore.OutcomeCheck) int {
-	count := 0
-	for _, check := range checks {
-		if !check.Met && !check.Inapplicable {
-			count++
-		}
-	}
-	return count
+	return missCount(checks, explore.MissDefect)
 }
 
-func inapplicableCount(checks []explore.OutcomeCheck) int {
+// missCount counts unmet outcomes that went unmet for one reason.
+func missCount(checks []explore.OutcomeCheck, reason explore.MissReason) int {
 	count := 0
 	for _, check := range checks {
-		if !check.Met && check.Inapplicable {
+		if !check.Met && check.Missed == reason {
 			count++
 		}
 	}
@@ -276,8 +271,11 @@ func inapplicableCount(checks []explore.OutcomeCheck) int {
 // headings.
 func failedVerdict(checks []explore.OutcomeCheck) string {
 	verdict := fmt.Sprintf("failed: %d of %d expected outcome(s) unmet", unmetCount(checks), len(checks))
-	if unpromised := inapplicableCount(checks); unpromised > 0 {
+	if unpromised := missCount(checks, explore.MissUnpromised); unpromised > 0 {
 		verdict += fmt.Sprintf(", %d the app never promised", unpromised)
+	}
+	if unjudged := missCount(checks, explore.MissUnjudged); unjudged > 0 {
+		verdict += fmt.Sprintf(", %d never judged", unjudged)
 	}
 	return verdict
 }

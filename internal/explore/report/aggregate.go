@@ -62,9 +62,18 @@ func aggregate(session *explore.SessionReport) aggregation {
 			agg.issues = append(agg.issues, execIssue{test: name, reason: reason})
 			continue
 		}
-		unmet := firstUnmet(result, false)
+		unmet := firstUnmet(result, explore.MissDefect)
 		if unmet == nil {
-			if skipped := firstUnmet(result, true); skipped != nil {
+			// A missing verdict outranks an unpromised expectation: the run
+			// was not judged, so its remaining classification is a guess.
+			if unjudged := firstUnmet(result, explore.MissUnjudged); unjudged != nil {
+				agg.issues = append(agg.issues, execIssue{
+					test:   name,
+					reason: "the judge reached no verdict: " + judgeEvidence(unjudged),
+				})
+				continue
+			}
+			if skipped := firstUnmet(result, explore.MissUnpromised); skipped != nil {
 				key := normalizeOutcome(skipped.Expected)
 				if index, seen := byUnsureKey[key]; seen {
 					agg.unsure[index].tests = append(agg.unsure[index].tests, name)
@@ -141,17 +150,17 @@ func endedOnAFailedStep(result explore.TestResult) (string, bool) {
 	return "driver error: " + truncate(last.ErrText, 120), true
 }
 
-// firstUnmet returns the first unmet scenario outcome whose applicability
-// matches inapplicable. Scanning for an applicable one first keeps a real
-// defect visible even when an expectation the app never promised precedes
-// it; skipping the run's own check_visible probes keeps a failed probe from
+// firstUnmet returns the first unmet scenario outcome that went unmet for
+// the given reason. Callers ask for a defect first, so a real one stays
+// visible even when an unpromised or unjudged outcome precedes it;
+// skipping the run's own check_visible probes keeps a failed probe from
 // becoming the finding once that scan walks past the scenario outcomes.
-func firstUnmet(result explore.TestResult, inapplicable bool) *explore.OutcomeCheck {
+func firstUnmet(result explore.TestResult, reason explore.MissReason) *explore.OutcomeCheck {
 	for i := range result.Outcomes {
 		if result.Outcomes[i].Driver {
 			continue
 		}
-		if !result.Outcomes[i].Met && result.Outcomes[i].Inapplicable == inapplicable {
+		if !result.Outcomes[i].Met && result.Outcomes[i].Missed == reason {
 			check := result.Outcomes[i]
 			return &check
 		}
