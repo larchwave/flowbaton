@@ -70,7 +70,10 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 	}
 	state, err := crew.Navigator.EnsureReady(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("explore: prepare app: %w", err)
+		// The report is already built and carries the session header. The
+		// caller writes artifacts from whatever it is handed, so throwing it
+		// away here costs the failed run the little evidence it has.
+		return report, fmt.Errorf("explore: prepare app: %w", err)
 	}
 
 	executed := 0

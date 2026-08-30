@@ -271,6 +271,15 @@ func writeExploreArtifacts(
 	options exploreOptions,
 	stdout, stderr io.Writer,
 ) (string, []string, error) {
+	// The failure path calls this with whatever the session had, and a
+	// session that died before it had a report has none: an app that never
+	// reaches the foreground, a crew that will not assemble, a recording that
+	// will not start. Every one of those arrived here as a nil pointer and
+	// crashed the CLI on the next line, which buried the failure an operator
+	// had come for. An empty session writes empty artifacts instead.
+	if report == nil {
+		report = &explore.SessionReport{AppID: options.AppID, Platform: options.Platform}
+	}
 	markdown := report.Markdown
 	if markdown != "" && !strings.HasSuffix(markdown, "\n") {
 		markdown += "\n"

@@ -30,13 +30,15 @@ func fakeModelSet() explore.ModelSet {
 // exploreCrewFake is one struct wearing every crew role: it plans a single
 // scenario, runs it through the injected tester, and renders a fixed report.
 type exploreCrewFake struct {
-	state     *explore.ScreenState
-	planned   bool
-	scenarios []explore.Scenario
-	tester    func(explore.Scenario) (*explore.TestResult, error)
-	report    string
-	flowYAML  []byte
-	exportErr error
+	state       *explore.ScreenState
+	planned     bool
+	scenarios   []explore.Scenario
+	tester      func(explore.Scenario) (*explore.TestResult, error)
+	report      string
+	flowYAML    []byte
+	exportErr   error
+	researchErr error
+	readyErr    error
 }
 
 func newExploreCrewFake() *exploreCrewFake {
@@ -55,6 +57,9 @@ func (f *exploreCrewFake) Observe(context.Context) (*explore.ScreenState, error)
 }
 
 func (f *exploreCrewFake) Research(_ context.Context, s *explore.ScreenState) (*explore.UIMap, error) {
+	if f.researchErr != nil {
+		return nil, f.researchErr
+	}
 	return &explore.UIMap{Screen: s.Signature}, nil
 }
 
@@ -76,6 +81,9 @@ func (f *exploreCrewFake) RunScenario(
 }
 
 func (f *exploreCrewFake) EnsureReady(context.Context) (*explore.ScreenState, error) {
+	if f.readyErr != nil {
+		return nil, f.readyErr
+	}
 	return f.state, nil
 }
 
@@ -655,5 +663,33 @@ func TestExploreRunKeepsTheArtifactsOfAFailedSession(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outputDir, "steps-mmx22.md")); err != nil {
 		t.Fatalf("the step log is missing: %v", err)
+	}
+}
+
+// A session that dies before it has a report hands the abort path a nil one,
+// and the path wrote to it without looking: `flowbaton explore` against
+// com.apple.mobilenotes crashed with a nil dereference at
+// writeExploreArtifacts instead of naming the failure. The crash also buried
+// the real cause, which is the thing an operator needed.
+func TestExploreRunReportsAFailureThatCameBeforeAnyReport(t *testing.T) {
+	t.Parallel()
+
+	fake := newExploreCrewFake()
+	// An app that never comes to the foreground is the earliest failure a
+	// real session hits, and the one that crashed: `flowbaton explore` on an
+	// app the simulator does not carry died on a nil dereference inside
+	// writeExploreArtifacts instead of naming the failure, burying the very
+	// cause an operator needed.
+	fake.readyErr = errors.New("prepare app: the app never came to the foreground")
+	runner := assembledExploreRunner(fake, permissiveDriver())
+
+	var stdout, stderr bytes.Buffer
+	outputDir := filepath.Join(t.TempDir(), "out")
+	args := exploreArgs(outputDir, t.TempDir())
+	if got := runner.Run(context.Background(), args, &stdout, &stderr); got == ExitOK {
+		t.Fatalf("exit = %d, want a failure; stderr: %s", got, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "the app never came to the foreground") {
+		t.Fatalf("the cause of the failure never reached stderr: %q", stderr.String())
 	}
 }
