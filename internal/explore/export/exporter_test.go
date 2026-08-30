@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/larchwave/flowbaton/internal/explore"
+	"github.com/larchwave/flowbaton/internal/flow"
 )
 
 func step(index int, kind explore.ActionKind, target *explore.Locator, text, direction string) explore.StepRecord {
@@ -224,5 +225,38 @@ func TestExportKeepsLiteralAsterisks(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `"***"`) || strings.Contains(string(data), "FLOWBATON_EXPLORE_SECRET") {
 		t.Fatalf("literal asterisks were treated as a mask:\n%s", data)
+	}
+}
+
+func TestExportedCountSelectorSurvivesTheYAMLRoundTrip(t *testing.T) {
+	// A generalized count selector is the first exported value carrying a
+	// backslash. YAML double quotes give the backslash its own meaning, so
+	// the pattern has to come back out of the parser byte for byte or the
+	// flow taps nothing.
+	pattern := `All, \d+ reminders`
+	result := passingResult(
+		step(1, explore.ActionTap, &explore.Locator{Kind: explore.LocatorText, Value: pattern}, "", ""),
+	)
+	data, err := (Exporter{}).ExportFlow(result, "com.apple.reminders")
+	if err != nil {
+		t.Fatalf("ExportFlow: %v", err)
+	}
+	parsed, err := flow.ParseBytes("flow.yaml", data)
+	if err != nil {
+		t.Fatalf("the exported flow does not parse:\n%s\n%v", data, err)
+	}
+	found := false
+	for _, command := range parsed.Commands {
+		if command.Selector == nil || command.Selector.TextRegex == nil {
+			continue
+		}
+		found = true
+		if *command.Selector.TextRegex != pattern {
+			t.Fatalf("parsed text selector = %q, want %q\nYAML:\n%s",
+				*command.Selector.TextRegex, pattern, data)
+		}
+	}
+	if !found {
+		t.Fatalf("no text selector survived the round trip:\n%s", data)
 	}
 }

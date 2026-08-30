@@ -6,6 +6,9 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/explore"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
+	"github.com/larchwave/flowbaton/internal/matching"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 func TestElementTableMarksTextInputsAndKeyboardFocus(t *testing.T) {
@@ -150,5 +153,86 @@ func TestDecodeTargetReadsARowNamePassedAsAnID(t *testing.T) {
 	}
 	if _, err = decodeTarget([]byte(`{"idx":1}`), state); err == nil {
 		t.Fatal("unknown field accepted")
+	}
+}
+
+func TestLabelLocatorGeneralizesACountSoTheFlowSurvivesOtherData(t *testing.T) {
+	// A label unique on the screen can still carry app state: session mmx23
+	// exported `tapOn "All, 12 reminders"`, which stops matching the moment
+	// the list holds a different number. The engine compiles every text
+	// selector as a regexp anchored to the whole value, so the digits can
+	// become \d+ and the selector keeps meaning the row it came from.
+	state := &explore.ScreenState{Elements: []explore.FlatElement{
+		{EIDX: 0, Path: "0/0", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "All, 12 reminders", "bounds": "[0,0][10,10]"}}},
+		// No digits: nothing to generalize, so the label stays literal.
+		{EIDX: 1, Path: "0/1", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "New Reminder", "bounds": "[0,0][10,10]"}}},
+		// Regexp metacharacters in the label must be escaped, or the
+		// selector stops matching the very row it was written for.
+		{EIDX: 2, Path: "0/2", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "Total: $5.00 (2 items)", "bounds": "[0,0][10,10]"}}},
+		// Generalizing would collide with e4, so the literal label wins:
+		// a selector that matches two rows is worse than a brittle one.
+		{EIDX: 3, Path: "0/3", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "Slot 1", "bounds": "[0,0][10,10]"}}},
+		{EIDX: 4, Path: "0/4", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "Slot 2", "bounds": "[0,0][10,10]"}}},
+	}}
+	want := []explore.Locator{
+		{Kind: explore.LocatorText, Value: `All, \d+ reminders`},
+		{Kind: explore.LocatorText, Value: "New Reminder"},
+		{Kind: explore.LocatorText, Value: `Total: \$\d+\.\d+ \(\d+ items\)`},
+		{Kind: explore.LocatorText, Value: "Slot 1"},
+		{Kind: explore.LocatorText, Value: "Slot 2"},
+	}
+	for eidx, expected := range want {
+		index := eidx
+		got := (targetArgs{EIDX: &index}).locator(state)
+		if got == nil || *got != expected {
+			t.Fatalf("e%d locator = %+v, want %+v", eidx, got, expected)
+		}
+	}
+}
+
+func TestAGeneralizedCountSelectorStillFindsTheRowOnAnyData(t *testing.T) {
+	// The point of generalizing is that the DEVICE matcher accepts the
+	// selector: a pattern the exporter is proud of and the engine cannot
+	// use is worse than the literal it replaced. This runs the real
+	// matcher, once on the count the flow was recorded with and once on a
+	// different one, and pins that the literal fails the second.
+	state := &explore.ScreenState{Elements: []explore.FlatElement{
+		{EIDX: 0, Path: "0/0", Node: device.TreeNode{Attributes: map[string]string{
+			"label": "All, 12 reminders", "bounds": "[0,0][10,10]"}}},
+	}}
+	index := 0
+	got := (targetArgs{EIDX: &index}).locator(state)
+	if got == nil || got.Kind != explore.LocatorText {
+		t.Fatalf("locator = %+v, want a text selector", got)
+	}
+
+	find := func(pattern, label string) int {
+		root, err := hierarchy.New(device.TreeNode{Children: []device.TreeNode{
+			{Attributes: map[string]string{"text": label, "bounds": "[0,0][10,10]"}},
+		}})
+		if err != nil {
+			t.Fatalf("normalize tree: %v", err)
+		}
+		found, err := matching.Find(root, model.ElementSelector{TextRegex: &pattern})
+		if err != nil {
+			t.Fatalf("selector %q: %v", pattern, err)
+		}
+		return len(found)
+	}
+
+	for _, label := range []string{"All, 12 reminders", "All, 3 reminders", "All, 0 reminders"} {
+		if find(got.Value, label) != 1 {
+			t.Fatalf("selector %q did not find %q", got.Value, label)
+		}
+	}
+	// Negative control: the literal the exporter wrote before only matches
+	// the one count it was recorded with.
+	if find("All, 12 reminders", "All, 3 reminders") != 0 {
+		t.Fatal("the literal label matched a different count, so this test proves nothing")
 	}
 }

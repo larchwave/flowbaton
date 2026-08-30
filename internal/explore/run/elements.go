@@ -202,6 +202,9 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 		return &explore.Locator{Kind: explore.LocatorID, Value: id}
 	}
 	if label := elementLabel(element.Node); label != "" && labelCount(state, label) == 1 {
+		if pattern, ok := generalizeCount(state, label); ok {
+			return &explore.Locator{Kind: explore.LocatorText, Value: pattern}
+		}
 		return &explore.Locator{Kind: explore.LocatorText, Value: label}
 	}
 	if bounds, ok := explore.ElementBounds(element.Node); ok {
@@ -209,6 +212,47 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 		return &explore.Locator{Kind: explore.LocatorPoint, Value: explore.PointLocator(center)}
 	}
 	return &explore.Locator{Kind: explore.LocatorPath, Value: element.Path}
+}
+
+// digitRun matches the digit runs of a label.
+var digitRun = regexp.MustCompile(`[0-9]+`)
+
+// generalizeCount answers a text selector that survives a changed count.
+// A label unique on one screen can still carry app state -- "All, 12
+// reminders" names a row by how much is in it -- and a flow written with
+// that literal stops matching the moment the data differs. Every text
+// selector reaches the device as a regexp anchored to the whole value, so
+// the digits can become \d+ while the rest is escaped and keeps meaning
+// itself.
+//
+// Answers false when there is nothing to generalize, or when generalizing
+// would aim the selector at a second row as well: a selector that matches
+// two rows taps the wrong one, which is worse than a brittle one that taps
+// nothing.
+func generalizeCount(state *explore.ScreenState, label string) (string, bool) {
+	if !digitRun.MatchString(label) {
+		return "", false
+	}
+	// QuoteMeta escapes the metacharacters and leaves digits alone, so the
+	// digit runs of the quoted text are still the digit runs of the label.
+	pattern := digitRun.ReplaceAllString(regexp.QuoteMeta(label), `\d+`)
+	// Mirrors compilePattern in internal/matching: a text selector is
+	// anchored to the whole value and case-folded. Counting matches under
+	// any looser rule would call a selector unique that the device does not.
+	compiled, err := regexp.Compile(`(?ims:^(?:` + pattern + `)$)`)
+	if err != nil {
+		return "", false
+	}
+	matches := 0
+	for _, element := range state.Elements {
+		if other := elementLabel(element.Node); other != "" && compiled.MatchString(other) {
+			matches++
+		}
+	}
+	if matches != 1 {
+		return "", false
+	}
+	return pattern, true
 }
 
 func labelCount(state *explore.ScreenState, label string) int {
