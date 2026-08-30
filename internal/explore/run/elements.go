@@ -205,7 +205,10 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 		if pattern, ok := generalizeCount(state, label); ok {
 			return &explore.Locator{Kind: explore.LocatorText, Value: pattern}
 		}
-		return &explore.Locator{Kind: explore.LocatorText, Value: label}
+		// Escaped: a text selector is compiled as a regexp, so an unescaped
+		// "a*b" also matches "b" and "aab", and an unbalanced bracket does
+		// not compile at all and fails the step.
+		return &explore.Locator{Kind: explore.LocatorText, Value: regexp.QuoteMeta(label)}
 	}
 	if bounds, ok := explore.ElementBounds(element.Node); ok {
 		center := hierarchy.Center(bounds)
@@ -236,23 +239,37 @@ func generalizeCount(state *explore.ScreenState, label string) (string, bool) {
 	// QuoteMeta escapes the metacharacters and leaves digits alone, so the
 	// digit runs of the quoted text are still the digit runs of the label.
 	pattern := digitRun.ReplaceAllString(regexp.QuoteMeta(label), `\d+`)
-	// Mirrors compilePattern in internal/matching: a text selector is
-	// anchored to the whole value and case-folded. Counting matches under
-	// any looser rule would call a selector unique that the device does not.
-	compiled, err := regexp.Compile(`(?ims:^(?:` + pattern + `)$)`)
-	if err != nil {
+	// A label that is nothing but a count identifies nothing once the count
+	// is gone: the pattern would be `\d+`, which the device resolves to
+	// every number on the screen -- a price, a page number, a badge.
+	if strings.TrimSpace(strings.ReplaceAll(pattern, `\d+`, "")) == "" {
 		return "", false
 	}
-	matches := 0
-	for _, element := range state.Elements {
-		if other := elementLabel(element.Node); other != "" && compiled.MatchString(other) {
-			matches++
-		}
-	}
-	if matches != 1 {
+	if selectorMatchCount(state, pattern) != 1 {
 		return "", false
 	}
 	return pattern, true
+}
+
+// selectorMatchCount answers how many elements the DEVICE would find for a
+// text selector, by running the matcher the device runs.
+//
+// Counting rows of the flattened table instead is strictly weaker in two
+// ways that both end with the flow tapping the wrong element: the table
+// drops nodes the matcher still searches, and it compares one attribute per
+// node where the matcher tries text, hintText and accessibilityText
+// independently. A tree it cannot read answers -1, which reads as "not
+// unique" and keeps the literal label.
+func selectorMatchCount(state *explore.ScreenState, pattern string) int {
+	root, err := hierarchy.New(state.Hierarchy)
+	if err != nil {
+		return -1
+	}
+	found, err := matching.Find(root, model.ElementSelector{TextRegex: &pattern})
+	if err != nil {
+		return -1
+	}
+	return len(found)
 }
 
 func labelCount(state *explore.ScreenState, label string) int {

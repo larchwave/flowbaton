@@ -1,6 +1,7 @@
 package run
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -162,35 +163,28 @@ func TestLabelLocatorGeneralizesACountSoTheFlowSurvivesOtherData(t *testing.T) {
 	// the list holds a different number. The engine compiles every text
 	// selector as a regexp anchored to the whole value, so the digits can
 	// become \d+ and the selector keeps meaning the row it came from.
-	state := &explore.ScreenState{Elements: []explore.FlatElement{
-		{EIDX: 0, Path: "0/0", Node: device.TreeNode{Attributes: map[string]string{
-			"label": "All, 12 reminders", "bounds": "[0,0][10,10]"}}},
+	state := screenOfLabels(
+		"All, 12 reminders",
 		// No digits: nothing to generalize, so the label stays literal.
-		{EIDX: 1, Path: "0/1", Node: device.TreeNode{Attributes: map[string]string{
-			"label": "New Reminder", "bounds": "[0,0][10,10]"}}},
+		"New Reminder",
 		// Regexp metacharacters in the label must be escaped, or the
 		// selector stops matching the very row it was written for.
-		{EIDX: 2, Path: "0/2", Node: device.TreeNode{Attributes: map[string]string{
-			"label": "Total: $5.00 (2 items)", "bounds": "[0,0][10,10]"}}},
-		// Generalizing would collide with e4, so the literal label wins:
-		// a selector that matches two rows is worse than a brittle one.
-		{EIDX: 3, Path: "0/3", Node: device.TreeNode{Attributes: map[string]string{
-			"label": "Slot 1", "bounds": "[0,0][10,10]"}}},
-		{EIDX: 4, Path: "0/4", Node: device.TreeNode{Attributes: map[string]string{
-			"label": "Slot 2", "bounds": "[0,0][10,10]"}}},
-	}}
-	want := []explore.Locator{
-		{Kind: explore.LocatorText, Value: `All, \d+ reminders`},
-		{Kind: explore.LocatorText, Value: "New Reminder"},
-		{Kind: explore.LocatorText, Value: `Total: \$\d+\.\d+ \(\d+ items\)`},
-		{Kind: explore.LocatorText, Value: "Slot 1"},
-		{Kind: explore.LocatorText, Value: "Slot 2"},
+		"Total: $5.00 (2 items)",
+		// Generalizing would collide with the next row, so the literal
+		// label wins: a selector that matches two rows is worse.
+		"Slot 1",
+		"Slot 2",
+	)
+	want := []string{
+		`All, \d+ reminders`,
+		"New Reminder",
+		`Total: \$\d+\.\d+ \(\d+ items\)`,
+		`Slot 1`,
+		`Slot 2`,
 	}
 	for eidx, expected := range want {
-		index := eidx
-		got := (targetArgs{EIDX: &index}).locator(state)
-		if got == nil || *got != expected {
-			t.Fatalf("e%d locator = %+v, want %+v", eidx, got, expected)
+		if got := labelLocator(t, state, eidx); got.Kind != explore.LocatorText || got.Value != expected {
+			t.Fatalf("e%d locator = %+v, want text %q", eidx, got, expected)
 		}
 	}
 }
@@ -201,13 +195,9 @@ func TestAGeneralizedCountSelectorStillFindsTheRowOnAnyData(t *testing.T) {
 	// use is worse than the literal it replaced. This runs the real
 	// matcher, once on the count the flow was recorded with and once on a
 	// different one, and pins that the literal fails the second.
-	state := &explore.ScreenState{Elements: []explore.FlatElement{
-		{EIDX: 0, Path: "0/0", Node: device.TreeNode{Attributes: map[string]string{
-			"label": "All, 12 reminders", "bounds": "[0,0][10,10]"}}},
-	}}
-	index := 0
-	got := (targetArgs{EIDX: &index}).locator(state)
-	if got == nil || got.Kind != explore.LocatorText {
+	state := screenOfLabels("All, 12 reminders")
+	got := labelLocator(t, state, 0)
+	if got.Kind != explore.LocatorText {
 		t.Fatalf("locator = %+v, want a text selector", got)
 	}
 
@@ -234,5 +224,75 @@ func TestAGeneralizedCountSelectorStillFindsTheRowOnAnyData(t *testing.T) {
 	// the one count it was recorded with.
 	if find("All, 12 reminders", "All, 3 reminders") != 0 {
 		t.Fatal("the literal label matched a different count, so this test proves nothing")
+	}
+}
+
+// screenOfLabels builds a state whose flat elements and tree agree, so a
+// uniqueness check that runs the device's own matcher sees the same screen
+// the element table describes.
+func screenOfLabels(labels ...string) *explore.ScreenState {
+	state := &explore.ScreenState{}
+	children := make([]device.TreeNode, 0, len(labels))
+	for index, label := range labels {
+		node := device.TreeNode{Attributes: map[string]string{
+			"accessibilityText": label, "bounds": "[0,0][10,10]"}}
+		children = append(children, node)
+		state.Elements = append(state.Elements, explore.FlatElement{
+			EIDX: index, Path: fmt.Sprintf("0/%d", index), Node: node})
+	}
+	state.Hierarchy = device.TreeNode{Attributes: map[string]string{"bounds": "[0,0][100,100]"},
+		Children: children}
+	return state
+}
+
+func labelLocator(t *testing.T, state *explore.ScreenState, eidx int) explore.Locator {
+	t.Helper()
+	got := (targetArgs{EIDX: &eidx}).locator(state)
+	if got == nil {
+		t.Fatalf("e%d produced no locator", eidx)
+	}
+	return *got
+}
+
+// A label that is ONLY a count identifies nothing once the count is gone:
+// `\d+` matches every number on the screen, so the exported flow taps a
+// price, a page number, or a badge instead of the row it was recorded on.
+// That is the outcome generalizing exists to avoid, reached by generalizing.
+func TestACountWithNoLabelAroundItIsNotGeneralized(t *testing.T) {
+	state := screenOfLabels("3", "Inbox")
+	if got := labelLocator(t, state, 0); got.Value != "3" {
+		t.Fatalf("locator = %+v, want the literal label", got)
+	}
+}
+
+// The literal branch put the label on the wire unescaped, and every text
+// selector is compiled as a regexp: "a*b" matches "b" and "aab", and an
+// unbalanced bracket does not compile at all, which fails the step.
+func TestALiteralLabelIsEscapedBeforeItBecomesASelector(t *testing.T) {
+	for _, want := range []struct{ label, selector string }{
+		{"a*b", `a\*b`},
+		{"Reply (draft", `Reply \(draft`},
+		{"Save", "Save"},
+	} {
+		state := screenOfLabels(want.label)
+		if got := labelLocator(t, state, 0); got.Value != want.selector {
+			t.Fatalf("label %q gave %q, want %q", want.label, got.Value, want.selector)
+		}
+	}
+}
+
+// The uniqueness check has to be the device's own matcher. The flat element
+// table drops nodes the matcher still searches, so counting rows in the
+// table calls a pattern unique that the device resolves to two elements --
+// and the first one in document order wins.
+func TestGeneralizingCountsWithTheMatcherTheDeviceUses(t *testing.T) {
+	state := screenOfLabels("Sort by 3")
+	// A container the flat table never lists, carrying a label the matcher
+	// does see.
+	state.Hierarchy.Children = append([]device.TreeNode{{
+		Attributes: map[string]string{"accessibilityText": "Sort by 9", "bounds": "[0,0][100,20]"},
+	}}, state.Hierarchy.Children...)
+	if got := labelLocator(t, state, 0); got.Value != `Sort by 3` {
+		t.Fatalf("locator = %+v, want the literal label: the pattern matches two elements", got)
 	}
 }
