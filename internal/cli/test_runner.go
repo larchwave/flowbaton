@@ -367,10 +367,38 @@ func reportResults(stdout, stderr io.Writer, results []engine.FlowResult) int {
 		}
 		fmt.Fprintf(stdout, "%s %s (%s)\n", status, result.Path(), result.Outcome())
 		if err := result.ProductError(); err != nil {
-			fmt.Fprintf(stderr, "  %s\n", err)
+			fmt.Fprintf(stderr, "  %s%s\n", failedCommandPrefix(result), err)
 		}
 	}
 	return exitCode
+}
+
+// failedCommandPrefix locates the failure in the flow that caused it.
+//
+// Replaying an exported flow printed exactly "element not found": not which
+// of the six steps, not what it looked for. The answer was already in
+// commands.json, so the terminal was the only place missing it -- and the
+// terminal is what CI captures. The parser's source span is the most useful
+// form of it, since that is where the author goes to fix the flow.
+//
+// A flow can fail with no failing command of its own, from a preflight or a
+// device the session never acquired. That failure gets no prefix; there is
+// no step to name.
+func failedCommandPrefix(result engine.FlowResult) string {
+	for _, command := range result.Commands() {
+		if passingOutcomes[command.Outcome()] {
+			continue
+		}
+		if command.ProductError() == nil {
+			continue
+		}
+		kind := string(command.Command().Kind)
+		if source := command.Command().Source; source.Path != "" && source.Start.Line > 0 {
+			return fmt.Sprintf("%s:%d %s: ", filepath.Base(source.Path), source.Start.Line, kind)
+		}
+		return fmt.Sprintf("step %d %s: ", command.Sequence(), kind)
+	}
+	return ""
 }
 
 // passingOutcomes lists the outcomes that do NOT fail a run. The set is

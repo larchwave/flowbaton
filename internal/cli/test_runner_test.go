@@ -3,10 +3,16 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/larchwave/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/enginetest"
+	"github.com/larchwave/flowbaton/internal/model"
 )
 
 // The runner's job is to fail BEFORE a device is involved whenever the reason
@@ -204,5 +210,52 @@ func writeFile(t *testing.T, path, contents string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Replaying an exported flow on a simulator printed exactly "element not
+// found" and nothing else: not which of the six steps, not what it looked
+// for. The information was already in commands.json (sequence 2, tapOn "New
+// Reminder"), so the terminal was the only place it was missing -- and the
+// terminal is where CI and an operator read it.
+func TestAFailedFlowNamesTheCommandThatFailed(t *testing.T) {
+	t.Parallel()
+
+	clock := enginetest.NewFakeClock(time.Unix(0, 0))
+	timeline, err := engine.NewTimeline(clock)
+	if err != nil {
+		t.Fatalf("NewTimeline: %v", err)
+	}
+	tapOn := model.Command{
+		Kind:   model.CommandTapOn,
+		Source: model.SourceInfo{Path: "flow-02.yaml", Start: model.Position{Line: 7}},
+	}
+	span, _, err := timeline.BeginCommand(tapOn, 0)
+	if err != nil {
+		t.Fatalf("BeginCommand: %v", err)
+	}
+	failure := errors.New("element not found")
+	command, _, err := span.Finish(engine.Failed, failure, engine.CommandMetadata{})
+	if err != nil {
+		t.Fatalf("CommandSpan.Finish: %v", err)
+	}
+	flowSpan, _, err := timeline.BeginFlow("flow-02.yaml", "", 0)
+	if err != nil {
+		t.Fatalf("BeginFlow: %v", err)
+	}
+	flow, _, err := flowSpan.Finish(engine.Failed, failure, []engine.CommandResult{command})
+	if err != nil {
+		t.Fatalf("FlowSpan.Finish: %v", err)
+	}
+
+	var stdout, stderr strings.Builder
+	if code := reportResults(&stdout, &stderr, []engine.FlowResult{flow}); code != ExitFailure {
+		t.Fatalf("exit code = %d, want a failure", code)
+	}
+	line := stderr.String()
+	for _, want := range []string{"flow-02.yaml:7", "tapOn", "element not found"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("failure line %q is missing %q", line, want)
+		}
 	}
 }
