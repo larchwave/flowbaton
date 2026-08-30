@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.regex.Pattern;
 import org.junit.Test;
 
 public final class AndroidProjectConfigTest {
@@ -80,14 +81,26 @@ public final class AndroidProjectConfigTest {
                         Path.of("..", "..", "..", ".github", "workflows", "ci.yml"));
         for (String token :
                 new String[] {
-                    "actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a",
-                    "android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407",
                     "platforms;android-34",
                     "--dependency-verification strict",
                     ":core:test",
                     ":agent:assembleDebugAndroidTest"
                 }) {
             assertTrue("Android CI does not contain " + token, ci.contains(token));
+        }
+        // The policy is an immutable commit pin, not one frozen revision
+        // (docs/dependency-policy.md). Asserting the exact SHA turned every
+        // accepted Dependabot bump into a red Android job.
+        for (String action : new String[] {"actions/setup-java", "android-actions/setup-android"}) {
+            assertTrue(
+                    "Android CI must pin " + action + " to a full commit SHA",
+                    Pattern.compile(
+                                    "uses:\\s+"
+                                            + Pattern.quote(action)
+                                            + "@[0-9a-f]{40}(\\s|$)",
+                                    Pattern.MULTILINE)
+                            .matcher(ci)
+                            .find());
         }
     }
 

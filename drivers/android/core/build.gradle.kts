@@ -32,6 +32,22 @@ dependencies {
 
 tasks.test {
     useJUnit()
+    // AndroidProjectConfigTest audits files outside this source set. Without
+    // them as declared inputs Gradle calls the task up to date after they
+    // change, so the audit silently keeps its last answer.
+    inputs
+        .files(
+            "build.gradle.kts",
+            "gradle.lockfile",
+            "../agent/build.gradle.kts",
+            "../agent/gradle.lockfile",
+            "../agent/src/main/AndroidManifest.xml",
+            "../gradle/verification-metadata.xml",
+            "../gradle/wrapper/gradle-wrapper.jar",
+            "../gradle/wrapper/gradle-wrapper.properties",
+            "../../../.github/workflows/ci.yml",
+        ).withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("auditedProjectFiles")
 }
 
 dependencyLocking {
