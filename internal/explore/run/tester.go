@@ -124,7 +124,12 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 		}
 	}
 
-	checks := evaluateOutcomes(ctx, t.Models.Worker, scenario.Expected, session.current, session.finish, session.checksOnFinalScreen(), typedTexts(session.steps))
+	checks := evaluateOutcomes(ctx, t.Models.Worker, scenario.Expected, session.finish, judgeFacts{
+		Final:        session.current,
+		DriverChecks: session.checksOnFinalScreen(),
+		Typed:        typedTexts(session.steps),
+		SessionTag:   t.Config.SessionName,
+	})
 	t.fill(result, session)
 	result.Outcomes = append(append([]explore.OutcomeCheck(nil), checks...), session.checks...)
 	switch {

@@ -55,7 +55,7 @@ type workerVerdict struct {
 // the run. Those results are facts the driver measured, not claims the
 // tester made, so the judge gets them next to the table. Any model failure
 // counts as not met.
-func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, final *explore.ScreenState, driverChecks []explore.OutcomeCheck, typed []string) explore.OutcomeCheck {
+func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, facts judgeFacts) explore.OutcomeCheck {
 	check := explore.OutcomeCheck{Expected: expected}
 	if llm == nil {
 		check.Missed = explore.MissUnjudged
@@ -64,13 +64,15 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fin
 	}
 	prompt := fmt.Sprintf(
 		"Judge one expected outcome of a mobile UI test against the final screen.\n"+
-			"Expected outcome: %s\n\n%s%s\n"+
+			"Expected outcome: %s\n\n%s%s%s\n"+
 			"Reply with only a JSON object "+
 			"{\"met\": true|false, \"inapplicable\": true|false, \"evidence\": \"one line\"}.\n"+
 			"Set inapplicable only when this app has no such feature or the screen "+
 			"cannot express the expectation at all; an outcome the app should have "+
 			"produced and did not is applicable.",
-		expected, elementTable(final), driverCheckLines(driverChecks)+typedLines(typed))
+		expected, elementTable(facts.Final),
+		driverCheckLines(facts.DriverChecks)+typedLines(facts.Typed),
+		sessionTagLine(facts.SessionTag))
 	response, err := llm.Chat(ctx, explore.ChatRequest{Messages: []explore.Message{
 		{Role: explore.RoleSystem, Text: "You judge test outcomes strictly from the screen content and the driver checks given to you. An outcome that names a specific value or text is met only when exactly that value or text is on the screen; a different value is not met."},
 		{Role: explore.RoleUser, Text: prompt},
@@ -92,6 +94,34 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fin
 		check.Missed = explore.MissUnpromised
 	}
 	return check
+}
+
+// judgeFacts carries what the driver observed during one run. Every one of
+// these reached the judge as its own parameter until the list outgrew the
+// call; they are all answers to "what actually happened", so they travel
+// together.
+type judgeFacts struct {
+	Final        *explore.ScreenState
+	DriverChecks []explore.OutcomeCheck
+	Typed        []string
+	// SessionTag is the label the tester was told to stamp on anything it
+	// creates (scenarioText). Blank when the session has no name.
+	SessionTag string
+}
+
+// sessionTagLine warns the judge about the harness's own fingerprint. The
+// tester is instructed to tag the data it creates with the session name, so
+// a row the scenario named will carry a suffix the scenario never mentions.
+// Without this the judge applies its exact-text rule to the harness's tag
+// and the report files a defect against the app for it (session mmx24).
+func sessionTagLine(tag string) string {
+	if tag == "" {
+		return ""
+	}
+	return fmt.Sprintf(
+		"\nThe tester was told to tag any data it creates with %q. A screen value "+
+			"that matches the expectation apart from that tag is still the expected "+
+			"one; do not count the tag against it.\n", tag)
 }
 
 // driverCheckLines renders check_visible results for the judge; blank when
@@ -138,14 +168,14 @@ func typedTexts(steps []explore.StepRecord) []string {
 // first, then one worker call, then a conservative merge with the model's
 // own finish outcomes. The model can never turn an unmet check into a met
 // one; a model claim of not-met always sticks.
-func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, final *explore.ScreenState, finish *finishArgs, driverChecks []explore.OutcomeCheck, typed []string) []explore.OutcomeCheck {
+func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, finish *finishArgs, facts judgeFacts) []explore.OutcomeCheck {
 	claims := map[string]finishOutcome{}
 	if finish != nil {
 		for _, outcome := range finish.Outcomes {
 			claims[strings.ToLower(strings.TrimSpace(outcome.Expected))] = outcome
 		}
 	}
-	texts := treeTexts(final.Hierarchy)
+	texts := treeTexts(facts.Final.Hierarchy)
 	checks := make([]explore.OutcomeCheck, 0, len(expected))
 	for _, want := range expected {
 		check := explore.OutcomeCheck{Expected: want}
@@ -153,7 +183,7 @@ func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, f
 			check.Met = true
 			check.Evidence = evidence
 		} else {
-			check = askWorkerOutcome(ctx, llm, want, final, driverChecks, typed)
+			check = askWorkerOutcome(ctx, llm, want, facts)
 		}
 		if claim, ok := claims[strings.ToLower(strings.TrimSpace(want))]; ok && !claim.Met {
 			check.Met = false

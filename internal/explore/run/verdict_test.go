@@ -17,7 +17,7 @@ func TestAskWorkerOutcomeReadsAFencedReply(t *testing.T) {
 		textReply("```json\n{\"met\": true, \"evidence\": \"the list is visible\"}\n```"),
 	}}
 	check := askWorkerOutcome(
-		context.Background(), llm, "the list is visible", &explore.ScreenState{}, nil, nil)
+		context.Background(), llm, "the list is visible", judgeFacts{Final: &explore.ScreenState{}})
 	if !check.Met {
 		t.Fatalf("check = %+v, want met", check)
 	}
@@ -39,7 +39,7 @@ func TestAskWorkerOutcomeHandsDriverChecksToTheJudge(t *testing.T) {
 		{Expected: `visible: text "mmx7 morning reminder"`, Met: true, Evidence: `matched 1 element(s), first: "mmx7 morning reminder"`},
 		{Expected: `visible: text "No Reminders"`, Evidence: "no matching element in the current tree"},
 	}
-	askWorkerOutcome(context.Background(), llm, "the reminder is listed", &explore.ScreenState{}, checks, nil)
+	askWorkerOutcome(context.Background(), llm, "the reminder is listed", judgeFacts{Final: &explore.ScreenState{}, DriverChecks: checks})
 	prompt := llm.requests[0].Messages[1].Text
 	for _, want := range []string{
 		"Driver checks measured on this final screen",
@@ -70,7 +70,7 @@ func TestAskWorkerOutcomeHandsTypedTextToTheJudge(t *testing.T) {
 		t.Fatalf("typed = %q", typed)
 	}
 	llm := &scriptedLLM{replies: []explore.Message{textReply(`{"met": true, "evidence": "ok"}`)}}
-	askWorkerOutcome(context.Background(), llm, "a row bearing the title that was entered", &explore.ScreenState{}, nil, typed)
+	askWorkerOutcome(context.Background(), llm, "a row bearing the title that was entered", judgeFacts{Final: &explore.ScreenState{}, Typed: typed})
 	prompt := llm.requests[0].Messages[1].Text
 	if !strings.Contains(prompt, "Text typed during the run") || !strings.Contains(prompt, `- "mmx14 Test Reminder"`) {
 		t.Fatalf("prompt lacks the typed text:\n%s", prompt)
@@ -88,12 +88,12 @@ func TestAskWorkerOutcomeMarksAnInapplicableExpectation(t *testing.T) {
 		textReply(`{"met": false, "evidence": "the row still says Not Done"}`),
 	}}
 	marked := askWorkerOutcome(
-		context.Background(), llm, "the Completed tile is selected", &explore.ScreenState{}, nil, nil)
+		context.Background(), llm, "the Completed tile is selected", judgeFacts{Final: &explore.ScreenState{}})
 	if marked.Met || marked.Missed != explore.MissUnpromised {
 		t.Fatalf("check = %+v, want unmet and inapplicable", marked)
 	}
 	plain := askWorkerOutcome(
-		context.Background(), llm, "the row reads Done", &explore.ScreenState{}, nil, nil)
+		context.Background(), llm, "the row reads Done", judgeFacts{Final: &explore.ScreenState{}})
 	if plain.Met || plain.Missed != explore.MissDefect {
 		t.Fatalf("check = %+v, want unmet and applicable", plain)
 	}
@@ -112,12 +112,11 @@ func TestAFinishClaimOfNotMetClearsInapplicable(t *testing.T) {
 	}}
 	checks := evaluateOutcomes(
 		context.Background(), llm, []string{"the new reminder is listed"},
-		&explore.ScreenState{},
 		&finishArgs{Outcomes: []finishOutcome{{
 			Expected: "the new reminder is listed",
 			Evidence: "the list still shows No Reminders",
 		}}},
-		nil, nil)
+		judgeFacts{Final: &explore.ScreenState{}})
 	if len(checks) != 1 {
 		t.Fatalf("checks = %+v, want one", checks)
 	}
@@ -153,19 +152,51 @@ func TestAJudgeThatCannotAnswerMarksTheOutcomeUnjudged(t *testing.T) {
 	// An empty script errors on the first call, the way a dead provider does.
 	broken := &scriptedLLM{}
 	check := askWorkerOutcome(
-		context.Background(), broken, "the new reminder is listed", &explore.ScreenState{}, nil, nil)
+		context.Background(), broken, "the new reminder is listed", judgeFacts{Final: &explore.ScreenState{}})
 	if check.Met || check.Missed != explore.MissUnjudged {
 		t.Fatalf("check = %+v, want unjudged", check)
 	}
 	garbled := &scriptedLLM{replies: []explore.Message{textReply("I think it worked")}}
 	check = askWorkerOutcome(
-		context.Background(), garbled, "the new reminder is listed", &explore.ScreenState{}, nil, nil)
+		context.Background(), garbled, "the new reminder is listed", judgeFacts{Final: &explore.ScreenState{}})
 	if check.Met || check.Missed != explore.MissUnjudged {
 		t.Fatalf("check = %+v, want unjudged", check)
 	}
 	absent := askWorkerOutcome(
-		context.Background(), nil, "the new reminder is listed", &explore.ScreenState{}, nil, nil)
+		context.Background(), nil, "the new reminder is listed", judgeFacts{Final: &explore.ScreenState{}})
 	if absent.Missed != explore.MissUnjudged {
 		t.Fatalf("check = %+v, want unjudged", absent)
+	}
+}
+
+// The harness itself tells the tester to tag anything it creates with the
+// session name (`scenarioText`). Session mmx24 obeyed: it typed "Pay
+// electricity bill explore-20260830-070750" for an outcome phrased "a row
+// containing the text 'Pay electricity bill' is visible". The judge, whose
+// standing rule is that a named text must be on screen exactly, called that
+// row a miss and the report filed a [High] defect against Reminders for the
+// tag the harness had asked for. The judge has to know about the tag.
+func TestAskWorkerOutcomeTellsTheJudgeAboutTheSessionTag(t *testing.T) {
+	t.Parallel()
+
+	llm := &scriptedLLM{replies: []explore.Message{textReply(`{"met": true, "evidence": "ok"}`)}}
+	askWorkerOutcome(context.Background(), llm, "a row containing 'Pay electricity bill' is visible",
+		judgeFacts{Final: &explore.ScreenState{}, SessionTag: "explore-20260830-070750"})
+	prompt := llm.requests[0].Messages[1].Text
+	for _, want := range []string{
+		`"explore-20260830-070750"`,
+		"still the expected one",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt lacks %q:\n%s", want, prompt)
+		}
+	}
+
+	// No tag, nothing to explain: the sentence must not appear and invite
+	// the judge to accept a suffix nobody added.
+	plain := &scriptedLLM{replies: []explore.Message{textReply(`{"met": true, "evidence": "ok"}`)}}
+	askWorkerOutcome(context.Background(), plain, "a row is visible", judgeFacts{Final: &explore.ScreenState{}})
+	if strings.Contains(plain.requests[0].Messages[1].Text, "still the expected one") {
+		t.Fatalf("untagged run still carries the tag sentence:\n%s", plain.requests[0].Messages[1].Text)
 	}
 }
