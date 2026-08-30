@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // Crew bundles the role implementations for one exploration session.
@@ -75,6 +76,7 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 	executed := 0
 	dryRounds := 0
 	planned := []string{}
+	unpromised := []string{}
 	for iteration := 0; executed < config.MaxTests && dryRounds < len(styles); iteration++ {
 		if err := ctx.Err(); err != nil {
 			return finishReport(report, config), err
@@ -90,10 +92,11 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			return finishReport(report, config), fmt.Errorf("explore: research: %w", err)
 		}
 		scenarios, err := crew.Planner.PlanNext(ctx, PlanRequest{
-			Map:      uiMap,
-			Style:    styles[iteration%len(styles)],
-			Existing: planned,
-			Budget:   config.MaxTests - executed,
+			Map:        uiMap,
+			Style:      styles[iteration%len(styles)],
+			Existing:   planned,
+			Unpromised: unpromised,
+			Budget:     config.MaxTests - executed,
 		})
 		if err != nil {
 			return finishReport(report, config), fmt.Errorf("explore: plan: %w", err)
@@ -113,6 +116,7 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			result, err := crew.Tester.RunScenario(ctx, scenario, state)
 			if result != nil {
 				report.Results = append(report.Results, *result)
+				unpromised = collectUnpromised(unpromised, *result)
 			}
 			if err != nil {
 				return finishReport(report, config), fmt.Errorf("explore: scenario %q: %w", scenario.Name, err)
@@ -133,4 +137,21 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 func finishReport(report *SessionReport, config Config) *SessionReport {
 	report.Finished = config.Now()
 	return report
+}
+
+// collectUnpromised adds the expected outcomes a run's judge ruled this
+// app never offers. Driver probes are the run's own evidence, not
+// scenario outcomes, so they never enter the list, and a repeat of one
+// already listed is dropped.
+func collectUnpromised(known []string, result TestResult) []string {
+	for _, check := range result.Outcomes {
+		if check.Met || !check.Inapplicable || check.Driver {
+			continue
+		}
+		if slices.Contains(known, check.Expected) {
+			continue
+		}
+		known = append(known, check.Expected)
+	}
+	return known
 }

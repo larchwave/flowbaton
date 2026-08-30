@@ -111,13 +111,16 @@ type fakeCrew struct {
 	plans    [][]Scenario
 	planCall int
 	ran      []string
+	outcomes []OutcomeCheck
+	requests []PlanRequest
 }
 
 func (f *fakeCrew) Observe(context.Context) (*ScreenState, error) { return f.state, nil }
 func (f *fakeCrew) Research(_ context.Context, s *ScreenState) (*UIMap, error) {
 	return &UIMap{Screen: s.Signature}, nil
 }
-func (f *fakeCrew) PlanNext(_ context.Context, _ PlanRequest) ([]Scenario, error) {
+func (f *fakeCrew) PlanNext(_ context.Context, request PlanRequest) ([]Scenario, error) {
+	f.requests = append(f.requests, request)
 	if f.planCall >= len(f.plans) {
 		return nil, nil
 	}
@@ -127,7 +130,7 @@ func (f *fakeCrew) PlanNext(_ context.Context, _ PlanRequest) ([]Scenario, error
 }
 func (f *fakeCrew) RunScenario(_ context.Context, s Scenario, _ *ScreenState) (*TestResult, error) {
 	f.ran = append(f.ran, s.Name)
-	return &TestResult{Scenario: s, Status: TestPassed}, nil
+	return &TestResult{Scenario: s, Status: TestPassed, Outcomes: f.outcomes}, nil
 }
 func (f *fakeCrew) EnsureReady(context.Context) (*ScreenState, error) { return f.state, nil }
 func (f *fakeCrew) Reach(context.Context, string) (*ScreenState, error) {
@@ -174,5 +177,41 @@ func TestRunSessionFailsClosed(t *testing.T) {
 	}
 	if _, err := RunSession(context.Background(), Config{MaxTests: 1}, Crew{}); err == nil {
 		t.Fatal("empty crew accepted")
+	}
+}
+
+// A planner that writes an expectation the app never offers writes it
+// again next round unless the session says so. The judge's verdict is the
+// only place that knowledge exists, so the loop carries it back.
+func TestRunSessionCarriesUnpromisedExpectationsBackToThePlanner(t *testing.T) {
+	fake := &fakeCrew{
+		state: &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		plans: [][]Scenario{
+			{{Name: "a", Priority: PriorityNormal}},
+			{{Name: "b", Priority: PriorityNormal}},
+		},
+		outcomes: []OutcomeCheck{
+			{Expected: "the Completed tile is selected", Inapplicable: true},
+			{Expected: "the list is empty"},
+			{Expected: `visible: text "Completed"`, Inapplicable: true, Driver: true},
+		},
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	config := Config{AppID: "app", MaxTests: 2, Styles: []string{"normal"}}
+	if _, err := RunSession(context.Background(), config, crew); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.requests) < 2 {
+		t.Fatalf("want at least two plan requests, got %d", len(fake.requests))
+	}
+	if got := fake.requests[0].Unpromised; len(got) != 0 {
+		t.Fatalf("first request already carries %v", got)
+	}
+	got := fake.requests[1].Unpromised
+	if len(got) != 1 || got[0] != "the Completed tile is selected" {
+		t.Fatalf("Unpromised = %v, want only the inapplicable scenario outcome", got)
 	}
 }

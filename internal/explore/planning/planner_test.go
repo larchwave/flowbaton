@@ -319,3 +319,20 @@ func TestPlanPromptForbidsOutcomesRelativeToAnEarlierScreen(t *testing.T) {
 		}
 	}
 }
+
+// Expectations the judge ruled this app never offers must reach the
+// planner, or the next round writes them again.
+func TestPlanNextNamesUnpromisedExpectations(t *testing.T) {
+	llm := &scriptedLLM{replies: []string{scenarioJSON(entry("Sign in", "critical"))}}
+	planner := &Planner{LLM: llm}
+	if _, err := planner.PlanNext(context.Background(), explore.PlanRequest{
+		Map: testMap(), Style: "normal", Budget: 3,
+		Unpromised: []string{"the Completed tile is selected"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	prompt := llm.requests[0].Messages[1].Text
+	if !strings.Contains(prompt, "the Completed tile is selected") {
+		t.Fatalf("prompt missing the unpromised expectation:\n%s", prompt)
+	}
+}

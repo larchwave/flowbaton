@@ -216,6 +216,15 @@ func buildPrompt(request explore.PlanRequest, style Style, known bool, hints []s
 	if request.Focus != "" {
 		fmt.Fprintf(&b, "\nFocus every scenario on: %s\n", request.Focus)
 	}
+	if len(request.Unpromised) > 0 {
+		b.WriteString("\nOutcomes this app was already found not to offer. " +
+			"Do not expect any of these again:\n")
+		for _, expected := range request.Unpromised {
+			b.WriteString("- ")
+			b.WriteString(expected)
+			b.WriteString("\n")
+		}
+	}
 	if len(request.Existing) > 0 {
 		b.WriteString("\nScenarios already planned, do not propose these again:\n")
 		for _, name := range request.Existing {

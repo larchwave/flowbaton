@@ -22,6 +22,11 @@ type PlanRequest struct {
 	// Existing lists scenario names already planned or executed, for
 	// dedup.
 	Existing []string
+	// Unpromised lists expected outcomes the judge ruled this app never
+	// offers, gathered from earlier runs of the same session. Naming them
+	// keeps the planner from writing the same unverifiable expectation
+	// every round.
+	Unpromised []string
 	// Focus optionally narrows planning to one feature or region.
 	Focus string
 	// Budget caps how many scenarios to emit.

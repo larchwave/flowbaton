@@ -418,9 +418,10 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 		"882d77b27bdff082e246959060655c3cc5fde510": false,
 		"2b9bec310469f6a3175d2bf78b1db789f5669a7b": false,
 		"7bad373298249a1e3892b4fd688ae72a67d0d9bf": false,
+		"d3f37036281dfb9f9cb21aa376669ebdb49563da": false,
 	}
-	if len(grandfathered) != 19 {
-		t.Fatalf("Lore grandfather set has %d entries, want exactly 19", len(grandfathered))
+	if len(grandfathered) != 20 {
+		t.Fatalf("Lore grandfather set has %d entries, want exactly 20", len(grandfathered))
 	}
 	hasGitMetadata, err := repositoryHasGitMetadata(repoRoot(t))
 	if err != nil {
