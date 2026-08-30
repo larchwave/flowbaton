@@ -1557,3 +1557,49 @@ func TestLaunchAppWaitsForTheAppToComeToTheForeground(t *testing.T) {
 		t.Fatalf("LaunchApp() error = %v, want the context deadline", err)
 	}
 }
+
+// HideKeyboard presses Return, and the runner refuses to type when nothing on
+// screen accepts text (session mmx23: that refusal used to take the runner's
+// whole process with it). Hiding a keyboard that is not up is already done,
+// so the press must not be made at all.
+func TestHideKeyboardDoesNothingWhenNoKeyboardIsUp(t *testing.T) {
+	t.Parallel()
+
+	var routes []string
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		routes = append(routes, r.URL.Path)
+		switch r.URL.Path {
+		case "/keyboard":
+			_, _ = io.WriteString(w, `{"isKeyboardVisible": false}`)
+		default:
+			_, _ = io.WriteString(w, `{}`)
+		}
+	})
+	if err := driver.HideKeyboard(context.Background()); err != nil {
+		t.Fatalf("HideKeyboard: %v", err)
+	}
+	if slices.Contains(routes, "/pressKey") {
+		t.Fatalf("routes = %v, want no key press when the keyboard is already hidden", routes)
+	}
+}
+
+func TestHideKeyboardPressesReturnWhenTheKeyboardIsUp(t *testing.T) {
+	t.Parallel()
+
+	var routes []string
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		routes = append(routes, r.URL.Path)
+		switch r.URL.Path {
+		case "/keyboard":
+			_, _ = io.WriteString(w, `{"isKeyboardVisible": true}`)
+		default:
+			_, _ = io.WriteString(w, `{}`)
+		}
+	})
+	if err := driver.HideKeyboard(context.Background()); err != nil {
+		t.Fatalf("HideKeyboard: %v", err)
+	}
+	if !slices.Contains(routes, "/pressKey") {
+		t.Fatalf("routes = %v, want the Return press", routes)
+	}
+}

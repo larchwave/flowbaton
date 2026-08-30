@@ -552,8 +552,21 @@ func (driver *Driver) OpenLink(ctx context.Context, request device.OpenLinkReque
 
 // HideKeyboard has no route of its own. The keyboard dismisses on return,
 // which is the gesture a person would use.
+//
+// The press is skipped when no keyboard is up, and not only to save a round
+// trip: the runner refuses to type when nothing on screen accepts text, so
+// asking it to press Return on a screen without a keyboard turns a keyboard
+// that is already hidden into a failed command.
 func (driver *Driver) HideKeyboard(ctx context.Context) error {
-	return driver.client.PressKey(ctx, KeyReturn, driver.defaultAppIDs(nil))
+	appIDs := driver.defaultAppIDs(nil)
+	visible, err := driver.client.KeyboardVisible(ctx, appIDs)
+	if err != nil {
+		return err
+	}
+	if !visible {
+		return nil
+	}
+	return driver.client.PressKey(ctx, KeyReturn, appIDs)
 }
 
 func (driver *Driver) TakeScreenshot(

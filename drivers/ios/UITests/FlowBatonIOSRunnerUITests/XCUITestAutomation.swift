@@ -132,15 +132,44 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     return app
   }
 
-  func isKeyboardVisible(appIDs: [String]) throws -> Bool {
-    try onMain { try Self.foregroundApp(among: appIDs).keyboards.firstMatch.exists }
+  /// keyboardIsUp answers the question the route's name asks. Existence is
+  /// not the answer: a dismissed keyboard stays in the hierarchy parked
+  /// below the screen, so `keyboards.firstMatch.exists` is true everywhere.
+  /// KeyboardPresence decides on geometry instead.
+  @MainActor
+  static func keyboardIsUp(in app: XCUIApplication) -> Bool {
+    let keyboard = app.keyboards.firstMatch
+    guard keyboard.exists else { return false }
+    // The app's own frame stands in for the screen: the runner drives one
+    // full-screen app at a time, and XCUIScreen exposes no bounds.
+    return KeyboardPresence.isPresented(keyboard: keyboard.frame, screen: app.frame)
   }
 
+  func isKeyboardVisible(appIDs: [String]) throws -> Bool {
+    try onMain { Self.keyboardIsUp(in: try Self.foregroundApp(among: appIDs)) }
+  }
+
+  /// A key press needs a keyboard, which is a stricter demand than
+  /// typingTarget's: that one asks whether anything on screen could accept
+  /// text, and a Reminders screen with an unfocused search field says yes.
+  /// Pressing Return there answered 200 and took the whole runner process
+  /// down with it -- typeText without keyboard focus raises an XCTIssue, not
+  /// a Swift error, so nothing here can catch it. The host saw the death as
+  /// a connection refused on its next request (sessions mmx22 and mmx23,
+  /// both right after hide_keyboard). Reproduced and pinned live.
   func pressKey(_ key: String, appIDs: [String]) throws {
     guard let keyboardKey = Self.keyboardKeys[key] else {
       throw AutomationError.precondition("unsupported key \(key)")
     }
-    try onMain { try Self.foregroundApp(among: appIDs).typeText(keyboardKey.rawValue) }
+    try onMain {
+      let app = try Self.foregroundApp(among: appIDs)
+      _ = app.keyboards.firstMatch.waitForExistence(timeout: Self.keyboardWaitSeconds)
+      guard Self.keyboardIsUp(in: app) else {
+        throw AutomationError.precondition(
+          "no keyboard is on screen, so there is no key to press; focus a text field first")
+      }
+      app.typeText(keyboardKey.rawValue)
+    }
   }
 
   func pressButton(_ button: String) throws {
