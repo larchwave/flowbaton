@@ -404,3 +404,41 @@ func TestUnconfirmedRunsReachTheHeadlineAndTheDigest(t *testing.T) {
 		t.Errorf("digest never mentions the unconfirmed expectation:\n%s", digest)
 	}
 }
+
+// The headline and coverage line are the two sentences every reader sees;
+// "1 runs with execution problems" reads as a bug in the tool.
+func TestCountsAreWordedForOneAndForMany(t *testing.T) {
+	one := &explore.SessionReport{
+		AppID:    "com.apple.reminders",
+		Platform: "ios",
+		Results: []explore.TestResult{
+			failedResult("rename a list", explore.PriorityCritical, "the header shows the new name"),
+		},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), one)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	for _, want := range []string{"1 defect finding,", "0 runs with execution problems", "1 scenario run against"} {
+		if !strings.Contains(markdown, want) {
+			t.Errorf("want %q in:\n%s", want, markdown)
+		}
+	}
+	many := &explore.SessionReport{
+		AppID:    "com.apple.reminders",
+		Platform: "ios",
+		Results: []explore.TestResult{
+			failedResult("rename a list", explore.PriorityCritical, "the header shows the new name"),
+			failedResult("share a list", explore.PriorityCritical, "the share sheet opens"),
+		},
+	}
+	markdown, err = Analyst{}.Report(context.Background(), many)
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	for _, want := range []string{"2 defect findings,", "2 scenario runs against"} {
+		if !strings.Contains(markdown, want) {
+			t.Errorf("want %q in:\n%s", want, markdown)
+		}
+	}
+}

@@ -103,8 +103,9 @@ func deterministicHeadline(session *explore.SessionReport, agg aggregation) stri
 		return fmt.Sprintf("No scenarios ran against %s.", session.AppID)
 	}
 	headline := fmt.Sprintf(
-		"%s on %s: %d of %d scenarios passed, %d defect findings, %d runs with execution problems",
-		session.AppID, session.Platform, len(agg.passed), agg.total, len(agg.findings), len(agg.issues),
+		"%s on %s: %d of %d scenarios passed, %s, %s with execution problems",
+		session.AppID, session.Platform, len(agg.passed), agg.total,
+		count(len(agg.findings), "defect finding"), count(len(agg.issues), "run"),
 	)
 	if len(agg.unsure) > 0 {
 		headline += fmt.Sprintf(", %d with an expectation the app never promised", len(agg.unsure))
@@ -118,9 +119,9 @@ func render(headline string, session *explore.SessionReport, agg aggregation) st
 	builder.WriteString("\n")
 	builder.WriteString("\n## Coverage\n\n")
 	fmt.Fprintf(builder,
-		"%d scenario runs against %s on %s: %d passed, %d failed, %d with execution problems, "+
-			"%d with expectations the app never promised.\n",
-		agg.total, session.AppID, session.Platform,
+		"%s against %s on %s: %d passed, %d failed, %d with execution problems, "+
+			"%d with an expectation the app never promised.\n",
+		count(agg.total, "scenario run"), session.AppID, session.Platform,
 		len(agg.passed), len(agg.failed), len(agg.issues), len(agg.unsure))
 	if len(agg.passed) > 0 {
 		builder.WriteString("\n## What works\n\n")
@@ -156,6 +157,16 @@ func render(headline string, session *explore.SessionReport, agg aggregation) st
 		}
 	}
 	return builder.String()
+}
+
+// count words a tally with its noun, pluralizing the regular way. The
+// report's counts are read by people, and "1 runs" reads as a bug in the
+// tool that wrote it.
+func count(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func backticked(names []string) string {
