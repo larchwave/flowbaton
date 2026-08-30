@@ -693,3 +693,47 @@ func TestExploreRunReportsAFailureThatCameBeforeAnyReport(t *testing.T) {
 		t.Fatalf("the cause of the failure never reached stderr: %q", stderr.String())
 	}
 }
+
+// The session name reaches the filesystem as part of every artifact name
+// (report-<name>.md, steps-<name>.md), and filepath.Join folds "..", so
+// "../../x" writes outside the output directory the operator chose. Both
+// entry points share this check because the MCP tool builds the same options
+// from whatever a model asked for.
+func TestExploreRefusesASessionNameThatLeavesTheOutputDirectory(t *testing.T) {
+	escapes := []string{
+		"../../x",
+		"..",
+		"a/b",
+		`a\b`,
+		"nested/../../x",
+	}
+	for _, name := range escapes {
+		options := exploreOptions{
+			AppID: "com.example.app", Platform: "ios",
+			MaxTests: 1, MaxSteps: 1, Styles: []string{"normal"},
+			SessionName: name,
+		}
+		err := validateExploreOptions(options)
+		if err == nil {
+			t.Fatalf("session name %q was accepted", name)
+		}
+		if !strings.Contains(err.Error(), "--session-name") {
+			t.Fatalf("session name %q refused without naming the option: %v", name, err)
+		}
+	}
+}
+
+func TestExploreAcceptsTheSessionNamesOperatorsActuallyUse(t *testing.T) {
+	// The default is generated (explore-20260830-141500) and a session on a
+	// device is tagged by hand; refusing either would be worse than the escape.
+	for _, name := range []string{"", "explore-20260830-141500", "mmx33", "run_2.retry"} {
+		options := exploreOptions{
+			AppID: "com.example.app", Platform: "ios",
+			MaxTests: 1, MaxSteps: 1, Styles: []string{"normal"},
+			SessionName: name,
+		}
+		if err := validateExploreOptions(options); err != nil {
+			t.Fatalf("session name %q refused: %v", name, err)
+		}
+	}
+}

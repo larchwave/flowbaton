@@ -516,6 +516,19 @@ func validateExploreOptions(options exploreOptions) error {
 	if options.MaxSteps <= 0 {
 		return usageErrorf("the step bound must be positive, got %d", options.MaxSteps)
 	}
+	// The name reaches the filesystem in every artifact name, and
+	// filepath.Join folds "..", so a name carrying one writes outside the
+	// output directory an operator chose. The check lives here rather than in
+	// the flag parser because the MCP tool validates through this function
+	// too; it supplies no session name today, and this is what keeps that
+	// from being the day it does.
+	if name := options.SessionName; name != "" {
+		if strings.ContainsAny(name, `/\`) || name == "." || name == ".." ||
+			strings.Contains(name, "..") {
+			return usageErrorf(
+				"option --session-name must name one session, not a path: %q", name)
+		}
+	}
 	if len(options.Styles) == 0 {
 		return usageErrorf("option --styles requires at least one style name")
 	}
