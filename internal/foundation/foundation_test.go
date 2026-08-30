@@ -515,8 +515,35 @@ func TestAndroidConnectedRunnerBoundsEmulatorStartup(t *testing.T) {
 			t.Errorf("Android connected runner is missing bounded startup control %q", required)
 		}
 	}
-	if got := strings.Count(script, `timeout --kill-after=2s 5s adb`); got != 4 {
-		t.Errorf("Android connected runner has %d hard-bounded ADB calls, want 4", got)
+	// The rule is that no adb call can hang the job, not that there are
+	// exactly N of them. Counting them made adding a bounded call fail this
+	// test, which says nothing about whether the call was bounded.
+	const bound = "timeout --kill-after=2s 5s "
+	bounded := 0
+	for _, line := range strings.Split(script, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		// Per occurrence, not per line: two of these calls sit inside a
+		// command substitution and after an &&, so what matters is what
+		// stands immediately before each one.
+		for offset := 0; ; {
+			index := strings.Index(trimmed[offset:], "adb ")
+			if index < 0 {
+				break
+			}
+			at := offset + index
+			offset = at + 1
+			if at >= len(bound) && trimmed[at-len(bound):at] == bound {
+				bounded++
+				continue
+			}
+			t.Errorf("Android connected runner calls adb without a hard bound: %q", trimmed)
+		}
+	}
+	if bounded == 0 {
+		t.Error("Android connected runner calls adb nowhere, so the bound above proves nothing")
 	}
 	for _, forbidden := range []string{"adb wait-for-device", "swiftshader_indirect", "timeout 5s adb", "\nemulator -"} {
 		if strings.Contains(script, forbidden) {
