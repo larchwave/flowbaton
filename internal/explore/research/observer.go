@@ -69,8 +69,14 @@ func (o *Observer) Observe(ctx context.Context) (*explore.ScreenState, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// Without this the keyboard arrives as a row per key: 41 of 342 nodes on
+	// a reminders screen with a focused field, every one of them looking
+	// tappable in the element table. Session mmx34 spent four steps tapping
+	// "the element with id Return". The tester reaches the keyboard through
+	// press_key and hide_keyboard, and needs the app's own elements here.
 	root, err := o.Driver.ContentDescriptor(ctx, device.ContentDescriptorRequest{
-		AppIDs: []string{o.AppID},
+		AppIDs:                  []string{o.AppID},
+		ExcludeKeyboardElements: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("research: hierarchy: %w", err)

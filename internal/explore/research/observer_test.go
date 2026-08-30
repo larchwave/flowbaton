@@ -212,3 +212,20 @@ func TestDialogActiveHeuristic(t *testing.T) {
 		})
 	}
 }
+
+// Measured on a booted simulator with a focused field in com.apple.reminders:
+// the tree is 342 nodes with the keyboard and 301 without it, so the keyboard
+// is 41 rows -- a row per key -- in the element table the tester reads. In
+// session mmx34 the model spent four steps tapping "the element with id
+// Return" instead of pressing a key, which is what those rows invite. It has
+// press_key and hide_keyboard for the keyboard; it needs the app's elements.
+func TestObserveAsksForTheAppsOwnElementsWithoutTheKeyboardKeys(t *testing.T) {
+	driver := &fakeDriver{}
+	observer := &Observer{Driver: driver, AppID: "com.example.app"}
+	if _, err := observer.Observe(context.Background()); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if !driver.descReq.ExcludeKeyboardElements {
+		t.Fatalf("hierarchy request = %+v, want the keyboard keys left out", driver.descReq)
+	}
+}
