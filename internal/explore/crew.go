@@ -115,6 +115,12 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			planned = append(planned, scenario.Name)
 			result, err := crew.Tester.RunScenario(ctx, scenario, state)
 			if result != nil {
+				if err != nil && result.Verdict == "" {
+					// "run stopped before a verdict" is also what a spent step
+					// budget says. A reader of the report has to be able to
+					// tell a dead device from a slow model (session mmx23).
+					result.Verdict = "the run ended on an error: " + truncateCause(err.Error())
+				}
 				report.Results = append(report.Results, *result)
 				unpromised = collectUnpromised(unpromised, *result)
 			}
@@ -148,6 +154,15 @@ func abortReport(ctx context.Context, crew Crew, report *SessionReport, config C
 		}
 	}
 	return finishReport(report, config)
+}
+
+// truncateCause keeps an error readable in a report line.
+func truncateCause(cause string) string {
+	const limit = 160
+	if len(cause) <= limit {
+		return cause
+	}
+	return cause[:limit] + "..."
 }
 
 func finishReport(report *SessionReport, config Config) *SessionReport {

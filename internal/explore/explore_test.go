@@ -107,14 +107,15 @@ func TestRunToolLoopStopRequestAndBounds(t *testing.T) {
 }
 
 type fakeCrew struct {
-	state      *ScreenState
-	plans      [][]Scenario
-	planCall   int
-	ran        []string
-	outcomes   []OutcomeCheck
-	requests   []PlanRequest
-	failAfter  int
-	reportFail bool
+	state       *ScreenState
+	plans       [][]Scenario
+	planCall    int
+	ran         []string
+	outcomes    []OutcomeCheck
+	requests    []PlanRequest
+	failAfter   int
+	failVerdict string
+	reportFail  bool
 }
 
 func (f *fakeCrew) Observe(context.Context) (*ScreenState, error) { return f.state, nil }
@@ -133,7 +134,8 @@ func (f *fakeCrew) PlanNext(_ context.Context, request PlanRequest) ([]Scenario,
 func (f *fakeCrew) RunScenario(_ context.Context, s Scenario, _ *ScreenState) (*TestResult, error) {
 	f.ran = append(f.ran, s.Name)
 	if f.failAfter > 0 && len(f.ran) > f.failAfter {
-		return &TestResult{Scenario: s, Status: TestStopped}, errors.New("device unreachable")
+		return &TestResult{Scenario: s, Status: TestStopped, Verdict: f.failVerdict},
+			errors.New("device unreachable")
 	}
 	return &TestResult{Scenario: s, Status: TestPassed, Outcomes: f.outcomes}, nil
 }
@@ -276,5 +278,51 @@ func TestAnAnalystFailureDoesNotMaskTheSessionFailure(t *testing.T) {
 	}
 	if report == nil || len(report.Results) != 2 {
 		t.Fatalf("want the partial report anyway, got %+v", report)
+	}
+}
+
+// mmx23 (2026-08-30, live): the runner died mid-scenario and the report
+// filed the run as "run stopped before a verdict", which is what a spent
+// step budget also says. The operator cannot tell a dead device from a
+// slow model unless the report says so.
+func TestAnAbortedScenarioCarriesItsCauseIntoTheReport(t *testing.T) {
+	fake := &fakeCrew{
+		state:     &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		plans:     [][]Scenario{{{Name: "a", Priority: PriorityNormal}, {Name: "b", Priority: PriorityNormal}}},
+		failAfter: 1,
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	config := Config{AppID: "app", MaxTests: 2, Styles: []string{"normal"}}
+	report, err := RunSession(context.Background(), config, crew)
+	if err == nil {
+		t.Fatal("want the failure surfaced")
+	}
+	aborted := report.Results[len(report.Results)-1]
+	if !strings.Contains(aborted.Verdict, "device unreachable") {
+		t.Fatalf("verdict = %q, want the cause that ended the run", aborted.Verdict)
+	}
+}
+
+// A run that recorded its own verdict keeps it: the tester knows better
+// than the loop why it stopped.
+func TestAnAbortedScenarioKeepsAVerdictItAlreadyHas(t *testing.T) {
+	fake := &fakeCrew{
+		state:       &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		plans:       [][]Scenario{{{Name: "a", Priority: PriorityNormal}, {Name: "b", Priority: PriorityNormal}}},
+		failAfter:   1,
+		failVerdict: "pilot stop: the run left the app",
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	config := Config{AppID: "app", MaxTests: 2, Styles: []string{"normal"}}
+	report, _ := RunSession(context.Background(), config, crew)
+	aborted := report.Results[len(report.Results)-1]
+	if aborted.Verdict != "pilot stop: the run left the app" {
+		t.Fatalf("verdict = %q, want the tester's own", aborted.Verdict)
 	}
 }
