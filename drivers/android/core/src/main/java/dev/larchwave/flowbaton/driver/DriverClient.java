@@ -37,9 +37,11 @@ public final class DriverClient {
         return WireCodec.decodeDeviceInfo(call(FlowBatonDriverServer.DEVICE_INFO_METHOD, new byte[0]));
     }
 
-    public String viewHierarchy() {
+    public String viewHierarchy(boolean excludeKeyboardElements) {
         return WireCodec.decodeViewHierarchy(
-                call(FlowBatonDriverServer.VIEW_HIERARCHY_METHOD, new byte[0]));
+                call(
+                        FlowBatonDriverServer.VIEW_HIERARCHY_METHOD,
+                        WireCodec.encodeViewHierarchyRequest(excludeKeyboardElements)));
     }
 
     public byte[] screenshot() {

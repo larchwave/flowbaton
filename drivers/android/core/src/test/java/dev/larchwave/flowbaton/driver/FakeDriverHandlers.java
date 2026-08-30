@@ -33,9 +33,13 @@ final class FakeDriverHandlers implements FlowBatonDriverHandlers {
         return dimensions;
     }
 
+    /** What the last viewHierarchy call was asked to leave out. */
+    public Boolean excludedKeyboard;
+
     @Override
-    public String viewHierarchy() {
+    public String viewHierarchy(boolean excludeKeyboardElements) {
         failIfArmed();
+        excludedKeyboard = excludeKeyboardElements;
         return hierarchy;
     }
 

@@ -2,6 +2,7 @@ package dev.larchwave.flowbaton;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.view.WindowManager;
 import android.widget.EditText;
 
 /**
@@ -13,6 +14,11 @@ public final class TextEntryActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Ask for the soft keyboard rather than hoping for it: an emulator with a hardware
+        // keyboard leaves the IME hidden on plain focus, and leavesTheKeyboardOutWhenAsked
+        // has nothing to exclude without it.
+        getWindow()
+                .setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
         EditText field = new EditText(this);
         setContentView(field);
         field.requestFocus();

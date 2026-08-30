@@ -45,6 +45,33 @@ public final class WireCodec {
         return new DeviceDimensions(width, height);
     }
 
+    /**
+     * The host's ask for a dump without the input-method window. proto3 omits a false, so a host
+     * that wants the whole screen sends nothing -- which is also what every host built before this
+     * field sends.
+     */
+    public static byte[] encodeViewHierarchyRequest(boolean excludeKeyboardElements) {
+        Writer writer = new Writer();
+        if (excludeKeyboardElements) {
+            writer.varintField(1, 1);
+        }
+        return writer.bytes();
+    }
+
+    public static boolean decodeViewHierarchyRequest(byte[] encoded) {
+        Reader reader = new Reader(encoded);
+        boolean exclude = false;
+        while (reader.hasMore()) {
+            int tag = reader.readTag();
+            if (tag == 0x08) {
+                exclude = reader.readVarint() != 0;
+            } else {
+                reader.skip(tag);
+            }
+        }
+        return exclude;
+    }
+
     public static byte[] encodeViewHierarchy(String hierarchy) {
         Writer writer = new Writer();
         writer.stringField(1, hierarchy);

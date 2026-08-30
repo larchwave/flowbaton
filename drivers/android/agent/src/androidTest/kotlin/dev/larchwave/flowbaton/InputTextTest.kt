@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
@@ -30,6 +31,47 @@ class InputTextTest {
     @Test
     fun typesMappedASCIITextIntoTheFocusedField() {
         typeAndRequireExactTail("ascii text")
+    }
+
+    /**
+     * The iOS runner has always answered excludeKeyboardElements; the Android agent ignored it and
+     * dumped every window, so the explore element table carried one tappable row per key on
+     * Android and none on iOS. The window type is the signal, and only a device can say whether
+     * reading it works: this asserts both directions on a screen that has a keyboard up, so a
+     * filter that dropped nothing and a filter that dropped everything both fail.
+     */
+    @Test
+    fun leavesTheKeyboardOutWhenAsked() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val handlers = AndroidDriverHandlers(instrumentation)
+        focusTheTextField(instrumentation, handlers)
+
+        val whole = handlers.viewHierarchy(false)
+        val withoutKeyboard = handlers.viewHierarchy(true)
+        val keyboard =
+            instrumentation.uiAutomation.windows.firstOrNull {
+                it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD
+            }
+        // Not a skip: a focused text field with no input-method window means the dump this test
+        // is about cannot be exercised, and passing quietly would be the same as not running.
+        val keyboardPackage =
+            keyboard?.root?.packageName?.toString()
+                ?: fail("no input-method window while a text field has focus:\n$whole").let { "" }
+
+        assertTrue(
+            "the input-method package $keyboardPackage is missing from the whole screen:\n$whole",
+            whole.contains("package=\"$keyboardPackage\""),
+        )
+        assertTrue(
+            "the keyboard survived the exclusion:\n$withoutKeyboard",
+            !withoutKeyboard.contains("package=\"$keyboardPackage\""),
+        )
+        // The app itself must still be there; dropping every window would satisfy the line above.
+        val appPackage = instrumentation.context.packageName
+        assertTrue(
+            "the app under test went with the keyboard:\n$withoutKeyboard",
+            withoutKeyboard.contains("package=\"$appPackage\""),
+        )
     }
 
     private companion object {
@@ -72,10 +114,11 @@ class InputTextTest {
         return listOf("stdout: $out", "stderr: $err").joinToString("\n")
     }
 
-    private fun typeAndRequireExactTail(prefix: String) {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val handlers = AndroidDriverHandlers(instrumentation)
-
+    /** Starts the text-entry activity and waits until its field holds input focus. */
+    private fun focusTheTextField(
+        instrumentation: Instrumentation,
+        handlers: AndroidDriverHandlers,
+    ) {
         // Launched through the shell: API 34 silently drops activity starts from
         // a background process, which is what the instrumented process is.
         val component =
@@ -101,9 +144,15 @@ class InputTextTest {
                     // is empty unless flagRetrieveInteractiveWindows is set,
                     // and viewHierarchy() is the path that sets it. An empty
                     // list said nothing about the screen, only about the flag.
-                    "screen at the deadline:\n" + handlers.viewHierarchy(),
+                    "screen at the deadline:\n" + handlers.viewHierarchy(false),
             )
         }
+    }
+
+    private fun typeAndRequireExactTail(prefix: String) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val handlers = AndroidDriverHandlers(instrumentation)
+        focusTheTextField(instrumentation, handlers)
 
         // Unique per run: inputText appends to whatever the field holds, so a
         // rerun against a still-open activity must not pass on stale text. The
@@ -111,7 +160,7 @@ class InputTextTest {
         val text = "$prefix ${SystemClock.uptimeMillis() % 100_000}"
         handlers.inputText(text)
 
-        val hierarchy = handlers.viewHierarchy()
+        val hierarchy = handlers.viewHierarchy(false)
         assertTrue(
             "typed text is missing from the hierarchy:\n$hierarchy",
             hierarchy.contains("$text\""),

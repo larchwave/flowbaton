@@ -184,6 +184,25 @@ public final class WireCodecTest {
         assertEquals(200, decoded.y());
     }
 
+    /**
+     * A host built before this field existed sends an empty request, and it means "the whole
+     * screen" -- the behavior every agent shipped before this field. Decoding an empty body as
+     * anything else would silently start dropping the keyboard for those hosts.
+     */
+    @Test
+    public void viewHierarchyRequestCarriesTheKeyboardExclusion() {
+        assertTrue(
+                WireCodec.decodeViewHierarchyRequest(
+                        WireCodec.encodeViewHierarchyRequest(true)));
+        assertEquals(
+                false,
+                WireCodec.decodeViewHierarchyRequest(
+                        WireCodec.encodeViewHierarchyRequest(false)));
+        assertEquals(false, WireCodec.decodeViewHierarchyRequest(new byte[0]));
+        // proto3 omits a false, so an unasked exclusion puts nothing on the wire.
+        assertEquals(0, WireCodec.encodeViewHierarchyRequest(false).length);
+    }
+
     @Test
     public void truncatedInputIsRefused() {
         assertThrows(

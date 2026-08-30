@@ -644,21 +644,25 @@ func (driver *Driver) PressKey(ctx context.Context, request device.PressKeyReque
 }
 
 // ContentDescriptor asks the agent for the spec 04 §2 XML and converts it.
-// The rpc takes no parameters: the agent dumps the whole screen, so the app
-// filter and the keyboard exclusion have nothing to carry here.
+// The app filter has nothing to carry -- the agent dumps every window -- but
+// the keyboard exclusion does: only the agent can see which window is the
+// input method, so the ask travels with the request.
 func (driver *Driver) ContentDescriptor(
 	ctx context.Context,
-	_ device.ContentDescriptorRequest,
+	request device.ContentDescriptorRequest,
 ) (device.TreeNode, error) {
-	hierarchy, err := driver.agentHierarchy(ctx)
+	hierarchy, err := driver.agentHierarchy(ctx, request.ExcludeKeyboardElements)
 	if err != nil {
 		return device.TreeNode{}, err
 	}
 	return driver.webViewHierarchy(ctx, hierarchy)
 }
 
-func (driver *Driver) agentHierarchy(ctx context.Context) (device.TreeNode, error) {
-	reply, err := driver.invoke(ctx, pbwire.MethodViewHierarchy, pbwire.ViewHierarchyRequest{})
+func (driver *Driver) agentHierarchy(
+	ctx context.Context, excludeKeyboardElements bool,
+) (device.TreeNode, error) {
+	reply, err := driver.invoke(ctx, pbwire.MethodViewHierarchy,
+		pbwire.ViewHierarchyRequest{ExcludeKeyboardElements: excludeKeyboardElements})
 	if err != nil {
 		return device.TreeNode{}, err
 	}
@@ -1106,7 +1110,10 @@ func (driver *Driver) WaitForAppToSettle(
 	if updating {
 		return nil, nil
 	}
-	root, err := driver.agentHierarchy(ctx)
+	// Settle keeps the whole screen, as the iOS driver does: the caller is
+	// asking whether the screen stopped moving, and a keyboard sliding in is
+	// exactly the movement worth seeing.
+	root, err := driver.agentHierarchy(ctx, false)
 	if err != nil {
 		return nil, err
 	}

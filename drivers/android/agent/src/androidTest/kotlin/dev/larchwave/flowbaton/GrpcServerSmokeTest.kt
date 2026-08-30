@@ -38,7 +38,7 @@ class GrpcServerSmokeTest {
                 assertTrue("width must be real pixels: ${info.widthPixels()}", info.widthPixels() > 0)
                 assertTrue("height must be real pixels: ${info.heightPixels()}", info.heightPixels() > 0)
 
-                val hierarchy = client.viewHierarchy()
+                val hierarchy = client.viewHierarchy(false)
                 assertTrue(hierarchy, hierarchy.startsWith("<?xml version='1.0'"))
                 assertTrue(hierarchy, hierarchy.contains("<hierarchy rotation="))
                 assertTrue(hierarchy, hierarchy.contains("bounds=\""))

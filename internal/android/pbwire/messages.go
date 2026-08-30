@@ -57,11 +57,40 @@ func (m *DeviceInfo) Unmarshal(data []byte) error {
 	return nil
 }
 
-type ViewHierarchyRequest struct{}
+type ViewHierarchyRequest struct {
+	ExcludeKeyboardElements bool
+}
 
-func (ViewHierarchyRequest) Marshal() []byte { return nil }
+func (m ViewHierarchyRequest) Marshal() []byte {
+	return appendBool(nil, 1, m.ExcludeKeyboardElements)
+}
 
-func (*ViewHierarchyRequest) Unmarshal(data []byte) error { return discardAll(data) }
+func (m *ViewHierarchyRequest) Unmarshal(data []byte) error {
+	*m = ViewHierarchyRequest{}
+	for len(data) > 0 {
+		field, wire, n, err := consumeTag(data)
+		if err != nil {
+			return err
+		}
+		data = data[n:]
+		switch field {
+		case 1:
+			v, n, err := consumeVarintField(data, wire, field)
+			if err != nil {
+				return err
+			}
+			m.ExcludeKeyboardElements = v != 0
+			data = data[n:]
+		default:
+			n, err := skipField(data, wire)
+			if err != nil {
+				return err
+			}
+			data = data[n:]
+		}
+	}
+	return nil
+}
 
 type ViewHierarchyResponse struct {
 	Hierarchy string

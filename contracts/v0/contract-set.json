@@ -90,7 +90,7 @@
       "language": "proto",
       "path": "proto/flowbaton_android.proto",
       "coverage": "contract-complete",
-      "sha256": "418880fbd0f6ec86398925c63bc4c9f37d564a064141bb96efbc6ea17b291bae"
+      "sha256": "852ed749e40f644d0b399555e56012f2c6040ce39c1bdb7328878e310f265e6f"
     },
     {
       "id": "android-json-descriptor",
@@ -98,7 +98,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/android-grpc.json",
       "coverage": "contract-complete",
-      "sha256": "d0b1b630a6c96c717d3824bc60098c46f00f90c3c3f614bbad0635182eb3a640"
+      "sha256": "dabeade15724b90a5e7e547f9d8933b0538b90b64ae80896d3b573c14e78ac3a"
     },
     {
       "id": "android-jvm-declarations",
@@ -106,7 +106,7 @@
       "language": "jvm",
       "path": "drivers/android/core/src/main/java/dev/larchwave/flowbaton/driver/contract/AndroidWireContractV0.java",
       "coverage": "contract-complete",
-      "sha256": "d1c0e477e7b71ff83d86f2fbaa06c2eebb7e519b1a8c75ca1117e325427887a2"
+      "sha256": "235cb5f768d232abe9b9619858c6bdbe3b6db56f75b665ac8c521f1465bc0265"
     },
     {
       "id": "android-g001-runtime",

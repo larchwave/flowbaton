@@ -11,7 +11,7 @@ public final class AndroidWireContractV0Test {
     @Test
     public void freezesAllTwelveRPCDeclarations() {
         assertEquals("v0", AndroidWireContractV0.CONTRACT_VERSION);
-        assertEquals("d0b1b630a6c96c717d3824bc60098c46f00f90c3c3f614bbad0635182eb3a640", AndroidWireContractV0.DESCRIPTOR_SHA256);
+        assertEquals("dabeade15724b90a5e7e547f9d8933b0538b90b64ae80896d3b573c14e78ac3a", AndroidWireContractV0.DESCRIPTOR_SHA256);
         assertEquals(
                 List.of(
                         rpc("deviceInfo", "DeviceInfoRequest", "DeviceInfo", false),
@@ -55,7 +55,7 @@ public final class AndroidWireContractV0Test {
                         message("SetLocationResponse"),
                         message("TapRequest", field("x", "uint32", 1, false), field("y", "uint32", 2, false)),
                         message("TapResponse"),
-                        message("ViewHierarchyRequest"),
+                        message("ViewHierarchyRequest", field("excludeKeyboardElements", "bool", 1, false)),
                         message("ViewHierarchyResponse", field("hierarchy", "string", 1, false))),
                 AndroidWireContractV0.messages());
     }

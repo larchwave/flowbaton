@@ -17,6 +17,7 @@ import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import dev.larchwave.flowbaton.driver.ArgumentCoercion
 import dev.larchwave.flowbaton.driver.DeviceDimensions
 import dev.larchwave.flowbaton.driver.HierarchyXml
@@ -53,7 +54,7 @@ class AndroidDriverHandlers(
         return DeviceDimensions(metrics.widthPixels, metrics.heightPixels)
     }
 
-    override fun viewHierarchy(): String {
+    override fun viewHierarchy(excludeKeyboardElements: Boolean): String {
         try {
             uiAutomation.waitForIdle(500, 1_000)
         } catch (_: TimeoutException) {
@@ -65,7 +66,13 @@ class AndroidDriverHandlers(
         // Bottom-up by window layer, because the platform's own order is not stable and the
         // flakiness reaches the flow author through selection order. Put the app under test
         // ahead of overlays such as the status bar; WindowOrder defines the ordering.
-        val windows = uiAutomation.windows
+        // The keyboard is its own window, and its type is the only authoritative signal there
+        // is -- an IME package name is a guess, and the key rows themselves read as ordinary
+        // tappable elements. Dropping the window drops every key with it.
+        val windows =
+            uiAutomation.windows.filter {
+                !excludeKeyboardElements || it.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD
+            }
         val roots =
             WindowOrder.ascendingLayerOrder(IntArray(windows.size) { windows[it].layer })
                 .toList()

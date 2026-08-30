@@ -12,7 +12,7 @@ import java.util.List;
 public final class AndroidWireContractV0 {
     public static final int SCHEMA_VERSION = 1;
     public static final String CONTRACT_VERSION = "v0";
-    public static final String DESCRIPTOR_SHA256 = "d0b1b630a6c96c717d3824bc60098c46f00f90c3c3f614bbad0635182eb3a640";
+    public static final String DESCRIPTOR_SHA256 = "dabeade15724b90a5e7e547f9d8933b0538b90b64ae80896d3b573c14e78ac3a";
     public static final String SEMANTIC_MANIFEST = String.join(
             "\n",
             "descriptor|1|v0",
@@ -72,6 +72,7 @@ public final class AndroidWireContractV0 {
             "field|TapRequest|1|y|uint32|2|false",
             "message|21|TapResponse",
             "message|22|ViewHierarchyRequest",
+            "field|ViewHierarchyRequest|0|excludeKeyboardElements|bool|1|false",
             "message|23|ViewHierarchyResponse",
             "field|ViewHierarchyResponse|0|hierarchy|string|1|false",
             "error-handler-status|INTERNAL",
@@ -150,7 +151,7 @@ public final class AndroidWireContractV0 {
             message("SetLocationResponse"),
             message("TapRequest", field("x", "uint32", 1, false), field("y", "uint32", 2, false)),
             message("TapResponse"),
-            message("ViewHierarchyRequest"),
+            message("ViewHierarchyRequest", field("excludeKeyboardElements", "bool", 1, false)),
             message("ViewHierarchyResponse", field("hierarchy", "string", 1, false)));
 
     private static final ErrorContract ERROR_CONTRACT = new ErrorContract(

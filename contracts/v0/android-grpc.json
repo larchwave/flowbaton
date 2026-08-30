@@ -88,7 +88,9 @@
       {"name":"y","type":"uint32","number":2,"repeated":false}
     ]},
     {"name":"TapResponse","fields":[]},
-    {"name":"ViewHierarchyRequest","fields":[]},
+    {"name":"ViewHierarchyRequest","fields":[
+      {"name":"excludeKeyboardElements","type":"bool","number":1,"repeated":false}
+    ]},
     {"name":"ViewHierarchyResponse","fields":[
       {"name":"hierarchy","type":"string","number":1,"repeated":false}
     ]}

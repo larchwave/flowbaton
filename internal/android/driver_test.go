@@ -1001,6 +1001,38 @@ func TestContentDescriptorParsesTheAgentXML(t *testing.T) {
 	}
 }
 
+// The keyboard is 41 rows of tappable keys in the element table on iOS, and
+// the observer asks for the app's own elements to keep them out. Android
+// dumped the whole screen regardless, so the same table carried the IME on one
+// platform and not the other, and a tester could tap a key row as if it were
+// the app. The agent holds the only authoritative signal
+// (AccessibilityWindowInfo.TYPE_INPUT_METHOD), so the request has to carry the
+// ask.
+func TestContentDescriptorAsksTheAgentToLeaveTheKeyboardOut(t *testing.T) {
+	t.Parallel()
+
+	driver, _, recorder := newOpenDriver(t, func(method string, _ [][]byte) []byte {
+		switch method {
+		case pbwire.MethodDeviceInfo:
+			return pbwire.DeviceInfo{WidthPixels: 1, HeightPixels: 1}.Marshal()
+		case pbwire.MethodViewHierarchy:
+			return pbwire.ViewHierarchyResponse{Hierarchy: sampleHierarchy}.Marshal()
+		}
+		return nil
+	})
+	if _, err := driver.ContentDescriptor(context.Background(),
+		device.ContentDescriptorRequest{ExcludeKeyboardElements: true}); err != nil {
+		t.Fatalf("ContentDescriptor() error = %v", err)
+	}
+	var request pbwire.ViewHierarchyRequest
+	if err := request.Unmarshal(recorder.messagesFor(pbwire.MethodViewHierarchy)[0]); err != nil {
+		t.Fatal(err)
+	}
+	if !request.ExcludeKeyboardElements {
+		t.Fatal("the agent was asked for the whole screen although the caller excluded the keyboard")
+	}
+}
+
 func TestAddMediaStreamsChunksCarryingNameAndExtension(t *testing.T) {
 	t.Parallel()
 

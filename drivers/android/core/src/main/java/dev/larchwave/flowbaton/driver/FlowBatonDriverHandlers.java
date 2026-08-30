@@ -11,7 +11,7 @@ import java.util.List;
 public interface FlowBatonDriverHandlers {
     DeviceDimensions deviceInfo() throws Exception;
 
-    String viewHierarchy() throws Exception;
+    String viewHierarchy(boolean excludeKeyboardElements) throws Exception;
 
     byte[] screenshot() throws Exception;
 

@@ -136,7 +136,10 @@ public final class FlowBatonDriverServer implements AutoCloseable {
                         VIEW_HIERARCHY_METHOD,
                         unaryCall(
                                 request ->
-                                        WireCodec.encodeViewHierarchy(handlers.viewHierarchy())))
+                                        WireCodec.encodeViewHierarchy(
+                                                handlers.viewHierarchy(
+                                                        WireCodec.decodeViewHierarchyRequest(
+                                                                request)))))
                 .addMethod(
                         SCREENSHOT_METHOD,
                         unaryCall(request -> WireCodec.encodeScreenshot(handlers.screenshot())))

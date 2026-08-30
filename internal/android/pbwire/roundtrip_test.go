@@ -37,7 +37,7 @@ func TestEveryMessageSurvivesARoundTrip(t *testing.T) {
 
 	assertRoundTrip(t, "DeviceInfoRequest", DeviceInfoRequest{})
 	assertRoundTrip(t, "DeviceInfo", DeviceInfo{WidthPixels: 1080, HeightPixels: 2400})
-	assertRoundTrip(t, "ViewHierarchyRequest", ViewHierarchyRequest{})
+	assertRoundTrip(t, "ViewHierarchyRequest", ViewHierarchyRequest{ExcludeKeyboardElements: true})
 	assertRoundTrip(t, "ViewHierarchyResponse", ViewHierarchyResponse{Hierarchy: "<node text='&amp;'/>"})
 	assertRoundTrip(t, "ScreenshotRequest", ScreenshotRequest{})
 	assertRoundTrip(t, "ScreenshotResponse", ScreenshotResponse{Bytes: []byte{0x89, 'P', 'N', 'G', 0}})
@@ -144,5 +144,17 @@ func TestAnEmptyMessageSkipsUnknownFieldsOfEveryWireType(t *testing.T) {
 	var response TapResponse
 	if err := response.Unmarshal(mustHex(t, payload)); err != nil {
 		t.Fatalf("Unmarshal(%s) = %v, want unknown fields skipped", payload, err)
+	}
+}
+
+// An agent built before this field existed decodes the request as an empty
+// message, so a host that does not want the exclusion must put nothing on the
+// wire. proto3 omits false; this pins that the hand-rolled encoder does too,
+// because a stray tag would reach every deployed agent.
+func TestNotExcludingTheKeyboardPutsNothingOnTheWire(t *testing.T) {
+	t.Parallel()
+
+	if encoded := (ViewHierarchyRequest{}).Marshal(); len(encoded) != 0 {
+		t.Fatalf("ViewHierarchyRequest{}.Marshal() = % x, want nothing", encoded)
 	}
 }

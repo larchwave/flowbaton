@@ -28,7 +28,9 @@ message DeviceInfo {
   uint32 heightPixels = 2;
 }
 
-message ViewHierarchyRequest {}
+message ViewHierarchyRequest {
+  bool excludeKeyboardElements = 1;
+}
 
 message ViewHierarchyResponse {
   string hierarchy = 1;

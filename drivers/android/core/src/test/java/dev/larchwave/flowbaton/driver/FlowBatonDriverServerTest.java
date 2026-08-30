@@ -58,7 +58,14 @@ public final class FlowBatonDriverServerTest {
                         assertEquals(1080, info.widthPixels());
                         assertEquals(1920, info.heightPixels());
 
-                        assertEquals("<hierarchy rotation=\"0\" />", client.viewHierarchy());
+                        assertEquals(
+                                "<hierarchy rotation=\"0\" />", client.viewHierarchy(false));
+                        assertEquals(Boolean.FALSE, handlers.excludedKeyboard);
+                        // The ask has to survive the round trip, not just the codec: the
+                        // server decodes the request body it is handed, and an empty one
+                        // means the whole screen.
+                        client.viewHierarchy(true);
+                        assertEquals(Boolean.TRUE, handlers.excludedKeyboard);
                         assertArrayEquals(handlers.png, client.screenshot());
 
                         client.tap(37, 73);
