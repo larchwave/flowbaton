@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/larchwave/flowbaton/internal/strictjson"
 )
@@ -159,10 +160,16 @@ func (u unreadableReply) Unwrap() error        { return u.err }
 func (u unreadableReply) Is(target error) bool { return target == ErrUnreadableReply }
 
 func DecodeReply(text string, target any) error {
-	if err := strictjson.Decode([]byte(UnfencedJSON(text)), target); err != nil {
-		return unreadableReply{fmt.Errorf("%w; reply begins %q", err, replyExcerpt(text))}
+	unfenced := UnfencedJSON(text)
+	err := strictjson.Decode([]byte(unfenced), target)
+	if err == nil {
+		return nil
 	}
-	return nil
+	if around, offset, ok := replyFaultSite(unfenced, err); ok {
+		return unreadableReply{fmt.Errorf(
+			"%w; the reply reads %q around byte %d", err, around, offset)}
+	}
+	return unreadableReply{fmt.Errorf("%w; reply begins %q", err, replyExcerpt(text))}
 }
 
 func replyExcerpt(text string) string {
@@ -170,4 +177,36 @@ func replyExcerpt(text string) string {
 	// model on the retry, and a reply cut through a character would feed it
 	// its own broken text as the example of what not to send.
 	return Truncate(strings.Join(strings.Fields(text), " "), replyExcerptLimit)
+}
+
+// replyFaultSite quotes the reply around the byte the decoder stopped on. A
+// long reply breaks where the model lost track, which its opening does not
+// show: two planning replies died on "invalid character '}' after array
+// element" with an excerpt that stopped inside the first scenario. The
+// window serves the retry too, since the model needs the place it went
+// wrong rather than its own first words.
+//
+// A fault inside the opening excerpt keeps the opening: there the head IS
+// the site, and it reads as the whole short reply rather than a slice of it.
+func replyFaultSite(unfenced string, err error) (string, int64, bool) {
+	var syntax *json.SyntaxError
+	if !errors.As(err, &syntax) {
+		return "", 0, false
+	}
+	offset := syntax.Offset
+	if offset <= replyExcerptLimit || offset > int64(len(unfenced)) {
+		return "", 0, false
+	}
+	start := int(offset) - replyExcerptLimit/2
+	for start > 0 && !utf8.RuneStart(unfenced[start]) {
+		start--
+	}
+	end := int(offset) + replyExcerptLimit/2
+	if end > len(unfenced) {
+		end = len(unfenced)
+	}
+	for end < len(unfenced) && !utf8.RuneStart(unfenced[end]) {
+		end++
+	}
+	return strings.Join(strings.Fields(unfenced[start:end]), " "), offset, true
 }
