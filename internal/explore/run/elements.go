@@ -208,7 +208,7 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 	// for whoever reads the report.
 	label := elementLabel(element.Node)
 	if bounds, ok := explore.ElementBounds(element.Node); ok {
-		center := hierarchy.Center(bounds)
+		center := hierarchy.VisibleCenter(bounds, state.Viewport)
 		return &explore.Locator{Kind: explore.LocatorPoint, Value: explore.PointLocator(center), Label: label}
 	}
 	return &explore.Locator{Kind: explore.LocatorPath, Value: element.Path, Label: label}
@@ -309,7 +309,7 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 					Reason: fmt.Sprintf("element e%d has no usable bounds", *args.EIDX),
 				}
 			}
-			return hierarchy.Center(bounds), nil
+			return hierarchy.VisibleCenter(bounds, state.Viewport), nil
 		}
 		return device.Point{}, explore.TargetMissError{
 			Reason: fmt.Sprintf("no element e%d in the newest element table; call observe", *args.EIDX),
@@ -333,7 +333,7 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 	}
 	for _, candidate := range found {
 		if candidate.HasBounds {
-			return hierarchy.Center(candidate.Bounds), nil
+			return hierarchy.VisibleCenter(candidate.Bounds, state.Viewport), nil
 		}
 	}
 	return device.Point{}, explore.TargetMissError{
