@@ -33,11 +33,18 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 	if result.Status != explore.TestPassed {
 		return nil, fmt.Errorf("export: only passing runs export, run status is %q", result.Status)
 	}
-	// stopApp, because the session records from a freshly launched app: the
-	// navigator kills and relaunches before every scenario. A bare launchApp
-	// resumes whatever is already running, so the flow would replay from a
-	// screen the run never started on -- which is how mmx36's flows failed
-	// at step 2 on selectors that were never wrong.
+	// stopApp restates today's default (specs/06-launch-app-semantics.md
+	// section 1, launchAppCompiled{stopApp: true}), and is written out
+	// because the run depended on it: the navigator kills and relaunches
+	// before every scenario, so the flow replays from a screen only a fresh
+	// launch produces. Naming it keeps that dependency true if the default
+	// ever changes.
+	//
+	// It is not what fixed mmx36's flows, whatever the commit that added it
+	// said -- a bare launchApp already stops the app, which
+	// TestLaunchAppSkipsEveryUnauthoredStep pins. The two changes beside it
+	// did: the navigator kills first, and the session returns to the start
+	// screen between scenarios.
 	//
 	// Not clearState: the kill resets navigation and keeps data, and a run
 	// often depends on what an earlier scenario created.
