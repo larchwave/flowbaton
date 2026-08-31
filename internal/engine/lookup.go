@@ -304,6 +304,23 @@ func (lookup *ElementLookup) visibleHierarchy(ctx context.Context) (*hierarchy.E
 	return hierarchy.FilterVisible(normalized, viewport), nil
 }
 
+// ForgetDeviceInfo drops the cached device grid so the next read measures the
+// screen as it is now. DeviceInfo is cached because a lookup polls and the iOS
+// runner answers the route by taking a screenshot, but the grid is the one
+// field that changes under a running session, and visibleHierarchy prunes with
+// it: after a rotation an element plainly on a landscape screen falls outside
+// the remembered portrait width and reads as missing.
+//
+// The engine calls this when IT rotates the device. A rotation the app performs
+// on its own is a known gap: nothing tells the session, and the cached grid
+// stays wrong until the flow rotates or the session ends.
+func (lookup *ElementLookup) ForgetDeviceInfo() {
+	lookup.deviceInfoMu.Lock()
+	defer lookup.deviceInfoMu.Unlock()
+	lookup.hasDeviceInfo = false
+	lookup.deviceInfo = device.DeviceInfo{}
+}
+
 // visibleCenter aims a gesture at the part of an element that is on screen.
 // visibleHierarchy keeps anything 10% visible, so a row scrolled past an edge
 // stays selectable while its geometric center sits off the device. Scroll

@@ -285,7 +285,12 @@ func executeDeviceState(ctx context.Context, state *executionState, evaluated ev
 	case model.CommandSetLocation:
 		err = driver.SetLocation(ctx, payload.location)
 	case model.CommandSetOrientation:
-		err = driver.SetOrientation(ctx, payload.orientation)
+		// The grid the rest of the flow prunes and aims with just changed.
+		if err = driver.SetOrientation(ctx, payload.orientation); err == nil {
+			if lookup, lookupErr := state.elementLookup(); lookupErr == nil {
+				lookup.ForgetDeviceInfo()
+			}
+		}
 	case model.CommandSetAirplaneMode:
 		err = driver.SetAirplaneMode(ctx, device.AirplaneModeRequest{Enabled: payload.airplaneOn})
 	case model.CommandSetPermissions:
