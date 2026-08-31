@@ -42,6 +42,22 @@ func elementID(node device.TreeNode) string {
 	return ""
 }
 
+// fieldContent returns what a text field currently holds, which is not its
+// label: an empty field labels itself with the word it prompts with, so
+// "searchField \"Search\"" reads the same whether the field is empty or holds
+// that word. mmx56 filed a [High] defect on exactly that ambiguity. Captured
+// on iOS 26.2, 2026-08-31: the empty shortcuts field sends hintText and
+// accessibilityText alone, the filled contacts field adds text and value.
+// Android sends the content in text and nothing when the field is empty.
+func fieldContent(node device.TreeNode) string {
+	for _, key := range []string{"text", "value"} {
+		if content := strings.TrimSpace(node.Attributes[key]); content != "" {
+			return content
+		}
+	}
+	return ""
+}
+
 // elementTable renders the newest observation as the model-facing element
 // list. Only the latest table is kept in a conversation.
 func elementTable(state *explore.ScreenState) string {
@@ -73,6 +89,9 @@ func elementTable(state *explore.ScreenState) string {
 		// which a text field with the keyboard open reports as false.
 		if explore.IsTextInput(element.Node) {
 			builder.WriteString(" text-field")
+			if fieldContent(element.Node) == "" {
+				builder.WriteString(" empty")
+			}
 		}
 		if element.Node.Focused != nil && *element.Node.Focused {
 			builder.WriteString(" focused")

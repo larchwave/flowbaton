@@ -299,3 +299,36 @@ func TestGeneralizingCountsWithTheMatcherTheDeviceUses(t *testing.T) {
 		t.Fatalf("locator = %+v, want the literal label: the pattern matches two elements", got)
 	}
 }
+
+// A row for a text field reads the same whether the field is empty or holds
+// the word it prompts with, so the judge cannot answer "is it empty?".
+// Session mmx56 filed a [High] defect saying exactly that: "e1 searchField
+// 'Search' is visible but the expected outcome requires it to be empty with
+// no entered text; no text content or emptiness confirmation is provided".
+// The fact was there and unreadable: captured on iOS 26.2, 2026-08-31, the
+// empty shortcuts field sends only hintText and accessibilityText "Search",
+// the filled contacts field adds text and value "ZZZNoSuchContact".
+func TestElementTableSaysWhenAFieldIsEmpty(t *testing.T) {
+	t.Parallel()
+
+	state := &explore.ScreenState{
+		Signature: explore.ScreenSignature{TreeDigest: "abcdef0123456789"},
+		Elements: []explore.FlatElement{
+			{EIDX: 0, Node: device.TreeNode{Attributes: map[string]string{
+				"elementType": "45", "hintText": "Search", "accessibilityText": "Search",
+				"bounds": "[0,0][100,50]",
+			}}},
+			{EIDX: 1, Node: device.TreeNode{Attributes: map[string]string{
+				"elementType": "45", "hintText": "Search", "accessibilityText": "Search",
+				"text": "ZZZNoSuchContact", "value": "ZZZNoSuchContact", "bounds": "[0,50][100,100]",
+			}}},
+		},
+	}
+	lines := strings.Split(elementTable(state), "\n")
+	if !strings.Contains(lines[1], "empty") {
+		t.Fatalf("an empty field is not marked empty: %q", lines[1])
+	}
+	if strings.Contains(lines[2], "empty") {
+		t.Fatalf("a field holding text is marked empty: %q", lines[2])
+	}
+}
