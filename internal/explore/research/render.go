@@ -113,8 +113,13 @@ func nodeID(node device.TreeNode) string {
 // elementLocators assigns locators deterministically, best first: a stable
 // identifier, then visible text when it is unique among the flattened
 // elements, then the tree path; a center-point locator is appended when
-// the element has bounds.
-func elementLocators(element explore.FlatElement, labelCounts map[string]int) []explore.Locator {
+// the element has bounds. That point is the center of the VISIBLE part: the
+// exporter writes it into a flow, and the engine refuses an absolute point
+// outside the screen, so a row scrolled past an edge would export a flow that
+// cannot replay. For a fully visible element the two centers are the same.
+func elementLocators(
+	element explore.FlatElement, labelCounts map[string]int, viewport device.Bounds,
+) []explore.Locator {
 	locators := []explore.Locator{}
 	switch {
 	case nodeID(element.Node) != "":
@@ -125,7 +130,7 @@ func elementLocators(element explore.FlatElement, labelCounts map[string]int) []
 		locators = append(locators, explore.Locator{Kind: explore.LocatorPath, Value: element.Path})
 	}
 	if bounds, ok := explore.ElementBounds(element.Node); ok {
-		center := hierarchy.Center(bounds)
+		center := hierarchy.VisibleCenter(bounds, viewport)
 		locators = append(locators, explore.Locator{
 			Kind:  explore.LocatorPoint,
 			Value: explore.PointLocator(center),

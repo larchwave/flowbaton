@@ -156,7 +156,7 @@ func TestElementLocatorLadder(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			locators := elementLocators(tt.element, counts)
+			locators := elementLocators(tt.element, counts, device.Bounds{})
 			if locators[0].Kind != tt.wantKind || locators[0].Value != tt.wantVal {
 				t.Fatalf("best locator %+v, want %s=%s", locators[0], tt.wantKind, tt.wantVal)
 			}

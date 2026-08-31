@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/explore"
 )
 
@@ -77,7 +78,7 @@ func (r *Researcher) Research(ctx context.Context, state *explore.ScreenState) (
 	if err != nil {
 		return nil, err
 	}
-	sections := buildSections(reply, state.Elements)
+	sections := buildSections(reply, state.Elements, state.Viewport)
 	if r.Models.Vision != nil && len(state.ScreenshotPNG) > 0 {
 		if err := r.mergeVisualNotes(ctx, state, table, sections); err != nil {
 			return nil, err
@@ -189,7 +190,9 @@ func (r *Researcher) now() time.Time {
 // buildSections resolves proposed rows against the flattened elements,
 // assigning deterministic locators and falling back to tree facts for
 // blank role or label fields.
-func buildSections(reply sectionsReply, elements []explore.FlatElement) []explore.Section {
+func buildSections(
+	reply sectionsReply, elements []explore.FlatElement, viewport device.Bounds,
+) []explore.Section {
 	byIndex := map[int]explore.FlatElement{}
 	labelCounts := map[string]int{}
 	for _, element := range elements {
@@ -218,7 +221,7 @@ func buildSections(reply sectionsReply, elements []explore.FlatElement) []explor
 				EIDX:     row.EIDX,
 				Role:     role,
 				Label:    label,
-				Locators: elementLocators(flat, labelCounts),
+				Locators: elementLocators(flat, labelCounts, viewport),
 				Notes:    row.Notes,
 			})
 		}
