@@ -46,8 +46,11 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 	// did: the navigator kills first, and the session returns to the start
 	// screen between scenarios.
 	//
-	// Not clearState: the kill resets navigation and keeps data, and a run
-	// often depends on what an earlier scenario created.
+	// Not clearState: it would take the data a run depends on with it. The
+	// price is that a stop does not reset navigation either -- an app that
+	// restores its last screen replays from there, not from the screen the
+	// recording began on (see EnsureReady in run/navigator.go for the
+	// measurement).
 	commands := []*yaml.Node{
 		keyed("launchApp", mapNode(plain("stopApp"), plain("true"))),
 	}

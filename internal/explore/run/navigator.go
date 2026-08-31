@@ -52,20 +52,25 @@ func (n *Navigator) deps() toolDeps {
 	}.withDefaults()
 }
 
-// EnsureReady puts the app at its own start screen, settles, and observes.
-// One failed observation earns one kill-and-relaunch retry before giving up.
+// EnsureReady relaunches the app from a stopped process, settles, and
+// observes. One failed observation earns one kill-and-relaunch retry before
+// giving up.
 //
-// It kills before launching, which is what makes "from any state" true: a
-// launch alone resumes an app wherever it was left. A session runs its
-// scenarios back to back, so without this scenario N begins on whatever
-// screen N-1 finished on -- while the planner writes scenarios against the
-// UI map of the start screen, and the exported flow records the actions
-// without the screen they began on. Measured on mmx36: 1 of 4 exported
-// flows replayed standalone.
+// It kills before launching so the app starts from a stopped process rather
+// than resuming a live one, and so a scenario does not inherit the process
+// state the one before it left. Measured on mmx36: 1 of 4 exported flows
+// replayed standalone; after this and the between-scenario reset, 4 of 4.
 //
-// The kill resets navigation and not data. An app relaunched still holds
-// whatever earlier scenarios created, which is what the later ones need;
-// clearing state would take that with it.
+// What it does NOT do is put the app on a known screen, whatever this
+// comment said before 2026-08-30. Measured on iOS 26.2: Reminders killed on
+// a list-detail screen relaunches on that same screen, because the system
+// restores it. A scenario, and a replayed export, can therefore still begin
+// somewhere the run never started -- the symptom is a step 2 that cannot
+// find an element the recording did. Only clearState defeats restoration,
+// and it takes the data later scenarios need with it.
+//
+// The kill does keep data: an app relaunched still holds whatever earlier
+// scenarios created.
 func (n *Navigator) EnsureReady(ctx context.Context) (*explore.ScreenState, error) {
 	deps := n.deps()
 	if err := deps.validate(); err != nil {
