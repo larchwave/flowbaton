@@ -88,7 +88,7 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 			"cannot express the expectation at all; an outcome the app should have "+
 			"produced and did not is applicable.",
 		expected, elementTable(facts.Final),
-		driverCheckLines(facts.DriverChecks)+typedLines(facts.Typed),
+		driverCheckLines(facts.DriverChecks)+typedLines(facts.Typed)+visitedLines(facts.Visited),
 		sessionTagLine(facts.SessionTag))
 	verdict := workerVerdict{}
 	_, err := explore.ChatJSON(ctx, llm, explore.ChatRequest{Messages: []explore.Message{
@@ -126,6 +126,12 @@ type judgeFacts struct {
 	// SessionTag is the label the tester was told to stamp on anything it
 	// creates (scenarioText). Blank when the session has no name.
 	SessionTag string
+	// Visited names the screens the run passed through, in order. Without
+	// it the judge answers only about the last screen, so an expectation
+	// about a state the run REACHED and then left reads as never produced:
+	// live mmx51 filed "[High] not observed: A new contact creation screen
+	// is shown" against a run whose own reproduce list taps "First name".
+	Visited []string
 }
 
 // sessionTagLine warns the judge about the harness's own fingerprint. The
@@ -141,6 +147,49 @@ func sessionTagLine(tag string) string {
 		"\nThe tester was told to tag any data it creates with %q. A screen value "+
 			"that matches the expectation apart from that tag is still the expected "+
 			"one; do not count the tag against it.\n", tag)
+}
+
+// visitedScreens names the screens a run passed through, in order, with
+// consecutive repeats collapsed: the judge needs the journey, not one line
+// per step. A step whose screen was never captured carries a zero
+// signature and is skipped -- naming it would assert a screen with no tree
+// behind it.
+func visitedScreens(steps []explore.StepRecord) []string {
+	visited := []string{}
+	for _, step := range steps {
+		for _, signature := range []explore.ScreenSignature{step.Before, step.After} {
+			if signature.TreeDigest == "" {
+				continue
+			}
+			key := signature.Key()
+			if len(visited) > 0 && visited[len(visited)-1] == key {
+				continue
+			}
+			visited = append(visited, key)
+		}
+	}
+	return visited
+}
+
+// visitedLines renders the journey for the judge. One screen is not a
+// journey: it says nothing the final table does not already show, so it
+// stays out of the prompt rather than inviting the model to reason about a
+// list of length one.
+func visitedLines(visited []string) string {
+	if len(visited) < 2 {
+		return ""
+	}
+	builder := &strings.Builder{}
+	builder.WriteString("\nScreens the run visited, in order (driver facts):\n")
+	for index, screen := range visited {
+		fmt.Fprintf(builder, "%d. %s\n", index+1, screen)
+	}
+	builder.WriteString(
+		"These are screen names, not screen content. An outcome naming a state " +
+			"the app should REACH is met when the run visited it, even though the " +
+			"run continued past it; an outcome naming a specific value or text is " +
+			"still met only when that value is on the final screen above.\n")
+	return builder.String()
 }
 
 // driverCheckLines renders check_visible results for the judge; blank when
