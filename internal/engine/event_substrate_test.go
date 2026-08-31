@@ -20,7 +20,12 @@ func TestCommandSpanBuildsMetadataAndResetEventsWithoutAllocatingSequence(t *tes
 		t.Fatalf("newTimeline() error: %v", err)
 	}
 	parentCommand := model.Command{Kind: model.CommandRepeat, Arguments: map[string]any{"times": 2}}
-	wantParentCommand := cloneCommand(parentCommand)
+	// Written out rather than cloneCommand(parentCommand): the timeline clones
+	// with that same function, so an expected value built from it would share
+	// whatever the clone shares and would accept a shallow copy that aliases
+	// the caller's map -- the aliasing both assertions below are here to
+	// catch.
+	wantParentCommand := model.Command{Kind: model.CommandRepeat, Arguments: map[string]any{"times": 2}}
 	parent, _, err := timeline.BeginCommand(parentCommand, 3)
 	if err != nil {
 		t.Fatalf("BeginCommand(parent) error: %v", err)

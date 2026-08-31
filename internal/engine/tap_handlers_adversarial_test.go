@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 	"strings"
 	"sync"
@@ -393,7 +394,17 @@ func TestTapBatch2OddFloorAndOverflowSafePercentageMath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("max-int resolve error = %v", err)
 	}
-	wantAxis := floorTapPercentage(int64(maximumInt), 99)
+	// Computed with big.Int, NOT with floorTapPercentage: an expected value
+	// that calls the function under test agrees with it however wrong it is.
+	// Rewritten as the naive dimension*percent/100 this axis overflows to
+	// 92233720368547757, and the old form of this assertion still passed
+	// because both sides overflowed the same way.
+	exact := new(big.Int).Mul(big.NewInt(int64(maximumInt)), big.NewInt(99))
+	exact.Div(exact, big.NewInt(100))
+	if !exact.IsInt64() {
+		t.Fatalf("expected value %s does not fit in an int64", exact)
+	}
+	wantAxis := exact.Int64()
 	if resolved != (device.Point{X: float64(wantAxis), Y: float64(wantAxis)}) {
 		t.Fatalf("max-int floor = %+v, want %d without multiplication overflow", resolved, wantAxis)
 	}

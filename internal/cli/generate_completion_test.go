@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -34,18 +36,36 @@ func TestGenerateCompletionDefaultsToBash(t *testing.T) {
 func TestGenerateCompletionListsEverySubcommand(t *testing.T) {
 	t.Parallel()
 
-	// The whole point is to complete the real subcommands. If the script and the
-	// dispatch drift, completion offers commands that do not exist or omits ones
-	// that do — so every command flowbaton actually dispatches must appear.
+	// Every subcommand must reach compgen's word list, which is the only place
+	// bash reads them from. Searching the whole script instead would pass on a
+	// list moved into a comment or an unused variable. This test says nothing
+	// about drift from the dispatch, because the script is built out of the
+	// same slice it would be checked against
+	// (TestCompletionListsExactlyWhatMainDispatches in internal/foundation
+	// reads cmd/flowbaton/main.go for that).
 	stdout, _, code := runGenerateCompletion(t, "bash")
 	if code != ExitOK {
 		t.Fatalf("exit = %d", code)
 	}
+	words := compgenWords(t, stdout)
 	for _, command := range TopLevelSubcommands {
-		if !strings.Contains(stdout, command) {
-			t.Fatalf("completion is missing subcommand %q\n%s", command, stdout)
+		if !slices.Contains(words, command) {
+			t.Fatalf("compgen word list %v is missing subcommand %q\n%s", words, command, stdout)
 		}
 	}
+	if !slices.Contains(words, "--version") {
+		t.Fatalf("compgen word list %v drops --version\n%s", words, stdout)
+	}
+}
+
+// compgenWords returns the words bash would actually offer.
+func compgenWords(t *testing.T, script string) []string {
+	t.Helper()
+	match := regexp.MustCompile(`compgen -W "([^"]*)"`).FindStringSubmatch(script)
+	if match == nil {
+		t.Fatalf("no compgen word list in the completion script\n%s", script)
+	}
+	return strings.Fields(match[1])
 }
 
 func TestGenerateCompletionSupportsZsh(t *testing.T) {

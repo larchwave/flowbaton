@@ -507,7 +507,17 @@ func TestExecuteOwnsAndSanitizesExternalEnvironmentBeforeRootExecution(t *testin
 		"FLOWBATON_SHARD_ID":    "external-id",
 		"FLOWBATON_SHARD_INDEX": "external-index",
 	}
-	wantCaller := cloneStringMap(external)
+	// A literal, not cloneStringMap(external): Execute protects the caller's
+	// map with that same function, so an expected value built from it would
+	// alias whatever the function aliases and the check below would hold
+	// however much Execute wrote into the caller's map.
+	wantCaller := map[string]string{
+		"COLLIDE":               "external",
+		"EXT_A":                 "external-a",
+		"EXT_Z":                 "external-z",
+		"FLOWBATON_SHARD_ID":    "external-id",
+		"FLOWBATON_SHARD_INDEX": "external-index",
+	}
 	runtime := &sessionRuntime{}
 	driver := enginetest.NewFakeDriver()
 	driver.Enqueue(enginetest.DriverScript{DeviceInfo: []enginetest.Result[device.DeviceInfo]{{
