@@ -397,6 +397,9 @@ func TestARequestAfterTheRunnerDiedSaysWhyItDied(t *testing.T) {
 	if err := driver.Open(context.Background()); err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
+	// This test never reaches a clean Close, and an Open that started a runner
+	// owns a directory until one happens.
+	t.Cleanup(func() { _ = driver.Close(context.Background()) })
 
 	// The child dies and the port shuts, in that order, as a real one does.
 	process.reason = "the runner exited: exit status 65: Testing failed: SpringBoard quit unexpectedly"
