@@ -300,6 +300,15 @@ func named(locator *explore.Locator, where string) string {
 	return fmt.Sprintf("%q at %s", locator.Label, where)
 }
 
+// judgeEvidenceLimit bounds one evidence line. The judge is asked for one
+// line and writes one: what it saw, then why that does not meet the
+// outcome. At 160 the cut landed in the middle of the reason -- mmx56
+// printed "…the expected outcome states the search screen is dismiss…" --
+// and the reason is the half an operator reads to decide whether the defect
+// is real. The bound stays so a model that answers with a paragraph cannot
+// take over the report.
+const judgeEvidenceLimit = 400
+
 // judgeEvidence quotes only what the judge said. An unconfirmed
 // expectation must not borrow a driver error from the step log: that
 // sentence reads as a defect under a heading that says there is none.
@@ -307,12 +316,12 @@ func judgeEvidence(check *explore.OutcomeCheck) string {
 	if check.Evidence == "" {
 		return "the judge recorded no evidence"
 	}
-	return explore.Truncate(check.Evidence, 160)
+	return explore.Truncate(check.Evidence, judgeEvidenceLimit)
 }
 
 func evidenceLine(result explore.TestResult, unmet *explore.OutcomeCheck) string {
 	if unmet.Evidence != "" {
-		return explore.Truncate(unmet.Evidence, 160)
+		return explore.Truncate(unmet.Evidence, judgeEvidenceLimit)
 	}
 	for i := len(result.Steps) - 1; i >= 0; i-- {
 		step := result.Steps[i]
