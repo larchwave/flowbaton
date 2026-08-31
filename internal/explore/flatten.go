@@ -100,6 +100,27 @@ func namesTheApplication(node device.TreeNode) bool {
 	return node.Attributes["elementType"] == iosApplicationType
 }
 
+// coversTheScreen reports whether this node's frame is the whole viewport.
+// A label on such a node says what the whole screen does, never what the
+// screen is: iOS gives the dimming view behind a sheet the label "Activate
+// to dismiss", and because that view sits above the sheet in document order
+// it took the first label slot -- the contacts search screen with a sheet
+// open keyed as activate-to-dismiss-search, 2026-08-31.
+//
+// The viewport comes from the application element, so the rule is quiet on
+// a platform that sends none -- the same reason isChrome names only iOS. The
+// tree root is not used for it: a root is as large as whatever it holds, and
+// on a screen that is one labelled view that would drop the only name it
+// has. Eight iOS apps carried exactly two labels the size of the viewport:
+// the application element and that one dimming view.
+func coversTheScreen(node device.TreeNode, viewport device.Bounds, known bool) bool {
+	if !known {
+		return false
+	}
+	bounds, ok := ElementBounds(node)
+	return ok && bounds == viewport
+}
+
 // isChrome reports whether this node roots operating-system furniture rather
 // than the app under test. Its clock, carrier, and battery labels otherwise
 // read as app content: live sessions planned Wi-Fi and signal scenarios in a
@@ -247,6 +268,8 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 	parts := []string{}
 	salient := []string{}
 	title := ""
+	viewport := device.Bounds{}
+	haveViewport := false
 	var walk func(node device.TreeNode, insideBar bool)
 	walk = func(node device.TreeNode, insideBar bool) {
 		// Chrome is skipped here for the same reason as in FlattenScreen, and
@@ -256,6 +279,9 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			return
 		}
 		insideBar = insideBar || node.Attributes["elementType"] == iosNavigationBarType
+		if !haveViewport && namesTheApplication(node) {
+			viewport, haveViewport = ElementBounds(node)
+		}
 		// A node the accessibility layer gives no area is not on the screen,
 		// and two of them arrive in whichever order it happened to walk them:
 		// measured on iOS 26.2, two captures of one untouched screen agreed on
@@ -282,7 +308,8 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 				return sameName(taken, trimmed)
 			})
 			if usable && len(salient) < salientLabelCount &&
-				!namesTheApplication(node) && !duplicate {
+				!namesTheApplication(node) && !duplicate &&
+				!coversTheScreen(node, viewport, haveViewport) {
 				salient = append(salient, trimmed)
 			}
 		}

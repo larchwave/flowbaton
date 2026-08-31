@@ -15,12 +15,15 @@ func typed(elementType, label string, children ...device.TreeNode) device.TreeNo
 	return device.TreeNode{Attributes: attrs, Children: children}
 }
 
+// The application element frames the whole viewport on a device, and the bar
+// and its buttons sit in a strip at the top. The sizes matter: a label as
+// large as the application is not a name for the screen.
 func appScreen(children ...device.TreeNode) device.TreeNode {
+	app := typed("2", "TheApp", children...)
+	app.Attributes["bounds"] = "[0,0][402,874]"
 	return device.TreeNode{
 		Attributes: map[string]string{"bounds": "[0,0][402,874]"},
-		Children: []device.TreeNode{
-			typed("2", "TheApp", children...),
-		},
+		Children:   []device.TreeNode{app},
 	}
 }
 
