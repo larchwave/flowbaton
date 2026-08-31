@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"slices"
@@ -29,6 +30,9 @@ type fakeRunnerProcess struct {
 	environment []string
 	stopped     bool
 	exit        chan error
+	// reason is what a real child latches when it dies: readable without
+	// taking it off the channel the stop path waits on.
+	reason string
 }
 
 func (process *fakeRunnerProcess) stopRunner() error {
@@ -37,6 +41,8 @@ func (process *fakeRunnerProcess) stopRunner() error {
 }
 
 func (process *fakeRunnerProcess) exited() <-chan error { return process.exit }
+
+func (process *fakeRunnerProcess) exitReason() string { return process.reason }
 
 func TestOpenStartsTheRunnerWhenItOwnsOne(t *testing.T) {
 	t.Parallel()
@@ -354,5 +360,88 @@ func TestTheManagedRunnerLeavesNoDerivedDataBehind(t *testing.T) {
 	}
 	if _, err := os.Stat(derivedData); !os.IsNotExist(err) {
 		t.Fatalf("Close left %q behind: %v", derivedData, err)
+	}
+}
+
+// A runner that dies mid-session leaves every later request answering
+// "connection refused", which says the port is shut and nothing about why.
+// The driver is already holding the reason -- xcodebuild's own last words,
+// carried on the exit channel -- and threw it away. Session mmx38 on
+// 2026-08-30 died on the first tap of the first scenario and left no way to
+// tell a crashed simulator from a killed child.
+func TestARequestAfterTheRunnerDiedSaysWhyItDied(t *testing.T) {
+	t.Parallel()
+
+	var started atomic.Bool
+	var launchedID atomic.Value
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" && started.Load() {
+			_, _ = w.Write([]byte(runnerStatusBody(launchedID.Load().(string))))
+			return
+		}
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	}))
+	httpClient := server.Client()
+	httpClient.Timeout = defaultTimeout
+	driver := NewDriver("UDID-1", 41002,
+		NewClient(server.URL, WithHTTPClient(httpClient)),
+		NewSimctl("UDID-1", &recordingRunner{}), nil)
+	process := &fakeRunnerProcess{exit: make(chan error, 1)}
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	driver.spawnRunner = func(_ context.Context, _, environment []string) (runnerProcess, error) {
+		launchedID.Store(launchedRunnerID(environment))
+		started.Store(true)
+		return process, nil
+	}
+	if err := driver.Open(context.Background()); err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	// The child dies and the port shuts, in that order, as a real one does.
+	process.reason = "the runner exited: exit status 65: Testing failed: SpringBoard quit unexpectedly"
+	process.exit <- errors.New("exit status 65")
+	server.Close()
+
+	err := driver.client.Status(context.Background())
+	if err == nil {
+		t.Fatal("a request to a shut port succeeded")
+	}
+	if !strings.Contains(err.Error(), "SpringBoard quit unexpectedly") {
+		t.Fatalf("error = %v, want it to carry the reason the runner exited", err)
+	}
+}
+
+// The stop path waits on the exit channel before it resorts to SIGKILL, so a
+// reader that took the value off it would leave stopRunner waiting out its
+// whole ten-second budget on a process that was already dead. Asking why the
+// runner died must not be that reader.
+func TestAskingWhyTheRunnerDiedLeavesTheExitChannelAlone(t *testing.T) {
+	t.Parallel()
+
+	runner := &xcodebuildRunner{done: make(chan error, 1)}
+	reason := errors.New("exit status 65")
+	runner.exit.set(reason)
+	runner.done <- reason
+
+	if runner.exitReason() != "the runner exited: exit status 65" {
+		t.Fatalf("exitReason() = %q", runner.exitReason())
+	}
+	// Twice, because a latch that emptied itself would pass the first ask.
+	if runner.exitReason() != "the runner exited: exit status 65" {
+		t.Fatalf("second exitReason() = %q, want the same answer", runner.exitReason())
+	}
+	select {
+	case got := <-runner.exited():
+		if !errors.Is(got, reason) {
+			t.Fatalf("exited() carried %v, want %v", got, reason)
+		}
+	default:
+		t.Fatal("exited() no longer carries the exit; the stop path would wait it out")
+	}
+	// A running child has nothing to explain, and saying so is how a caller
+	// tells "still up" from "gone".
+	if live := (&xcodebuildRunner{done: make(chan error, 1)}).exitReason(); live != "" {
+		t.Fatalf("a live runner answered %q, want nothing", live)
 	}
 }

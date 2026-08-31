@@ -73,6 +73,12 @@ type runnerProcess interface {
 	// .xctestrun path, a simulator that is not booted — and waiting out the
 	// whole budget to say "no answer" hides it.
 	exited() <-chan error
+	// exitReason answers the same thing without consuming it, for the paths
+	// that only want to explain a failure they already have. Receiving from
+	// exited() is destructive, and the stop path waits on that channel: a
+	// reader that took the value would leave stopRunner waiting out its whole
+	// ten-second budget before killing a process that was already dead.
+	exitReason() string
 }
 
 // runnerArgs builds the xcodebuild invocation that launches the managed runner.
@@ -135,6 +141,7 @@ func (driver *Driver) openManagedRunner(ctx context.Context) error {
 		return fmt.Errorf("starting the runner for %s: %w", driver.udid, err)
 	}
 	driver.process = process
+	driver.client.SetTransportHint(process.exitReason)
 
 	if err := driver.awaitRunner(ctx, timeout, process); err != nil {
 		_ = driver.stopRunnerProcess()
@@ -229,6 +236,9 @@ type xcodebuildRunner struct {
 	// path or an unbooted simulator says so.
 	output *boundedBuffer
 	done   chan error
+	// exit latches what done carried, so asking why the child died does not
+	// take the answer away from whoever asks next.
+	exit exitLatch
 }
 
 func realRunnerSpawn(_ context.Context, args, environment []string) (runnerProcess, error) {
@@ -243,8 +253,40 @@ func realRunnerSpawn(_ context.Context, args, environment []string) (runnerProce
 		return nil, err
 	}
 	runner := &xcodebuildRunner{cmd: cmd, output: output, done: make(chan error, 1)}
-	go func() { runner.done <- runner.describeExit(cmd.Wait()) }()
+	go func() {
+		reason := runner.describeExit(cmd.Wait())
+		runner.exit.set(reason)
+		runner.done <- reason
+	}()
 	return runner, nil
+}
+
+// exitLatch remembers a child's exit for every later reader.
+type exitLatch struct {
+	mu     sync.Mutex
+	exited bool
+	reason error
+}
+
+func (latch *exitLatch) set(reason error) {
+	latch.mu.Lock()
+	defer latch.mu.Unlock()
+	latch.exited, latch.reason = true, reason
+}
+
+// String is empty while the child runs, so a caller can tell "still up" from
+// "gone, and here is why" without a second question.
+func (latch *exitLatch) String() string {
+	latch.mu.Lock()
+	defer latch.mu.Unlock()
+	switch {
+	case !latch.exited:
+		return ""
+	case latch.reason == nil:
+		return "the runner exited"
+	default:
+		return "the runner exited: " + latch.reason.Error()
+	}
 }
 
 func (runner *xcodebuildRunner) describeExit(err error) error {
@@ -255,6 +297,8 @@ func (runner *xcodebuildRunner) describeExit(err error) error {
 }
 
 func (runner *xcodebuildRunner) exited() <-chan error { return runner.done }
+
+func (runner *xcodebuildRunner) exitReason() string { return runner.exit.String() }
 
 func (runner *xcodebuildRunner) stopRunner() error {
 	return stopManagedRunnerCommand(runner.cmd, runner.done)

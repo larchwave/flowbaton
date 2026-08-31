@@ -35,6 +35,11 @@ func DefaultBaseURL(port int) string {
 type Client struct {
 	baseURL string
 	http    *http.Client
+	// transportHint answers why the runner is unreachable, when the caller
+	// knows something the socket cannot say. A managed runner's child holds
+	// xcodebuild's last words; without them "connection refused" is the whole
+	// report of a session that died mid-flight.
+	transportHint func() string
 }
 
 // Option customizes a client at construction.
@@ -135,6 +140,9 @@ func (client *Client) do(
 	}
 	response, err := client.http.Do(request)
 	if err != nil {
+		if hint := client.hint(); hint != "" {
+			return nil, fmt.Errorf("ios runner: %s: %w (%s)", path, err, hint)
+		}
 		return nil, fmt.Errorf("ios runner: %s: %w", path, err)
 	}
 	defer func() { _ = response.Body.Close() }()
@@ -151,6 +159,18 @@ func (client *Client) do(
 		}
 	}
 	return payload, nil
+}
+
+// SetTransportHint installs the explanation to attach when the runner cannot
+// be reached at all. Only the owner of the runner process can supply it, which
+// is why it arrives after construction rather than as an Option.
+func (client *Client) SetTransportHint(hint func() string) { client.transportHint = hint }
+
+func (client *Client) hint() string {
+	if client.transportHint == nil {
+		return ""
+	}
+	return client.transportHint()
 }
 
 func decodeError(status int, payload []byte) *Error {
