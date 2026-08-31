@@ -58,8 +58,10 @@ func (n *Navigator) deps() toolDeps {
 //
 // It kills before launching so the app starts from a stopped process rather
 // than resuming a live one, and so a scenario does not inherit the process
-// state the one before it left. Measured on mmx36: 1 of 4 exported flows
-// replayed standalone; after this and the between-scenario reset, 4 of 4.
+// state the one before it left. On mmx36 that moved the exported flows from
+// 1 of 4 replaying standalone to 4 of 4 -- one session's count, not a rate
+// this promises to hold, because the paragraph below names what still breaks
+// a replay.
 //
 // What it does NOT do is put the app on a known screen, whatever this
 // comment said before 2026-08-30. Measured on iOS 26.2: Reminders killed on

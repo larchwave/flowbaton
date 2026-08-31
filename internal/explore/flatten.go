@@ -125,6 +125,14 @@ func isInteresting(element *hierarchy.Element) bool {
 	return false
 }
 
+// offscreen reports whether the tree gives this node no area at all. A node
+// with no bounds attribute is not offscreen -- it is unmeasured, and dropping
+// those would take real containers with them.
+func offscreen(node device.TreeNode) bool {
+	bounds, ok := ElementBounds(node)
+	return ok && bounds.Width == 0 && bounds.Height == 0
+}
+
 // ElementBounds parses the node bounds when present.
 func ElementBounds(node device.TreeNode) (device.Bounds, bool) {
 	raw := node.Attributes["bounds"]
@@ -153,13 +161,23 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 		if isChrome(node) {
 			return
 		}
-		role := signatureRole(node)
-		label := signatureLabel(node)
-		parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
-		if len(salient) < 2 {
-			trimmed := strings.TrimSpace(label)
-			if trimmed != "" && len(trimmed) <= 40 {
-				salient = append(salient, trimmed)
+		// A node the accessibility layer gives no area is not on the screen,
+		// and two of them arrive in whichever order it happened to walk them:
+		// measured on iOS 26.2, two captures of one untouched screen agreed on
+		// 267 of 269 nodes and swapped a pair of zero-bounds siblings. Their
+		// order reaches this digest, so leaving them in lets an untouched
+		// screen report two signatures -- and a step that moved nothing then
+		// records as one that did. Children still walk: an invisible parent
+		// does not make its children invisible.
+		if !offscreen(node) {
+			role := signatureRole(node)
+			label := signatureLabel(node)
+			parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
+			if len(salient) < 2 {
+				trimmed := strings.TrimSpace(label)
+				if trimmed != "" && len(trimmed) <= 40 {
+					salient = append(salient, trimmed)
+				}
 			}
 		}
 		for _, child := range node.Children {
