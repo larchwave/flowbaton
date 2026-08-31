@@ -6,22 +6,38 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/explore"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
 )
 
 // treeTexts collects the case-folded text-bearing attribute values of the
 // final tree for deterministic outcome checks.
-func treeTexts(root device.TreeNode) []string {
+// visibleTexts collects the words of the final screen the way the engine
+// would find them: pruned to the viewport. Reading the raw tree passed an
+// expectation on text nobody could see -- a row scrolled off, a hidden view
+// -- which is a false pass, the one wrong answer a testing tool must not
+// give.
+//
+// A tree that will not normalize yields no texts rather than the raw ones.
+// The outcome then falls through to the worker, which is the conservative
+// path: asking beats auto-passing on evidence that could not be checked.
+func visibleTexts(state *explore.ScreenState) []string {
+	if state == nil {
+		return nil
+	}
+	root, err := state.VisibleTree()
+	if err != nil {
+		return nil
+	}
 	texts := []string{}
-	var walk func(node device.TreeNode)
-	walk = func(node device.TreeNode) {
+	var walk func(element *hierarchy.Element)
+	walk = func(element *hierarchy.Element) {
 		for _, key := range []string{"text", "label", "name"} {
-			if value := strings.TrimSpace(node.Attributes[key]); value != "" {
+			if value := strings.TrimSpace(element.Node.Attributes[key]); value != "" {
 				texts = append(texts, strings.ToLower(value))
 			}
 		}
-		for _, child := range node.Children {
+		for _, child := range element.Children {
 			walk(child)
 		}
 	}
@@ -178,7 +194,7 @@ func evaluateOutcomes(ctx context.Context, llm explore.LLM, expected []string, f
 			claims[strings.ToLower(strings.TrimSpace(outcome.Expected))] = outcome
 		}
 	}
-	texts := treeTexts(facts.Final.Hierarchy)
+	texts := visibleTexts(facts.Final)
 	checks := make([]explore.OutcomeCheck, 0, len(expected))
 	for _, want := range expected {
 		check := explore.OutcomeCheck{Expected: want}
