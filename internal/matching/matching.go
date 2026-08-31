@@ -164,8 +164,21 @@ func (selector *compiledSelector) rank(candidates []*hierarchy.Element) []*hiera
 		}
 		return []*hierarchy.Element{candidates[index]}
 	}
+	// Clickable first, but on screen before that: an element the viewport
+	// does not show cannot be tapped at all, and FilterVisible keeps such a
+	// node whenever a child of it is visible. A list header carrying the
+	// same label as the button below it then won on document order and sent
+	// the tap above the top of the screen. Ordering only -- nothing is
+	// dropped, because scrollUntilVisible looks for its target in this same
+	// tree and applies its own threshold.
+	//
+	// An explicit index is not touched: it counts positions the flow author
+	// chose, and reordering those would change what index 1 means.
 	sort.SliceStable(candidates, func(left, right int) bool {
 		return isClickable(candidates[left]) && !isClickable(candidates[right])
+	})
+	sort.SliceStable(candidates, func(left, right int) bool {
+		return candidates[left].OnScreen && !candidates[right].OnScreen
 	})
 	return candidates
 }

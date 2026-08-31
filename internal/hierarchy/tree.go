@@ -11,6 +11,11 @@ type Element struct {
 	Parent    *Element
 	Children  []*Element
 	Order     int
+	// OnScreen records what FilterVisible decided about this node, so a
+	// later step can tell a match the user can see from an ancestor kept
+	// only to carry a visible descendant. It stays false on an unfiltered
+	// tree, where nothing has decided yet.
+	OnScreen bool
 }
 
 // New converts a frozen TreeNode DTO into a normalized hierarchy.
@@ -87,7 +92,8 @@ func filterVisible(source, parent *Element, viewport device.Bounds) *Element {
 			clone.Children = append(clone.Children, retained)
 		}
 	}
-	if !clone.HasBounds || IsVisible(clone.Bounds, viewport) || len(clone.Children) > 0 {
+	clone.OnScreen = !clone.HasBounds || IsVisible(clone.Bounds, viewport)
+	if clone.OnScreen || len(clone.Children) > 0 {
 		return clone
 	}
 	return nil
