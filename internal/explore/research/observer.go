@@ -92,7 +92,16 @@ func (o *Observer) Observe(ctx context.Context) (*explore.ScreenState, error) {
 	if err != nil {
 		return nil, fmt.Errorf("research: flatten: %w", err)
 	}
+	// Everything downstream that selects an element by name prunes the tree
+	// to this box, the way the engine does before matching. Without it a
+	// name reaches an element with no area or one past the screen edge, and
+	// a tap lands on the corner or off the screen.
+	info, err := o.Driver.DeviceInfo(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("research: screen size: %w", err)
+	}
 	return &explore.ScreenState{
+		Viewport:      device.Bounds{Width: info.WidthGrid, Height: info.HeightGrid},
 		Signature:     explore.ComputeSignature(o.AppID, root),
 		Hierarchy:     root,
 		Elements:      elements,

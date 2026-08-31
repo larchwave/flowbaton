@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/hierarchy"
 )
 
 // ScreenSignature identifies one distinct screen state of the app under
@@ -104,4 +105,28 @@ type ScreenState struct {
 	// DialogActive reports that a modal surface (alert, sheet, dialog)
 	// dominates the screen.
 	DialogActive bool
+	// Viewport is the screen the device reported when this state was
+	// captured. A zero one means nobody measured, not a screen of no size.
+	Viewport device.Bounds
+}
+
+// VisibleTree normalizes the captured hierarchy and prunes it the way the
+// engine does before matching (internal/engine/lookup.go). Everything that
+// selects an element by name has to see the same screen the exported flow
+// will be replayed against; matching the raw tree reaches elements with no
+// area, whose centre is the screen corner, and elements past the screen
+// edge, whose centre is off it.
+//
+// An unmeasured viewport prunes nothing: a caller holding a hand-built state
+// has said nothing about screen size, and treating that as a screen of zero
+// size would hide every element instead.
+func (state *ScreenState) VisibleTree() (*hierarchy.Element, error) {
+	root, err := hierarchy.New(state.Hierarchy)
+	if err != nil {
+		return nil, err
+	}
+	if state.Viewport.Width <= 0 || state.Viewport.Height <= 0 {
+		return root, nil
+	}
+	return hierarchy.FilterVisible(root, state.Viewport), nil
 }

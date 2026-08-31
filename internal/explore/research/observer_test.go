@@ -22,6 +22,15 @@ type fakeDriver struct {
 	staticReq device.ScreenStaticRequest
 	descReq   device.ContentDescriptorRequest
 	shotReq   device.ScreenshotRequest
+
+	infoErr error
+}
+
+func (f *fakeDriver) DeviceInfo(context.Context) (device.DeviceInfo, error) {
+	if f.infoErr != nil {
+		return device.DeviceInfo{}, f.infoErr
+	}
+	return device.DeviceInfo{Platform: "android", WidthGrid: 400, HeightGrid: 800}, nil
 }
 
 func (f *fakeDriver) WaitUntilScreenIsStatic(_ context.Context, req device.ScreenStaticRequest) (bool, error) {
@@ -227,5 +236,33 @@ func TestObserveAsksForTheAppsOwnElementsWithoutTheKeyboardKeys(t *testing.T) {
 	}
 	if !driver.descReq.ExcludeKeyboardElements {
 		t.Fatalf("hierarchy request = %+v, want the keyboard keys left out", driver.descReq)
+	}
+}
+
+// Everything downstream that selects an element by name prunes the tree to
+// this box. An observation without it prunes nothing, so a name would reach
+// an element with no area or one past the screen edge.
+func TestObservationCarriesTheScreenItWasTakenOn(t *testing.T) {
+	driver := &fakeDriver{static: true, tree: device.TreeNode{
+		Attributes: map[string]string{"class": "android.widget.FrameLayout", "bounds": "[0,0][400,800]"},
+	}}
+	observer := &Observer{Driver: driver, AppID: "com.example.app"}
+	state, err := observer.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Viewport.Width != 400 || state.Viewport.Height != 800 {
+		t.Fatalf("observation viewport = %+v, want the screen the driver reports", state.Viewport)
+	}
+}
+
+// A driver that cannot say how big its own screen is cannot be asked what is
+// on it, so the observation fails rather than arriving unprunable.
+func TestObserveFailsWhenTheScreenSizeIsUnknown(t *testing.T) {
+	driver := &fakeDriver{static: true, infoErr: errors.New("no screen"), tree: device.TreeNode{
+		Attributes: map[string]string{"class": "android.widget.FrameLayout", "bounds": "[0,0][400,800]"},
+	}}
+	if _, err := (&Observer{Driver: driver, AppID: "com.example.app"}).Observe(context.Background()); err == nil {
+		t.Fatal("want an error when the screen size is unknown")
 	}
 }

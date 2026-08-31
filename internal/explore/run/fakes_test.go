@@ -18,9 +18,12 @@ func makeState(appID string, root device.TreeNode) *explore.ScreenState {
 		panic(err)
 	}
 	return &explore.ScreenState{
-		Signature:  explore.ComputeSignature(appID, root),
-		Hierarchy:  root,
-		Elements:   elements,
+		Signature: explore.ComputeSignature(appID, root),
+		Hierarchy: root,
+		Elements:  elements,
+		// The same box fakeDriver reports and screen() lays its children
+		// out in, so a test state prunes the way a real one does.
+		Viewport:   device.Bounds{Width: 400, Height: 800},
 		CapturedAt: time.Unix(0, 0),
 	}
 }

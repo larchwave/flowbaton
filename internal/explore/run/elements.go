@@ -149,7 +149,7 @@ func decodeTarget(args json.RawMessage, state *explore.ScreenState) (targetArgs,
 var rowName = regexp.MustCompile(`^e[0-9]+$`)
 
 func idSelectsSomething(state *explore.ScreenState, id string) bool {
-	root, err := hierarchy.New(state.Hierarchy)
+	root, err := state.VisibleTree()
 	if err != nil {
 		return true
 	}
@@ -258,7 +258,7 @@ func generalizeCount(state *explore.ScreenState, label string) (string, bool) {
 // independently. A tree it cannot read answers -1, which reads as "not
 // unique" and keeps the literal label.
 func selectorMatchCount(state *explore.ScreenState, pattern string) int {
-	root, err := hierarchy.New(state.Hierarchy)
+	root, err := state.VisibleTree()
 	if err != nil {
 		return -1
 	}
@@ -319,7 +319,7 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 		id := args.ID
 		selector.IDRegex = &id
 	}
-	root, err := hierarchy.New(state.Hierarchy)
+	root, err := state.VisibleTree()
 	if err != nil {
 		return device.Point{}, fmt.Errorf("normalize screen tree: %w", err)
 	}
