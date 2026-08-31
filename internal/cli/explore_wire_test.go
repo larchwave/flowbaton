@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/explore"
+	"github.com/larchwave/flowbaton/internal/explore/research"
 )
 
 type wireLLM struct{}
@@ -66,4 +68,36 @@ func TestDefaultExploreCrewAssemblesEveryRole(t *testing.T) {
 // crew never operates it here.
 type fakeExploreDriver struct {
 	device.Driver
+}
+
+// Both of the observer's diagnostics run through Logf, and a nil Logf drops
+// them: the "screen still moving, capturing anyway" line is exactly what
+// explains a session whose first observation caught a screen mid-animation.
+func TestTheAssembledObserverReportsItsDiagnostics(t *testing.T) {
+	var out bytes.Buffer
+	crew, err := DefaultExploreCrew(ExploreDeps{
+		Driver: &fakeExploreDriver{},
+		Models: explore.ModelSet{Worker: wireLLM{}, Manager: wireLLM{}, Vision: wireLLM{}},
+		Stdout: &out,
+		Config: explore.Config{
+			AppID: "com.example.app", Platform: "android",
+			StateDir: t.TempDir(), OutputDir: t.TempDir(),
+			MaxTests: 1, MaxStepsPerTest: 5,
+			Clock: func() time.Time { return time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC) },
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer, ok := crew.Observer.(*research.Observer)
+	if !ok {
+		t.Fatalf("crew.Observer is %T, not the production observer", crew.Observer)
+	}
+	if observer.Logf == nil {
+		t.Fatal("the assembled observer has no way to report why a capture looked wrong")
+	}
+	observer.Logf("screen still moving after %s, capturing anyway", "3s")
+	if got := out.String(); got != "screen still moving after 3s, capturing anyway\n" {
+		t.Fatalf("diagnostic did not reach the session output: %q", got)
+	}
 }

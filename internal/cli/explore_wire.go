@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/larchwave/flowbaton/internal/aiengine"
@@ -43,6 +44,16 @@ func DefaultExploreCrew(deps ExploreDeps) (explore.Crew, error) {
 		Driver: deps.Driver,
 		AppID:  config.AppID,
 		Clock:  config.Clock,
+		// The observer says here that the settle probe is unsupported, or
+		// that the screen was still moving when it captured anyway. Both
+		// explain a session that behaved oddly, and both went nowhere while
+		// this field was left nil.
+		Logf: func(format string, args ...any) {
+			if deps.Stdout == nil {
+				return
+			}
+			fmt.Fprintf(deps.Stdout, format+"\n", args...)
+		},
 	}
 	crew := explore.Crew{
 		Observer: observer,
