@@ -31,6 +31,28 @@ const iosSecureTextFieldType = "50"
 // sibling window of the app, not part of it.
 const iosStatusBarType = "25"
 
+// iosApplicationType is the XCUIElementType of the application element (2).
+// It wraps the whole app and carries the app's own name.
+const iosApplicationType = "2"
+
+// namesTheApplication reports whether this node is the app's own element
+// rather than anything on the screen. Its label is the application name and
+// its frame is the whole viewport, so it names every screen of an app
+// identically -- and ScreenSignature.AppID already carries that identity, so
+// the label adds nothing. Captured on Contacts, iOS 26.2: two different
+// screens both opened with elementType 2 at [0,0][402,874] labelled
+// "Contacts", and every screen the session recorded keyed the same.
+//
+// The node itself stays in the digest: it is real structure, and skipping it
+// there would change the identity of every screen already recorded.
+//
+// Only iOS is recognized, for the same reason as isChrome: the Android agent
+// has not been seen emitting an application-level labelled wrapper, so
+// nothing is skipped there until a device shows one.
+func namesTheApplication(node device.TreeNode) bool {
+	return node.Attributes["elementType"] == iosApplicationType
+}
+
 // isChrome reports whether this node roots operating-system furniture rather
 // than the app under test. Its clock, carrier, and battery labels otherwise
 // read as app content: live sessions planned Wi-Fi and signal scenarios in a
@@ -190,7 +212,7 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			role := signatureRole(node)
 			label := signatureLabel(node)
 			parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
-			if len(salient) < 2 {
+			if len(salient) < 2 && !namesTheApplication(node) {
 				trimmed := strings.TrimSpace(label)
 				if trimmed != "" && len(trimmed) <= 40 {
 					salient = append(salient, trimmed)
