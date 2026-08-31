@@ -101,6 +101,32 @@ func namesTheApplication(node device.TreeNode) bool {
 	return node.Attributes["elementType"] == iosApplicationType
 }
 
+// iosTabBarType and iosToolbarType are the XCUIElementTypes of a tab bar
+// (22) and a toolbar (24). Both carry their own role as their label.
+const (
+	iosTabBarType  = "22"
+	iosToolbarType = "24"
+)
+
+// namesItsOwnRole reports whether this node's label is the name of the
+// container rather than of anything on the screen. A tab bar is labelled
+// "Tab Bar" and a toolbar "Toolbar", so a screen took the word Toolbar for a
+// name: session mmx56 keyed the contacts search screen as
+// toolbar-search-32d1546f. Captured on iOS 26.2, 2026-08-31: shortcuts and
+// photos hold a tab bar labelled "Tab Bar", calendar and contacts a toolbar
+// labelled "Toolbar", and all seven navigation bars carry no label at all,
+// which is why that type needs no rule here.
+//
+// The children keep their labels: what sits IN a toolbar is the app's, and
+// the bar itself stays in the digest as structure.
+func namesItsOwnRole(node device.TreeNode) bool {
+	switch node.Attributes["elementType"] {
+	case iosTabBarType, iosToolbarType:
+		return true
+	}
+	return false
+}
+
 // coversTheScreen reports whether this node's frame is the whole viewport.
 // A label on such a node says what the whole screen does, never what the
 // screen is: iOS gives the dimming view behind a sheet the label "Activate
@@ -317,7 +343,7 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 				return sameName(taken, trimmed)
 			})
 			if usable && len(salient) < salientLabelCount &&
-				!namesTheApplication(node) && !duplicate &&
+				!namesTheApplication(node) && !namesItsOwnRole(node) && !duplicate &&
 				!coversTheScreen(node, viewport, haveViewport) {
 				salient = append(salient, trimmed)
 			}
