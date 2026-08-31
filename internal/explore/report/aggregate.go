@@ -285,10 +285,19 @@ func describeTarget(locator *explore.Locator) string {
 	case explore.LocatorText:
 		return fmt.Sprintf("%q", locator.Value)
 	case explore.LocatorPoint:
-		return "the point " + locator.Value
+		return named(locator, "the point "+locator.Value)
 	default:
-		return "the element at path " + locator.Value
+		return named(locator, "the element at path "+locator.Value)
 	}
+}
+
+// named puts the element's name in front of a locator that only says where
+// it is, and answers the bare location when there is no name to give.
+func named(locator *explore.Locator, where string) string {
+	if locator.Label == "" {
+		return where
+	}
+	return fmt.Sprintf("%q at %s", locator.Label, where)
 }
 
 // judgeEvidence quotes only what the judge said. An unconfirmed

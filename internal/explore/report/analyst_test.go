@@ -569,3 +569,28 @@ func TestReproduceStepsLeaveOutWhatDidNotHappen(t *testing.T) {
 		t.Errorf("the surviving steps do not start the list:\n%s", markdown)
 	}
 }
+
+// A point locator is what is left when an element carries no id and no label
+// unique on its screen -- but it usually still has a label, and mmx43's
+// report spent two of its six reproduce lines on "Tap the point 171,822".
+// The coordinate is what the flow replays; the name is what a reader needs.
+func TestReproduceStepsNameTheElementBehindACoordinate(t *testing.T) {
+	markdown, err := Analyst{}.Report(context.Background(), &explore.SessionReport{
+		AppID: "com.example.app", Platform: "ios",
+		Results: []explore.TestResult{{
+			Scenario: explore.Scenario{Name: "clearing the query", Priority: explore.PriorityHigh},
+			Status:   explore.TestFailed,
+			Steps: []explore.StepRecord{{Index: 0, Status: explore.StepOK, Action: explore.Action{
+				Kind:   explore.ActionTap,
+				Target: &explore.Locator{Kind: explore.LocatorPoint, Value: "171,822", Label: "Clear text"},
+			}}},
+			Outcomes: []explore.OutcomeCheck{{Expected: "the query is empty", Met: false, Evidence: "hank still shows"}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(markdown, `1. Tap "Clear text" at the point 171,822`) {
+		t.Errorf("the reproduce line names no element:\n%s", markdown)
+	}
+}

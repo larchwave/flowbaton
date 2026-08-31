@@ -36,6 +36,11 @@ type Locator struct {
 	Value string
 	// Index disambiguates when Value matches several elements.
 	Index int
+	// Label names the element for a human reader when Value cannot: a point
+	// or a tree path says where, never what. Nothing matches on it and the
+	// exporter never writes it -- an element reached by coordinate is reached
+	// by coordinate on replay too.
+	Label string
 }
 
 // MappedElement is one interactive element in a researched UI map.

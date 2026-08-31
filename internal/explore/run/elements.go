@@ -210,11 +210,15 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 		// not compile at all and fails the step.
 		return &explore.Locator{Kind: explore.LocatorText, Value: regexp.QuoteMeta(label)}
 	}
+	// Both fallbacks below say where the element is and nothing about what it
+	// is. The label that was not unique enough to select on still names it
+	// for whoever reads the report.
+	label := elementLabel(element.Node)
 	if bounds, ok := explore.ElementBounds(element.Node); ok {
 		center := hierarchy.Center(bounds)
-		return &explore.Locator{Kind: explore.LocatorPoint, Value: explore.PointLocator(center)}
+		return &explore.Locator{Kind: explore.LocatorPoint, Value: explore.PointLocator(center), Label: label}
 	}
-	return &explore.Locator{Kind: explore.LocatorPath, Value: element.Path}
+	return &explore.Locator{Kind: explore.LocatorPath, Value: element.Path, Label: label}
 }
 
 // digitRun matches the digit runs of a label.

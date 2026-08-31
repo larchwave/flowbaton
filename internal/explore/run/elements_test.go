@@ -94,11 +94,14 @@ func TestEIDXLocatorClimbsTheExportLadder(t *testing.T) {
 		{EIDX: 5, Path: "0/5", Node: device.TreeNode{Attributes: map[string]string{
 			"bounds": "[379,0][390,11]"}}},
 	}}
+	// The two rungs that only say where the element is carry its label too,
+	// for the report to name it with. e4 has no label to carry and e5 has
+	// neither label nor id, which is why they fell this far.
 	want := []explore.Locator{
 		{Kind: explore.LocatorID, Value: "add"},
 		{Kind: explore.LocatorText, Value: "New Reminder"},
-		{Kind: explore.LocatorPoint, Value: "20,30"},
-		{Kind: explore.LocatorPoint, Value: "5,5"},
+		{Kind: explore.LocatorPoint, Value: "20,30", Label: "Today"},
+		{Kind: explore.LocatorPoint, Value: "5,5", Label: "Today"},
 		{Kind: explore.LocatorPath, Value: "0/4"},
 		// The engine's tapOn point takes integers only, and a screen 390
 		// wide ends at 389: the half-pixel center 384.5,5.5 floors so the
