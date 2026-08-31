@@ -110,6 +110,28 @@ type toolSession struct {
 	finish    *finishArgs
 	recording []string
 	record    bool
+	// viewport is the screen the device reports, read once: a tester can
+	// call check_visible several times in one turn and the screen does not
+	// resize between them.
+	viewport    device.Bounds
+	viewportSet bool
+}
+
+// screenViewport answers the device's screen box, asking the driver the
+// first time. A driver that cannot say how big its own screen is cannot be
+// asked whether something is on it, so this reports the failure rather than
+// letting a caller fall back to the unpruned tree.
+func (s *toolSession) screenViewport(ctx context.Context) (device.Bounds, error) {
+	if s.viewportSet {
+		return s.viewport, nil
+	}
+	info, err := s.deps.driver.DeviceInfo(ctx)
+	if err != nil {
+		return device.Bounds{}, fmt.Errorf("screen size: %w", err)
+	}
+	s.viewport = device.Bounds{Width: info.WidthGrid, Height: info.HeightGrid}
+	s.viewportSet = true
+	return s.viewport, nil
 }
 
 func newToolSession(deps toolDeps, start *explore.ScreenState) (*toolSession, error) {
@@ -539,7 +561,17 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 	if err != nil {
 		return "", fmt.Errorf("normalize screen tree: %w", err)
 	}
-	found, findErr := matching.Find(root, selector)
+	// The engine matches a tree already pruned this way
+	// (internal/engine/lookup.go). Matching the raw one here answers a
+	// different question than the exported assertVisible will ask: it calls
+	// an element with no area, or one entirely past the screen edge, visible,
+	// and the flow that check becomes then fails on replay for a reason the
+	// session never saw.
+	viewport, err := s.screenViewport(ctx)
+	if err != nil {
+		return "", err
+	}
+	found, findErr := matching.Find(hierarchy.FilterVisible(root, viewport), selector)
 	switch {
 	case findErr != nil:
 		check.Evidence = "selector error: " + findErr.Error()

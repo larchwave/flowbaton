@@ -355,3 +355,39 @@ func TestEveryPressKeyTheToolServesIsInTheFlowLanguage(t *testing.T) {
 		t.Fatal("the flow language accepts RETURN, so the check above cannot fail")
 	}
 }
+
+// check_visible matched against the raw tree while the engine matches a tree
+// already pruned by hierarchy.FilterVisible (internal/engine/lookup.go). The
+// tester's passing check becomes an exported assertVisible, so any element
+// the two disagree about exports a flow that fails on replay for a reason the
+// session never saw.
+func TestCheckVisibleAgreesWithWhatTheEngineCanFind(t *testing.T) {
+	t.Parallel()
+	label := func(text, bounds string) device.TreeNode {
+		return device.TreeNode{Attributes: map[string]string{
+			"class": "android.widget.TextView", "text": text, "bounds": bounds,
+		}}
+	}
+	session, _ := inputSession(t, screen("List",
+		label("Saved", "[0,0][0,0]"),
+		label("Past the edge", "[500,900][600,950]"),
+		label("On screen", "[10,10][200,60]"),
+	))
+	for _, c := range []struct {
+		text string
+		want string
+	}{
+		{"Saved", "not visible: "},
+		{"Past the edge", "not visible: "},
+		{"On screen", "visible: "},
+	} {
+		reply, err := session.handleCheckVisible(context.Background(),
+			json.RawMessage(`{"text":"`+c.text+`"}`))
+		if err != nil {
+			t.Fatalf("%s: %v", c.text, err)
+		}
+		if !strings.HasPrefix(reply, c.want) {
+			t.Errorf("check_visible %q = %q, want it to start %q", c.text, reply, c.want)
+		}
+	}
+}
