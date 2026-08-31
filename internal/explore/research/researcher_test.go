@@ -36,16 +36,18 @@ type fakeCache struct {
 	puts    int
 }
 
-func (f *fakeCache) Get(key string) (*explore.UIMap, bool) {
-	m, ok := f.entries[key]
+// The fake files entries the way the real cache does, by the whole digest,
+// so a test cannot pass by agreeing with a rendered name.
+func (f *fakeCache) Get(screen explore.ScreenSignature) (*explore.UIMap, bool) {
+	m, ok := f.entries[screen.TreeDigest]
 	return m, ok
 }
 
-func (f *fakeCache) Put(key string, m *explore.UIMap) {
+func (f *fakeCache) Put(screen explore.ScreenSignature, m *explore.UIMap) {
 	if f.entries == nil {
 		f.entries = map[string]*explore.UIMap{}
 	}
-	f.entries[key] = m
+	f.entries[screen.TreeDigest] = m
 	f.puts++
 }
 
@@ -124,8 +126,8 @@ func TestResearchBuildsValidatedMap(t *testing.T) {
 	if cache.puts != 1 {
 		t.Fatalf("cache puts %d, want 1", cache.puts)
 	}
-	if _, ok := cache.entries[state.Signature.Key()]; !ok {
-		t.Fatal("cache keyed by signature key")
+	if _, ok := cache.entries[state.Signature.TreeDigest]; !ok {
+		t.Fatal("cache not keyed by the screen digest")
 	}
 	if len(worker.requests) != 1 {
 		t.Fatalf("worker calls %d, want 1", len(worker.requests))
@@ -241,7 +243,7 @@ func TestResearchCacheHitSkipsModel(t *testing.T) {
 	worker := &scriptedLLM{}
 	researcher := &Researcher{
 		Models: explore.ModelSet{Worker: worker},
-		Cache:  &fakeCache{entries: map[string]*explore.UIMap{state.Signature.Key(): cached}},
+		Cache:  &fakeCache{entries: map[string]*explore.UIMap{state.Signature.TreeDigest: cached}},
 	}
 	uiMap, err := researcher.Research(context.Background(), state)
 	if err != nil {

@@ -40,9 +40,9 @@ func TestResearchCacheRoundTrip(t *testing.T) {
 	now := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
 	cache := NewResearchCache(t.TempDir(), 0, func() time.Time { return now })
 	put := sampleMap()
-	cache.Put("cart-12345678", put)
+	cache.Put(sampleMap().Screen, put)
 
-	got, ok := cache.Get("cart-12345678")
+	got, ok := cache.Get(sampleMap().Screen)
 	if !ok {
 		t.Fatal("Get() miss, want hit")
 	}
@@ -65,14 +65,14 @@ func TestResearchCacheTTL(t *testing.T) {
 	start := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
 	now := start
 	cache := NewResearchCache(t.TempDir(), 0, func() time.Time { return now })
-	cache.Put("cart-12345678", sampleMap())
+	cache.Put(sampleMap().Screen, sampleMap())
 
 	now = start.Add(DefaultResearchTTL - time.Minute)
-	if _, ok := cache.Get("cart-12345678"); !ok {
+	if _, ok := cache.Get(sampleMap().Screen); !ok {
 		t.Fatal("Get() before expiry miss, want hit")
 	}
 	now = start.Add(DefaultResearchTTL)
-	if _, ok := cache.Get("cart-12345678"); ok {
+	if _, ok := cache.Get(sampleMap().Screen); ok {
 		t.Fatal("Get() at expiry hit, want miss")
 	}
 }
@@ -82,14 +82,14 @@ func TestResearchCacheCustomTTL(t *testing.T) {
 	start := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
 	now := start
 	cache := NewResearchCache(t.TempDir(), time.Minute, func() time.Time { return now })
-	cache.Put("cart-12345678", sampleMap())
+	cache.Put(sampleMap().Screen, sampleMap())
 
 	now = start.Add(59 * time.Second)
-	if _, ok := cache.Get("cart-12345678"); !ok {
+	if _, ok := cache.Get(sampleMap().Screen); !ok {
 		t.Fatal("Get() within custom TTL miss, want hit")
 	}
 	now = start.Add(2 * time.Minute)
-	if _, ok := cache.Get("cart-12345678"); ok {
+	if _, ok := cache.Get(sampleMap().Screen); ok {
 		t.Fatal("Get() past custom TTL hit, want miss")
 	}
 }
@@ -99,11 +99,12 @@ func TestResearchCacheMisses(t *testing.T) {
 	stateDir := t.TempDir()
 	cache := NewResearchCache(stateDir, 0, nil)
 
-	if _, ok := cache.Get("absent"); ok {
-		t.Fatal("Get() on an absent key hit, want miss")
+	if _, ok := cache.Get(sampleMap().Screen); ok {
+		t.Fatal("Get() on an absent screen hit, want miss")
 	}
-	if _, ok := cache.Get("../escape"); ok {
-		t.Fatal("Get() on an unusable key hit, want miss")
+	escape := explore.ScreenSignature{AppID: "com.example.shop", TreeDigest: "../escape"}
+	if _, ok := cache.Get(escape); ok {
+		t.Fatal("Get() on an unusable digest hit, want miss")
 	}
 
 	// A damaged entry is a miss, never bad data.
@@ -111,10 +112,20 @@ func TestResearchCacheMisses(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "broken.json"), []byte("{not json"), 0o644); err != nil {
+	broken := explore.ScreenSignature{AppID: "com.example.shop", TreeDigest: "broken0000000000"}
+	if err := os.WriteFile(filepath.Join(dir, broken.TreeDigest+".json"), []byte("{not json"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := cache.Get("broken"); ok {
+	if _, ok := cache.Get(broken); ok {
 		t.Fatal("Get() on a damaged entry hit, want miss")
+	}
+
+	// An entry written for another screen is a miss, not that screen's map.
+	other := sampleMap()
+	cache.Put(other.Screen, other)
+	stranger := explore.ScreenSignature{AppID: other.Screen.AppID, TreeDigest: other.Screen.TreeDigest}
+	stranger.AppID = "com.example.other"
+	if _, ok := cache.Get(stranger); ok {
+		t.Fatal("Get() served an entry filed for another app, want miss")
 	}
 }

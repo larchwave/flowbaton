@@ -12,11 +12,11 @@ import (
 	"github.com/larchwave/flowbaton/internal/explore"
 )
 
-// Cache stores researched UI maps by screen key. Nil on the Researcher
+// Cache stores researched UI maps by screen. Nil on the Researcher
 // disables caching.
 type Cache interface {
-	Get(key string) (*explore.UIMap, bool)
-	Put(key string, m *explore.UIMap)
+	Get(screen explore.ScreenSignature) (*explore.UIMap, bool)
+	Put(screen explore.ScreenSignature, m *explore.UIMap)
 }
 
 // Researcher turns an observed screen into a validated UI map. One worker
@@ -69,7 +69,7 @@ func (r *Researcher) Research(ctx context.Context, state *explore.ScreenState) (
 	}
 	key := state.Signature.Key()
 	if r.Cache != nil {
-		if cached, ok := r.Cache.Get(key); ok && cached != nil {
+		if cached, ok := r.Cache.Get(state.Signature); ok && cached != nil {
 			return copyUIMap(cached), nil
 		}
 	}
@@ -91,7 +91,7 @@ func (r *Researcher) Research(ctx context.Context, state *explore.ScreenState) (
 	}
 	uiMap.Markdown = renderMarkdown(key, sections)
 	if r.Cache != nil {
-		r.Cache.Put(key, copyUIMap(uiMap))
+		r.Cache.Put(state.Signature, copyUIMap(uiMap))
 	}
 	return uiMap, nil
 }

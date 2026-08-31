@@ -52,10 +52,10 @@ func NewResearchCache(stateDir string, ttl time.Duration, clock func() time.Time
 	return &ResearchCache{dir: filepath.Join(stateDir, "research-cache"), ttl: ttl, now: clock}
 }
 
-// Get returns the cached map for key, or a miss when the entry is absent,
-// unreadable, or older than the TTL.
-func (c *ResearchCache) Get(key string) (*explore.UIMap, bool) {
-	path, err := c.entryPath(key)
+// Get returns the cached map for screen, or a miss when the entry is
+// absent, unreadable, older than the TTL, or filed for another screen.
+func (c *ResearchCache) Get(screen explore.ScreenSignature) (*explore.UIMap, bool) {
+	path, err := c.entryPath(screen)
 	if err != nil {
 		return nil, false
 	}
@@ -72,6 +72,12 @@ func (c *ResearchCache) Get(key string) (*explore.UIMap, bool) {
 	if !c.now().Before(entry.SavedAt.Add(c.ttl)) {
 		return nil, false
 	}
+	// The file is named after the digest, so a mismatch here means the
+	// entry was written for another screen or another app. A cache serves a
+	// miss rather than another screen's map.
+	if entry.Screen.TreeDigest != screen.TreeDigest || entry.Screen.AppID != screen.AppID {
+		return nil, false
+	}
 	return &explore.UIMap{
 		Screen: explore.ScreenSignature{
 			AppID:      entry.Screen.AppID,
@@ -84,13 +90,13 @@ func (c *ResearchCache) Get(key string) (*explore.UIMap, bool) {
 	}, true
 }
 
-// Put stores the map under key. A failed write leaves at most a future
+// Put stores the map for screen. A failed write leaves at most a future
 // miss, so Put reports nothing.
-func (c *ResearchCache) Put(key string, m *explore.UIMap) {
+func (c *ResearchCache) Put(screen explore.ScreenSignature, m *explore.UIMap) {
 	if m == nil {
 		return
 	}
-	path, err := c.entryPath(key)
+	path, err := c.entryPath(screen)
 	if err != nil {
 		return
 	}
@@ -117,9 +123,17 @@ func (c *ResearchCache) Put(key string, m *explore.UIMap) {
 	_ = os.WriteFile(path, data, 0o644)
 }
 
-func (c *ResearchCache) entryPath(key string) (string, error) {
-	if key == "" || key != filepath.Base(key) || key == "." || key == ".." {
-		return "", fmt.Errorf("research cache: unusable key %q", key)
+// entryPath names an entry after the WHOLE digest, never Key(). Key renders
+// the salient labels, so every change to label selection renames every
+// screen at once and orphans what is on disk: after the naming commits of
+// 2026-08-31 the contacts cache held one screen under two names, and the
+// next session paid a model call to map it again. Key also truncates the
+// digest to eight characters, so two screens Same() calls different would
+// share one file.
+func (c *ResearchCache) entryPath(screen explore.ScreenSignature) (string, error) {
+	digest := screen.TreeDigest
+	if digest == "" || digest != filepath.Base(digest) {
+		return "", fmt.Errorf("research cache: unusable screen digest %q", digest)
 	}
-	return filepath.Join(c.dir, key+".json"), nil
+	return filepath.Join(c.dir, digest+".json"), nil
 }
