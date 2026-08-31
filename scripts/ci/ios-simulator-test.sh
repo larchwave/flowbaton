@@ -27,8 +27,14 @@ xcodebuild -quiet \
 
 xctestrun="$(find "$derived/Build/Products" -maxdepth 1 -name '*.xctestrun' -type f -print -quit)"
 test -n "$xctestrun"
+# Without -derivedDataPath, xcodebuild mints a fresh hashed directory under
+# ~/Library/Developer/Xcode/DerivedData for this run alone and collects a
+# simulator sysdiagnose into it -- 120MB of system log archive, written and
+# then abandoned. The build above already named a directory; results belong
+# beside it.
 xcodebuild -quiet \
   -xctestrun "$xctestrun" \
   -destination "platform=iOS Simulator,id=${udid}" \
+  -derivedDataPath "$derived" \
   test-without-building \
   -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testTheAutomationCanSeeTheDevice
