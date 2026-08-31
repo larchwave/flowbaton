@@ -35,6 +35,52 @@ const iosStatusBarType = "25"
 // It wraps the whole app and carries the app's own name.
 const iosApplicationType = "2"
 
+// iosNavigationBarType is the XCUIElementType of a navigation bar (21), and
+// iosStaticTextType that of static text (48). A screen carries one bar, and
+// the label a person reads as the screen's name is the static text among its
+// buttons.
+const (
+	iosNavigationBarType = "21"
+	iosStaticTextType    = "48"
+)
+
+// navigationTitle reports whether this node is the title of the navigation
+// bar it sits in. Salient labels are otherwise taken in document order,
+// which means the bar's leftmost BUTTON: a screen titled "Completed" was
+// named "Back, More", and one titled "Lists" was named "Edit, Lists".
+//
+// Captured on iOS 26.2, 2026-08-31, six apps: every screen with a bar had
+// exactly one, and where that bar held a static text it was the title --
+// reminders Back/More/Completed, contacts Edit/Lists/Add List and
+// Lists/Contacts, shortcuts Library/Edit/add/All Shortcuts. Three screens
+// had none: Calendar titles itself with a button, a Settings modal carries
+// only Close, and a locked Passwords screen has no bar at all. Those keep
+// the labels they had, which is why this promotes a title and never
+// requires one.
+func navigationTitle(node device.TreeNode, insideBar bool) bool {
+	return insideBar && node.Attributes["elementType"] == iosStaticTextType
+}
+
+// withTitleFirst puts the screen's own name in front of the labels taken in
+// document order, without growing the list: a title that is already among
+// them moves up rather than repeating.
+func withTitleFirst(title string, salient []string) []string {
+	if title == "" {
+		return salient
+	}
+	ordered := []string{title}
+	for _, label := range salient {
+		if len(ordered) >= salientLabelCount {
+			break
+		}
+		if label == title {
+			continue
+		}
+		ordered = append(ordered, label)
+	}
+	return ordered
+}
+
 // namesTheApplication reports whether this node is the app's own element
 // rather than anything on the screen. Its label is the application name and
 // its frame is the whole viewport, so it names every screen of an app
@@ -185,6 +231,13 @@ func parseBounds(node device.TreeNode) (device.Bounds, bool) {
 	return bounds, true
 }
 
+// salientLabelCount is how many labels name a screen; salientLabelLimit is
+// the longest one worth using as a name rather than as content.
+const (
+	salientLabelCount = 2
+	salientLabelLimit = 40
+)
+
 // ComputeSignature derives the screen signature for a tree: a digest over
 // normalized structure and text, plus a few salient labels. Digit runs
 // collapse so counters and timestamps do not split one logical screen
@@ -192,14 +245,16 @@ func parseBounds(node device.TreeNode) (device.Bounds, bool) {
 func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 	parts := []string{}
 	salient := []string{}
-	var walk func(node device.TreeNode)
-	walk = func(node device.TreeNode) {
+	title := ""
+	var walk func(node device.TreeNode, insideBar bool)
+	walk = func(node device.TreeNode, insideBar bool) {
 		// Chrome is skipped here for the same reason as in FlattenScreen, and
 		// twice over: it would name the screen after the carrier and split one
 		// screen into many as reception changes.
 		if isChrome(node) {
 			return
 		}
+		insideBar = insideBar || node.Attributes["elementType"] == iosNavigationBarType
 		// A node the accessibility layer gives no area is not on the screen,
 		// and two of them arrive in whichever order it happened to walk them:
 		// measured on iOS 26.2, two captures of one untouched screen agreed on
@@ -212,22 +267,24 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			role := signatureRole(node)
 			label := signatureLabel(node)
 			parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
-			if len(salient) < 2 && !namesTheApplication(node) {
-				trimmed := strings.TrimSpace(label)
-				if trimmed != "" && len(trimmed) <= 40 {
-					salient = append(salient, trimmed)
-				}
+			trimmed := strings.TrimSpace(label)
+			usable := trimmed != "" && len(trimmed) <= salientLabelLimit
+			if usable && title == "" && navigationTitle(node, insideBar) {
+				title = trimmed
+			}
+			if usable && len(salient) < salientLabelCount && !namesTheApplication(node) {
+				salient = append(salient, trimmed)
 			}
 		}
 		for _, child := range node.Children {
-			walk(child)
+			walk(child, insideBar)
 		}
 	}
-	walk(root)
+	walk(root, false)
 	digest := sha256.Sum256([]byte(strings.Join(parts, "\n")))
 	return ScreenSignature{
 		AppID:      appID,
-		Salient:    salient,
+		Salient:    withTitleFirst(title, salient),
 		TreeDigest: hex.EncodeToString(digest[:8]),
 	}
 }
