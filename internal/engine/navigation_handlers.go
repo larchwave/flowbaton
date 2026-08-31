@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/js"
@@ -13,6 +14,11 @@ import (
 
 // animationTimeoutMillis is ANIMATION_TIMEOUT_MS from specs/04-wire-protocols.md.
 const animationTimeoutMillis int64 = 15000
+
+// animationPollInterval is the host cadence for re-asking whether the screen
+// is static, matching lookupPollInterval: the two mobile drivers answer with
+// one sample and leave the waiting to their caller.
+const animationPollInterval = 100 * time.Millisecond
 
 // browserForced is the single non-empty inhabitant of device.Browser.
 //
@@ -274,10 +280,36 @@ func executeAnimationWait(ctx context.Context, state *executionState, evaluated 
 	// This is a wait, not an assertion: a screen that never becomes static
 	// within the timeout completes the command instead of failing the flow.
 	// Only a driver error propagates.
-	if _, err := state.dependencies.Driver.WaitUntilScreenIsStatic(
-		ctx, device.ScreenStaticRequest{TimeoutMillis: payload.timeoutMillis},
-	); err != nil {
-		return effect, err
+	//
+	// The waiting happens here because the drivers do not do it.
+	// internal/ios samples two frames a tenth of a second apart and
+	// internal/android asks the agent once; both ignore the request's
+	// timeout and say the caller owns the budget. Sending the request once
+	// therefore returned in a fraction of a second whatever the flow asked
+	// for. internal/web is the exception -- it blocks internally until the
+	// page settles or the timeout expires -- and it composes: its first
+	// answer already consumes the budget, so the loop ends after one call.
+	deadline := state.dependencies.Clock.Now().Add(
+		time.Duration(payload.timeoutMillis) * time.Millisecond)
+	for {
+		static, err := state.dependencies.Driver.WaitUntilScreenIsStatic(
+			ctx, device.ScreenStaticRequest{TimeoutMillis: payload.timeoutMillis})
+		if err != nil {
+			return effect, err
+		}
+		if static {
+			return effect, ctx.Err()
+		}
+		now := state.dependencies.Clock.Now()
+		if !now.Before(deadline) {
+			return effect, ctx.Err()
+		}
+		if err := state.dependencies.Clock.Wait(
+			ctx, minDuration(animationPollInterval, deadline.Sub(now))); err != nil {
+			if cancellation := ctx.Err(); cancellation != nil {
+				return effect, cancellation
+			}
+			return effect, err
+		}
 	}
-	return effect, nil
 }
