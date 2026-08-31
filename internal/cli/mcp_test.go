@@ -413,8 +413,8 @@ func TestMCPExploreToolReturnsTheReportAndFlowPaths(t *testing.T) {
 	}}
 	session := connectMCP(t, MCPRunner{Checker: stubChecker{}, BaseDir: base, Explore: invoker})
 	text, isError := callMCPText(t, session, "explore", map[string]any{
-		"app_id": "com.example.app", "platform": "android",
-		"device": "emulator-5554", "max_tests": 2, "output_dir": "out",
+		"appId": "com.example.app", "platform": "android",
+		"udid": "emulator-5554", "maxTests": 2, "outputDir": "out",
 	})
 	if isError {
 		t.Fatalf("explore reported an error: %q", text)
@@ -442,10 +442,10 @@ func TestMCPExploreToolConfinesTheOutputDir(t *testing.T) {
 	invoker := &fakeExploreInvoker{}
 	session := connectMCP(t, MCPRunner{Checker: stubChecker{}, BaseDir: base, Explore: invoker})
 	text, isError := callMCPText(t, session, "explore", map[string]any{
-		"app_id": "com.example.app", "platform": "android", "output_dir": "../outside",
+		"appId": "com.example.app", "platform": "android", "outputDir": "../outside",
 	})
 	if !isError {
-		t.Fatalf("an output_dir outside the base directory was accepted: %q", text)
+		t.Fatalf("an outputDir outside the base directory was accepted: %q", text)
 	}
 	if !strings.Contains(text, "outside") {
 		t.Fatalf("the confinement failure was not named: %q", text)
@@ -460,8 +460,8 @@ func TestMCPExploreToolRequiresAppAndPlatform(t *testing.T) {
 
 	session := connectMCP(t, MCPRunner{Checker: stubChecker{}, Explore: &fakeExploreInvoker{}})
 	for name, args := range map[string]map[string]any{
-		"missing app_id":   {"platform": "android"},
-		"missing platform": {"app_id": "com.example.app"},
+		"missing appId":    {"platform": "android"},
+		"missing platform": {"appId": "com.example.app"},
 	} {
 		if text, isError := callMCPText(t, session, "explore", args); !isError {
 			t.Fatalf("%s was accepted: %q", name, text)
@@ -475,7 +475,7 @@ func TestMCPExploreToolSurfacesAnInvokerFailure(t *testing.T) {
 	invoker := &fakeExploreInvoker{err: errors.New("no device behind that udid")}
 	session := connectMCP(t, MCPRunner{Checker: stubChecker{}, Explore: invoker})
 	text, isError := callMCPText(t, session, "explore", map[string]any{
-		"app_id": "com.example.app", "platform": "android",
+		"appId": "com.example.app", "platform": "android",
 	})
 	if !isError {
 		t.Fatalf("an invoker failure was not marked as an error: %q", text)
@@ -493,7 +493,7 @@ func TestMCPExploreToolDefaultInvokerRefusesUnassembled(t *testing.T) {
 	// the typed refusal before touching any device.
 	session := connectMCP(t, MCPRunner{Checker: stubChecker{}})
 	text, isError := callMCPText(t, session, "explore", map[string]any{
-		"app_id": "com.example.app", "platform": "android",
+		"appId": "com.example.app", "platform": "android",
 	})
 	if !isError {
 		t.Fatalf("the unassembled runner did not refuse: %q", text)

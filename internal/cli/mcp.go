@@ -143,17 +143,17 @@ type startDeviceToolInput struct {
 }
 
 type exploreToolInput struct {
-	AppID    string `json:"app_id"`
+	AppID    string `json:"appId"`
 	Platform string `json:"platform"`
-	Device   string `json:"device,omitempty"`
+	UDID     string `json:"udid,omitempty"`
 	// DriverPort is optional; zero lets the host pick the diagnostic port
 	// the hierarchy tool would use.
-	DriverPort int `json:"driver_port,omitempty"`
-	MaxTests   int `json:"max_tests,omitempty"`
-	MaxSteps   int `json:"max_steps,omitempty"`
+	DriverPort int `json:"driverPort,omitempty"`
+	MaxTests   int `json:"maxTests,omitempty"`
+	MaxSteps   int `json:"maxSteps,omitempty"`
 	// OutputDir receives the report and exported flows, under the base
 	// directory. Empty uses the explore subcommand's default location.
-	OutputDir string `json:"output_dir,omitempty"`
+	OutputDir string `json:"outputDir,omitempty"`
 }
 
 // ScreenshotRunner holds the frame capture behind a field so a test can stand
@@ -434,12 +434,12 @@ func (runner MCPRunner) server() *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "explore",
 		Description: "Run an autonomous AI exploration session against one app on a device " +
-			"and return the session report plus exported flow paths. Requires app_id and " +
+			"and return the session report plus exported flow paths. Requires appId and " +
 			"platform (ios|android|web). This drives the device for real and needs a " +
 			"configured AI provider on the host.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in exploreToolInput) (*mcp.CallToolResult, any, error) {
 		if strings.TrimSpace(in.AppID) == "" || strings.TrimSpace(in.Platform) == "" {
-			return errorResult(fmt.Errorf("explore: app_id and platform are required")), nil, nil
+			return errorResult(fmt.Errorf("explore: appId and platform are required")), nil, nil
 		}
 		outputDir := ""
 		if in.OutputDir != "" {
@@ -455,7 +455,7 @@ func (runner MCPRunner) server() *mcp.Server {
 		result, err := runner.exploreInvoker().Explore(ctx, ExploreToolOptions{
 			AppID:      in.AppID,
 			Platform:   in.Platform,
-			Device:     in.Device,
+			Device:     in.UDID,
 			DriverPort: in.DriverPort,
 			MaxTests:   in.MaxTests,
 			MaxSteps:   in.MaxSteps,

@@ -31,7 +31,7 @@ Prefer `flowbaton mcp` when you can register MCP servers: it exposes
 executes a flow on a device for real — pass `platform`, `udid`, and either
 `path` (confined to the base directory) or inline `yaml`. `start_device`
 boots a simulator or launches an emulator and waits for readiness. `explore`
-runs an autonomous AI exploration session against one app (`app_id` +
+runs an autonomous AI exploration session against one app (`appId` +
 `platform`) and needs a configured AI provider on the host.
 
 ## Flow shape
