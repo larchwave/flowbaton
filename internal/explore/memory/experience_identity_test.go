@@ -13,13 +13,14 @@ func screenSig(digest string, salient ...string) explore.ScreenSignature {
 	return explore.ScreenSignature{AppID: "app", Salient: salient, TreeDigest: digest}
 }
 
-// Experience is not a cache: it has no TTL and holds what past sessions
-// learned about a screen. Its filename is ScreenSignature.Key(), which mixes
-// the salient LABELS with the digest -- and the labels are display text.
-// Same() already says the DIGEST is the screen's identity, so a change to
-// how labels are picked must not orphan a screen's recipes. b1a79f5 was
-// exactly such a change: every iOS screen was renamed.
-func TestExperienceFindsAScreenAfterItsLabelsChange(t *testing.T) {
+// Experience is not a cache: no TTL, and it holds what past sessions learned
+// about a screen, which navigator.Reach replays as actions on the device.
+// Its filename must therefore be the screen's identity and nothing else.
+// ScreenSignature.Key() is not that -- it renders the salient LABELS before
+// a TRUNCATED digest, so it changes when label selection changes (b1a79f5
+// renamed every iOS screen) and it cannot tell apart two screens whose
+// digests share eight hex characters, which Same() reads as different.
+func TestExperienceIsFoundAfterItsLabelsChange(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -36,62 +37,53 @@ func TestExperienceFindsAScreenAfterItsLabelsChange(t *testing.T) {
 		t.Fatalf("Get after the labels changed: %v", err)
 	}
 	if body != "tap All Contacts" {
-		t.Fatalf("body = %q, want the recipe recorded under the old name", body)
-	}
-}
-
-// The next write moves the file to the current name, so the directory stays
-// readable instead of accumulating one file per naming era.
-func TestExperienceRenamesTheFileOnTheNextRecord(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	store := NewExperience(dir)
-	old := screenSig("aabbccddeeff0011", "Contacts", "Back")
-	renamed := screenSig("aabbccddeeff0011", "Back", "Contacts")
-
-	if err := store.Record(context.Background(), old,
-		explore.MemoryEntry{Title: "first", Body: "one"}); err != nil {
-		t.Fatalf("Record old: %v", err)
-	}
-	if err := store.Record(context.Background(), renamed,
-		explore.MemoryEntry{Title: "second", Body: "two"}); err != nil {
-		t.Fatalf("Record renamed: %v", err)
+		t.Fatalf("body = %q, want the recipe recorded before the labels changed", body)
 	}
 
-	names := []string{}
 	entries, err := os.ReadDir(filepath.Join(dir, "experience"))
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}
-	for _, entry := range entries {
-		names = append(names, entry.Name())
-	}
-	if len(names) != 1 || names[0] != renamed.Key()+".md" {
-		t.Fatalf("files = %v, want just %q", names, renamed.Key()+".md")
-	}
-	for _, title := range []string{"first", "second"} {
-		if _, err := store.Get(context.Background(), renamed, title); err != nil {
-			t.Fatalf("Get(%q) after the rename: %v", title, err)
+	if len(entries) != 1 || entries[0].Name() != old.TreeDigest+".md" {
+		names := []string{}
+		for _, entry := range entries {
+			names = append(names, entry.Name())
 		}
+		t.Fatalf("files = %v, want one named after the whole digest", names)
 	}
 }
 
-// Two screens are two screens. The fallback matches the digest, which is
-// what Same() reads, so it must not merge screens that differ.
-func TestExperienceKeepsDifferentScreensApart(t *testing.T) {
+// Two screens whose digests agree on the first eight characters are two
+// screens: Same() reads the whole digest, so the store must too. Key()
+// truncates to eight, which is why the key cannot be the filename.
+func TestExperienceKeepsScreensApartOnATruncatedDigestMatch(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	store := NewExperience(dir)
-	one := screenSig("1111111111111111", "Lists")
-	two := screenSig("2222222222222222", "Lists")
+	one := screenSig("aabbccdd00000001", "Lists")
+	two := screenSig("aabbccdd00000002", "Lists")
+	if one.Key() != two.Key() {
+		t.Fatalf("keys %q and %q differ; this test needs a truncation collision", one.Key(), two.Key())
+	}
 
 	if err := store.Record(context.Background(), one,
 		explore.MemoryEntry{Title: "only on one", Body: "x"}); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
 	if _, err := store.Get(context.Background(), two, "only on one"); err == nil {
-		t.Fatal("Get found a recipe from a different screen")
+		t.Fatal("a recipe from a different screen was served")
+	}
+}
+
+// A signature with no digest has no identity to file under, and guessing one
+// would file it with whatever else has none.
+func TestExperienceRefusesAScreenWithNoDigest(t *testing.T) {
+	t.Parallel()
+
+	store := NewExperience(t.TempDir())
+	if err := store.Record(context.Background(), screenSig("", "Lists"),
+		explore.MemoryEntry{Title: "t", Body: "b"}); err == nil {
+		t.Fatal("recorded a screen with no digest")
 	}
 }
