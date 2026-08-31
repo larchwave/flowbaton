@@ -3,6 +3,7 @@ package explore
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -272,7 +273,12 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			if usable && title == "" && navigationTitle(node, insideBar) {
 				title = trimmed
 			}
-			if usable && len(salient) < salientLabelCount && !namesTheApplication(node) {
+			// A container and the label inside it carry the same string --
+			// Android's ViewGroup product_lockup around TextView product_name,
+			// iOS's cell around its own text -- so taking both spends the whole
+			// list on one word and names the screen "contacts-contacts".
+			if usable && len(salient) < salientLabelCount &&
+				!namesTheApplication(node) && !slices.Contains(salient, trimmed) {
 				salient = append(salient, trimmed)
 			}
 		}
