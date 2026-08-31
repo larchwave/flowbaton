@@ -268,11 +268,12 @@ func TestExportedCountSelectorSurvivesTheYAMLRoundTrip(t *testing.T) {
 	}
 }
 
-// The session now returns the app to its start screen before every
-// scenario, so the run an exported flow records begins on a freshly
-// launched app. A bare launchApp resumes whatever is already running, so
-// replaying the flow would begin somewhere else -- which is how mmx36's
-// flows failed at step 2 on selectors that were never the problem.
+// The session relaunches before every scenario, so the run an exported flow
+// records begins on a freshly launched app, and the exported launchApp says
+// so. It restates the engine's default rather than changing it
+// (TestLaunchAppSkipsEveryUnauthoredStep), and it does not promise the
+// replay starts on the same SCREEN -- an app that restores its last one
+// comes back on it.
 func TestExportedFlowLaunchesTheAppTheWayTheSessionDid(t *testing.T) {
 	data, err := Exporter{}.ExportFlow(&explore.TestResult{
 		Scenario: explore.Scenario{Name: "Open a list"},

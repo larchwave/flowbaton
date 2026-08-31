@@ -42,9 +42,10 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 	//
 	// It is not what fixed mmx36's flows, whatever the commit that added it
 	// said -- a bare launchApp already stops the app, which
-	// TestLaunchAppSkipsEveryUnauthoredStep pins. The two changes beside it
-	// did: the navigator kills first, and the session returns to the start
-	// screen between scenarios.
+	// TestLaunchAppSkipsEveryUnauthoredStep pins. What helped was the
+	// navigator killing before it launches, and the session relaunching
+	// between scenarios instead of carrying one scenario's process into the
+	// next. Neither of those puts the app on a known screen either.
 	//
 	// Not clearState: it would take the data a run depends on with it. The
 	// price is that a stop does not reset navigation either -- an app that

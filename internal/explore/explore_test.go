@@ -338,12 +338,18 @@ func TestAnAbortedScenarioKeepsAVerdictItAlreadyHas(t *testing.T) {
 	}
 }
 
-// Scenarios run back to back, so before this each one began wherever the
-// last finished. The planner writes them against the UI map of the start screen,
-// and an exported flow records the actions without the screen they began on
-// -- measured on mmx36, only the first scenario's flow replayed standalone.
-// Every scenario now starts where the first one did.
-func TestRunSessionStartsEveryScenarioFromTheAppsStartScreen(t *testing.T) {
+// Scenarios run back to back, so before this each one inherited the process
+// the last one left. The planner writes them against the UI map of the
+// screen the session opened on, and an exported flow records the actions
+// without the screen they began on -- measured on mmx36, only the first
+// scenario's flow replayed standalone. Every scenario now begins from a
+// relaunch, and runs against the state that relaunch returned.
+//
+// That is what this pins: the navigator is asked, and its answer is what
+// the scenario gets. Whether the app comes back on the same SCREEN is the
+// app's business and not testable here -- one that restores its last screen
+// comes back on it (run/navigator.go).
+func TestRunSessionStartsEveryScenarioFromARelaunch(t *testing.T) {
 	start := &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "start"}}
 	fake := &fakeCrew{
 		state: start,
@@ -360,7 +366,7 @@ func TestRunSessionStartsEveryScenarioFromTheAppsStartScreen(t *testing.T) {
 	}
 	for index, state := range fake.starts {
 		if state == nil || !state.Signature.Same(start.Signature) {
-			t.Fatalf("scenario %d started from %+v, want the app's start screen", index+1, state)
+			t.Fatalf("scenario %d started from %+v, want the state the relaunch returned", index+1, state)
 		}
 	}
 	// Once at the session's start and once between the two scenarios. Not a
