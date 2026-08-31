@@ -32,8 +32,8 @@ func Prepare(ctx context.Context, plan model.ExecutionPlan, loader capability.Fl
 // compileProgram runs "before any runtime or device dependency is
 // constructed", which is what lets a syntax check use it: parse and capability
 // preflight see a command's SHAPE and its support, never its VALUES, so
-// `repeat: -1` and a 100% coordinate used to check clean and fail on the
-// device instead.
+// `repeat: -1` and a 100% coordinate pass both and fail on the device
+// instead.
 //
 // Compilation is interpolation aware -- `${POINT}` compiles and defers to
 // evaluation -- so this refuses literals only and never a value the flow gets

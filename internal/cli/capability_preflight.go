@@ -24,7 +24,7 @@ func (capabilityPreflight) Check(ctx context.Context, source Source, root model.
 		root:     root,
 		delegate: capability.FileLoader{},
 	}
-	// Prepare runs the same capability traversal this used to call directly
+	// Prepare runs the same capability traversal as a direct capability.Check
 	// and keeps the parsed flows, so Validate can compile them. Compilation
 	// is where a command's values are checked, and it needs no device.
 	program, err := engine.Prepare(
