@@ -258,7 +258,11 @@ func generalizeCount(state *explore.ScreenState, label string) (string, bool) {
 // independently. A tree it cannot read answers -1, which reads as "not
 // unique" and keeps the literal label.
 func selectorMatchCount(state *explore.ScreenState, pattern string) int {
-	root, err := state.VisibleTree()
+	// The full tree on purpose, unlike every other matcher here: this one is
+	// not choosing what to touch, it is asking whether the pattern could ever
+	// be ambiguous. A row scrolled out of view is one scroll from being a
+	// second match, and the comment above says which way to err.
+	root, err := state.FullTree()
 	if err != nil {
 		return -1
 	}

@@ -110,6 +110,15 @@ type ScreenState struct {
 	Viewport device.Bounds
 }
 
+// FullTree normalizes the captured hierarchy and prunes nothing. Only a
+// caller asking what could ever match wants this -- deciding whether a
+// generalized selector stays unambiguous, where a row one scroll away is a
+// second match waiting to happen. Anything deciding what to touch or what is
+// on screen wants VisibleTree.
+func (state *ScreenState) FullTree() (*hierarchy.Element, error) {
+	return hierarchy.New(state.Hierarchy)
+}
+
 // VisibleTree normalizes the captured hierarchy and prunes it the way the
 // engine does before matching (internal/engine/lookup.go). Everything that
 // selects an element by name has to see the same screen the exported flow
@@ -121,7 +130,7 @@ type ScreenState struct {
 // has said nothing about screen size, and treating that as a screen of zero
 // size would hide every element instead.
 func (state *ScreenState) VisibleTree() (*hierarchy.Element, error) {
-	root, err := hierarchy.New(state.Hierarchy)
+	root, err := state.FullTree()
 	if err != nil {
 		return nil, err
 	}
