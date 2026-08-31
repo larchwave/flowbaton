@@ -108,6 +108,36 @@ const (
 	iosToolbarType = "24"
 )
 
+// namesAnIcon reports whether this label is a symbol identifier rather than
+// words. iOS hands an icon the name of its glyph when the app sets no
+// label, and that name reached a screen: session mmx57 mapped a calendar
+// screen as august-calendar-day-timeline-leading-26d1eb3d from a button
+// labelled "calendar.day.timeline.leading" whose id is the honest
+// "toggle-day-list-view". Three more on iOS 26.2, 2026-08-31:
+// "doc.viewfinder.fill" and "deskclock.fill" in shortcuts,
+// "photo.fill.on.rectangle.fill" in photos.
+//
+// The shape is the test: lowercase words joined by dots, no spaces. A
+// filename typed by a person is the near miss, and the cost there is small
+// -- the screen takes its next label, which is another row of the same list
+// -- while the cost of keeping these is a screen named after a glyph.
+func namesAnIcon(label string) bool {
+	if !strings.Contains(label, ".") {
+		return false
+	}
+	for _, segment := range strings.Split(label, ".") {
+		if segment == "" {
+			return false
+		}
+		for _, r := range segment {
+			if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // namesItsOwnRole reports whether this node's label is the name of the
 // container rather than of anything on the screen. A tab bar is labelled
 // "Tab Bar" and a toolbar "Toolbar", so a screen took the word Toolbar for a
@@ -329,7 +359,7 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			// spend a slot on a blank and make the next real label read as a
 			// repeat of it, both being blank to sameName.
 			trimmed := strings.TrimSpace(label)
-			usable := slugify(trimmed) != "" &&
+			usable := slugify(trimmed) != "" && !namesAnIcon(trimmed) &&
 				utf8.RuneCountInString(trimmed) <= salientLabelLimit
 			if usable && title == "" && navigationTitle(node, insideBar) {
 				title = trimmed
