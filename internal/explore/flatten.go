@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/hierarchy"
@@ -254,7 +255,10 @@ func parseBounds(node device.TreeNode) (device.Bounds, bool) {
 }
 
 // salientLabelCount is how many labels name a screen; salientLabelLimit is
-// the longest one worth using as a name rather than as content.
+// the longest one worth using as a name rather than as content, counted in
+// characters. Counting bytes made the limit shrink with the script: a
+// Russian title of 29 characters weighs 55 bytes, a Chinese one reaches 40
+// bytes at 14 characters, and both were dropped as content.
 const (
 	salientLabelCount = 2
 	salientLabelLimit = 40
@@ -299,7 +303,8 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			// spend a slot on a blank and make the next real label read as a
 			// repeat of it, both being blank to sameName.
 			trimmed := strings.TrimSpace(label)
-			usable := slugify(trimmed) != "" && len(trimmed) <= salientLabelLimit
+			usable := slugify(trimmed) != "" &&
+				utf8.RuneCountInString(trimmed) <= salientLabelLimit
 			if usable && title == "" && navigationTitle(node, insideBar) {
 				title = trimmed
 			}
