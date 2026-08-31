@@ -294,8 +294,12 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			role := signatureRole(node)
 			label := signatureLabel(node)
 			parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
+			// A label of symbols alone -- an emoji, a glyph from the private
+			// use area -- names nothing: Key drops it, so keeping it would
+			// spend a slot on a blank and make the next real label read as a
+			// repeat of it, both being blank to sameName.
 			trimmed := strings.TrimSpace(label)
-			usable := trimmed != "" && len(trimmed) <= salientLabelLimit
+			usable := slugify(trimmed) != "" && len(trimmed) <= salientLabelLimit
 			if usable && title == "" && navigationTitle(node, insideBar) {
 				title = trimmed
 			}

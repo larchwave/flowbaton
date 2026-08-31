@@ -81,3 +81,25 @@ func TestWithTitleFirstDropsACaseVariantOfTheTitle(t *testing.T) {
 		t.Fatalf("ordered = %q, want %q", got, want)
 	}
 }
+
+// A label made only of symbols names nothing: Key drops it, so keeping it
+// spends one of the two slots on a blank and makes the next real label look
+// like a repeat of it, since the check that stops repeats reads the same
+// blank for both. None of the thirteen screens captured 2026-08-31 carried
+// such a label, but an emoji or a glyph from the private use area is one.
+func TestComputeSignatureIgnoresLabelsThatNameNothing(t *testing.T) {
+	t.Parallel()
+
+	tree := device.TreeNode{
+		Attributes: map[string]string{"bounds": "[0,0][402,874]"},
+		Children: []device.TreeNode{
+			node(map[string]string{"elementType": "9", "accessibilityText": "•••"}),
+			node(map[string]string{"elementType": "9", "accessibilityText": "★"}),
+			node(map[string]string{"elementType": "45", "accessibilityText": "Search"}),
+			node(map[string]string{"elementType": "48", "accessibilityText": "Groups"}),
+		},
+	}
+	if got, want := ComputeSignature("app", tree).Salient, []string{"Search", "Groups"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("salient = %q, want %q", got, want)
+	}
+}
