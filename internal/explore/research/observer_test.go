@@ -19,6 +19,12 @@ type fakeDriver struct {
 	shot      []byte
 	shotErr   error
 
+	// staticSeq is consumed in order when set, so a test can script a screen
+	// that moves for a while and then settles; `static` answers once it runs
+	// out. staticCalls counts every answer given.
+	staticSeq   []bool
+	staticCalls int
+
 	staticReq device.ScreenStaticRequest
 	descReq   device.ContentDescriptorRequest
 	shotReq   device.ScreenshotRequest
@@ -35,6 +41,12 @@ func (f *fakeDriver) DeviceInfo(context.Context) (device.DeviceInfo, error) {
 
 func (f *fakeDriver) WaitUntilScreenIsStatic(_ context.Context, req device.ScreenStaticRequest) (bool, error) {
 	f.staticReq = req
+	f.staticCalls++
+	if len(f.staticSeq) > 0 {
+		answer := f.staticSeq[0]
+		f.staticSeq = f.staticSeq[1:]
+		return answer, f.staticErr
+	}
 	return f.static, f.staticErr
 }
 
@@ -118,7 +130,10 @@ func TestObserveContinuesWhenScreenNotStatic(t *testing.T) {
 	observer := &Observer{
 		Driver: driver,
 		AppID:  "com.example.app",
-		Logf:   func(format string, args ...any) { notes = append(notes, format) },
+		// This test is about capturing a screen that never settles, not
+		// about how long the observer is willing to wait for one.
+		SettleTimeout: 10 * time.Millisecond,
+		Logf:          func(format string, args ...any) { notes = append(notes, format) },
 	}
 	state, err := observer.Observe(context.Background())
 	if err != nil {
@@ -229,7 +244,7 @@ func TestDialogActiveHeuristic(t *testing.T) {
 // Return" instead of pressing a key, which is what those rows invite. It has
 // press_key and hide_keyboard for the keyboard; it needs the app's elements.
 func TestObserveAsksForTheAppsOwnElementsWithoutTheKeyboardKeys(t *testing.T) {
-	driver := &fakeDriver{}
+	driver := &fakeDriver{static: true}
 	observer := &Observer{Driver: driver, AppID: "com.example.app"}
 	if _, err := observer.Observe(context.Background()); err != nil {
 		t.Fatalf("Observe: %v", err)

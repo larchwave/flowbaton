@@ -18,6 +18,10 @@ import (
 // DefaultSettleTimeout bounds the settle wait when the caller sets none.
 const DefaultSettleTimeout = 5 * time.Second
 
+// settlePollInterval is how often the observer re-asks whether the screen is
+// static, matching the engine's own cadence for a polled wait.
+const settlePollInterval = 100 * time.Millisecond
+
 // modalMarkers are class/type fragments that mark a modal surface.
 var modalMarkers = []string{"alert", "dialog", "sheet", "modal", "popup"}
 
@@ -38,6 +42,48 @@ type Observer struct {
 	Clock func() time.Time
 }
 
+// waitUntilStatic asks the driver until the screen is static or the bound is
+// spent. The waiting has to happen here because two of the three drivers do
+// not do it: internal/ios answers by reading two frames a tenth of a second
+// apart, internal/android asks the agent once, and both ignore the request's
+// timeout and say the caller owns the budget. Asking once therefore captured
+// mid-transition and printed a note naming a bound nothing had waited for.
+// internal/web blocks internally instead, and composes: its first answer
+// already spends the bound and ends the loop.
+//
+// The deadline is wall time, not o.now(): o.Clock supplies capture
+// timestamps and a test may hold it still, while this wait is about a screen
+// that moves in real time.
+//
+// A driver error ends the wait rather than being retried -- an unsupported
+// probe answers the same way every time, and the caller already treats it as
+// a screen it cannot judge.
+func (o *Observer) waitUntilStatic(ctx context.Context, timeout time.Duration) (bool, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		static, err := o.Driver.WaitUntilScreenIsStatic(ctx, device.ScreenStaticRequest{
+			TimeoutMillis: timeout.Milliseconds(),
+		})
+		if err != nil || static {
+			return static, err
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return false, nil
+		}
+		if remaining > settlePollInterval {
+			remaining = settlePollInterval
+		}
+		timer := time.NewTimer(remaining)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return false, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
 // Observe captures one full screen state. An unsettled screen is noted and
 // captured anyway; a settle probe the platform cannot answer is treated
 // the same way.
@@ -55,9 +101,7 @@ func (o *Observer) Observe(ctx context.Context) (*explore.ScreenState, error) {
 	if timeout <= 0 {
 		timeout = DefaultSettleTimeout
 	}
-	static, err := o.Driver.WaitUntilScreenIsStatic(ctx, device.ScreenStaticRequest{
-		TimeoutMillis: timeout.Milliseconds(),
-	})
+	static, err := o.waitUntilStatic(ctx, timeout)
 	switch {
 	case errors.Is(err, device.ErrUnsupported):
 		o.logf("settle probe unsupported, capturing anyway")
