@@ -340,7 +340,7 @@ func TestPlanNextNamesUnpromisedExpectations(t *testing.T) {
 // The planner wrote outcomes nothing can check: mmx57's calendar run spent
 // two of six scenarios on a "red filled-circle selection highlight", and the
 // judge has no colour to look at. Telling the planner what the checker sees
-// is upstream of that.
+// stops the scenario from being written at all.
 //
 // Measured against MiniMax-M3 on a cached calendar map, four plans per
 // variant, budget six: without this rule 24 outcomes carried 4 about colour
