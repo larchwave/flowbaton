@@ -114,3 +114,27 @@ func max64(left, right int64) int64 {
 	}
 	return right
 }
+
+// VisibleCenter returns the center of the part of an element that is actually
+// on screen. FilterVisible keeps an element at 10% visible, so a row scrolled
+// half past the bottom edge stays matchable while its geometric center sits
+// off the device -- and a tap aimed there lands nowhere. For a fully visible
+// element the intersection is the element, so the point is unchanged.
+func VisibleCenter(bounds, viewport device.Bounds) device.Point {
+	if Area(bounds) == 0 || Area(viewport) == 0 {
+		return Center(bounds)
+	}
+	left := max64(int64(bounds.X), int64(viewport.X))
+	top := max64(int64(bounds.Y), int64(viewport.Y))
+	right := min64(int64(bounds.X)+int64(bounds.Width), int64(viewport.X)+int64(viewport.Width))
+	bottom := min64(int64(bounds.Y)+int64(bounds.Height), int64(viewport.Y)+int64(viewport.Height))
+	if right <= left || bottom <= top {
+		return Center(bounds)
+	}
+	return Center(device.Bounds{
+		X:      int(left),
+		Y:      int(top),
+		Width:  int(right - left),
+		Height: int(bottom - top),
+	})
+}

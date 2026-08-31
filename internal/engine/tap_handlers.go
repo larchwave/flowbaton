@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/larchwave/flowbaton/internal/device"
-	"github.com/larchwave/flowbaton/internal/hierarchy"
 	"github.com/larchwave/flowbaton/internal/js"
 	"github.com/larchwave/flowbaton/internal/model"
 )
@@ -602,9 +601,13 @@ func resolveTapPoint(
 			return device.Point{}, err
 		}
 		if plan.targetMode == tapTargetSelectorCenter {
-			return hierarchy.Center(stability.Bounds), nil
+			return lookup.visibleCenter(ctx, stability.Bounds)
 		}
-		return plan.point.resolveRelative(stability.Bounds)
+		relative, err := plan.point.resolveRelative(stability.Bounds)
+		if err != nil {
+			return device.Point{}, err
+		}
+		return lookup.onScreen(ctx, relative)
 	default:
 		return device.Point{}, NewConfigurationError("tapOn target mode is invalid", nil)
 	}

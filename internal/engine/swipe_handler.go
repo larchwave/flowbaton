@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/larchwave/flowbaton/internal/device"
-	"github.com/larchwave/flowbaton/internal/hierarchy"
 	"github.com/larchwave/flowbaton/internal/js"
 	"github.com/larchwave/flowbaton/internal/matching"
 	"github.com/larchwave/flowbaton/internal/model"
@@ -363,7 +362,11 @@ func resolveSwipeRequest(ctx context.Context, lookup *ElementLookup, plan swipeE
 		if err != nil {
 			return device.SwipeRequest{}, err
 		}
-		return ownedSwipeElementRequest(hierarchy.Center(stability.Bounds), plan.direction, plan.durationMillis), nil
+		center, err := lookup.visibleCenter(ctx, stability.Bounds)
+		if err != nil {
+			return device.SwipeRequest{}, err
+		}
+		return ownedSwipeElementRequest(center, plan.direction, plan.durationMillis), nil
 	default:
 		return device.SwipeRequest{}, NewConfigurationError("swipe evaluated mode is invalid", nil)
 	}

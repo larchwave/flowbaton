@@ -304,6 +304,44 @@ func (lookup *ElementLookup) visibleHierarchy(ctx context.Context) (*hierarchy.E
 	return hierarchy.FilterVisible(normalized, viewport), nil
 }
 
+// visibleCenter aims a gesture at the part of an element that is on screen.
+// visibleHierarchy keeps anything 10% visible, so a row scrolled past an edge
+// stays selectable while its geometric center sits off the device. Scroll
+// distance is the deliberate exception: scrollUntilVisibleCenterRequest needs
+// the true center to know how far to travel.
+func (lookup *ElementLookup) visibleCenter(ctx context.Context, bounds device.Bounds) (device.Point, error) {
+	info, err := lookup.cachedDeviceInfo(ctx)
+	if err != nil {
+		return device.Point{}, err
+	}
+	return hierarchy.VisibleCenter(
+		bounds, device.Bounds{Width: info.WidthGrid, Height: info.HeightGrid}), nil
+}
+
+// onScreen refuses a resolved point the device does not have. An authored
+// point is measured against the ELEMENT (resolveAxis), never the screen, so
+// `point: 50%,50%` on a row scrolled past an edge resolves to a coordinate off
+// the display -- and the runner offsets a touch straight to it, since
+// XCUITestAutomation.coordinate does not clamp. Retargeting is not an option
+// here the way it is for a center: the author's percentage means a spot on the
+// element, so the flow says so instead of tapping nothing.
+func (lookup *ElementLookup) onScreen(ctx context.Context, point device.Point) (device.Point, error) {
+	info, err := lookup.cachedDeviceInfo(ctx)
+	if err != nil {
+		return device.Point{}, err
+	}
+	if info.WidthGrid <= 0 || info.HeightGrid <= 0 {
+		return point, nil
+	}
+	if point.X < 0 || point.X >= float64(info.WidthGrid) ||
+		point.Y < 0 || point.Y >= float64(info.HeightGrid) {
+		return device.Point{}, NewOperationError(fmt.Sprintf(
+			"resolved point %g,%g is off the screen (%dx%d): the element is only partly visible",
+			point.X, point.Y, info.WidthGrid, info.HeightGrid), nil)
+	}
+	return point, nil
+}
+
 func (lookup *ElementLookup) cachedDeviceInfo(ctx context.Context) (device.DeviceInfo, error) {
 	lookup.deviceInfoMu.Lock()
 	defer lookup.deviceInfoMu.Unlock()
