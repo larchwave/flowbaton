@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/larchwave/flowbaton/internal/capability"
+	"github.com/larchwave/flowbaton/internal/engine"
 	"github.com/larchwave/flowbaton/internal/model"
 )
 
@@ -23,12 +24,15 @@ func (capabilityPreflight) Check(ctx context.Context, source Source, root model.
 		root:     root,
 		delegate: capability.FileLoader{},
 	}
-	_, err := capability.Check(
-		ctx,
-		model.ExecutionPlan{SelectedRoots: []string{source.Name}},
-		capability.WithLoader(loader),
-	)
-	return err
+	// Prepare runs the same capability traversal this used to call directly
+	// and keeps the parsed flows, so Validate can compile them. Compilation
+	// is where a command's values are checked, and it needs no device.
+	program, err := engine.Prepare(
+		ctx, model.ExecutionPlan{SelectedRoots: []string{source.Name}}, loader)
+	if err != nil {
+		return err
+	}
+	return engine.Validate(ctx, program)
 }
 
 // seededFlowLoader lets capability.Check own all graph traversal while using

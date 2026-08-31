@@ -27,6 +27,26 @@ func Prepare(ctx context.Context, plan model.ExecutionPlan, loader capability.Fl
 	return prepare(ctx, plan, loader)
 }
 
+// Validate compiles a prepared Program without running it, so a caller can
+// learn what Execute would refuse before anything reaches a device.
+// compileProgram runs "before any runtime or device dependency is
+// constructed", which is what lets a syntax check use it: parse and capability
+// preflight see a command's SHAPE and its support, never its VALUES, so
+// `repeat: -1` and a 100% coordinate used to check clean and fail on the
+// device instead.
+//
+// Compilation is interpolation aware -- `${POINT}` compiles and defers to
+// evaluation -- so this refuses literals only and never a value the flow gets
+// from its environment.
+func Validate(ctx context.Context, program *Program) error {
+	registry, err := productionHandlerRegistry()
+	if err != nil {
+		return err
+	}
+	_, err = compileProgram(ctx, program, registry)
+	return err
+}
+
 // PrepareForPlatform performs the same immutable preparation while rejecting
 // features whose registry Platforms do not include the selected driver. It is
 // intended for executable paths before Driver.Open; syntax-only callers may
