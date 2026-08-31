@@ -2,6 +2,7 @@ package explore
 
 import (
 	"time"
+	"unicode"
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/hierarchy"
@@ -63,16 +64,18 @@ func sameName(first, second string) bool {
 	return slugify(first) == slugify(second)
 }
 
+// slugify keeps the letters and digits of any script, lowercased, and turns
+// every run of anything else into one dash. Keeping only a-z0-9 left a
+// Russian or Chinese screen with no name at all -- "Настройки" and "Экран 2"
+// keyed as "2" -- and the name is what the planner, the judge, and the
+// element table call the screen.
 func slugify(value string) string {
 	out := make([]rune, 0, len(value))
 	lastDash := false
 	for _, r := range value {
 		switch {
-		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
-			out = append(out, r)
-			lastDash = false
-		case r >= 'A' && r <= 'Z':
-			out = append(out, r+('a'-'A'))
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			out = append(out, unicode.ToLower(r))
 			lastDash = false
 		default:
 			if !lastDash && len(out) > 0 {
