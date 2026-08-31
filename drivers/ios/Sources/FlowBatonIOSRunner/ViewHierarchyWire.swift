@@ -202,22 +202,27 @@ func hierarchyDepth(of element: WireAXElement) -> Int {
 /// refuse on. It lives in the framework rather than beside the XCUITest code
 /// because that makes it testable without a simulator.
 ///
-/// KNOWN HOLE, and one wrong way to close it. A dismissed keyboard stays in
-/// the hierarchy parked below the screen, so `isKeyboard` is true on every
-/// screen and this gate is open even where nothing can take typed text.
-/// Gating it on the keyboard's geometry -- the fix that works for /keyboard
-/// and pressKey -- REFUSED EVERY TYPING COMMAND on the Simulator, measured
-/// across two apps (sessions mmx27 and mmx31): the software keyboard does
-/// not present there, while typeText still reaches the focused field. So
-/// screen geometry is not the signal for this question. What is needed is
-/// real keyboard focus, which the public attributes do not carry -- an iOS
-/// text field with the keyboard open reports `hasFocus` false.
+/// The parked-keyboard problem is NOT this function's, whatever this comment
+/// said before 2026-08-30. A dismissed keyboard does stay matchable below
+/// the screen, but through `app.keyboards` -- an element query that reaches
+/// the system-wide tree -- which is why /keyboard has to gate on geometry
+/// (KeyboardPresence.swift). This walks `app.snapshot()`, the app's OWN
+/// tree, and the keyboard belongs to another process, so it is not in there.
+/// Measured on iOS 26.2: on a Reminders screen with nothing focused,
+/// inputText is refused with this gate's precondition, and on a focused
+/// field typing lands (session mmx39, step 3).
 ///
-/// The hole is no longer fatal: AutomationIssues catches what XCUITest
-/// records when typing lands nowhere and returns it as the command's error,
-/// so a gate that guesses wrong costs a failed command rather than the
-/// serving process. This check stays because it says something more useful
-/// than XCUITest does about what to do next.
+/// One wrong way to close a gate here, kept because it cost two sessions to
+/// learn: gating on the keyboard's geometry -- the fix that works for
+/// /keyboard and pressKey -- REFUSED EVERY TYPING COMMAND on the Simulator,
+/// measured across two apps (sessions mmx27 and mmx31). The software
+/// keyboard does not present there, while typeText still reaches the focused
+/// field. Screen geometry is not the signal for this question.
+///
+/// A gate that guesses wrong is no longer fatal either: AutomationIssues
+/// catches what XCUITest records when typing lands nowhere and returns it as
+/// the command's error, so the cost is a failed command rather than the
+/// serving process.
 public func canReceiveTyping(in snapshot: any AccessibilitySnapshot) -> Bool {
   if snapshot.focused || snapshot.isKeyboard {
     return true
