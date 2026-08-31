@@ -106,6 +106,11 @@ func FlattenScreen(root device.TreeNode) ([]FlatElement, error) {
 
 func isInteresting(element *hierarchy.Element) bool {
 	node := element.Node
+	// Nothing can be tapped, read, or typed into where there is no area to
+	// touch, so listing it only offers the agent a row that cannot work.
+	if offscreen(node) {
+		return false
+	}
 	if node.Clickable != nil && *node.Clickable {
 		return true
 	}
@@ -125,16 +130,28 @@ func isInteresting(element *hierarchy.Element) bool {
 	return false
 }
 
-// offscreen reports whether the tree gives this node no area at all. A node
-// with no bounds attribute is not offscreen -- it is unmeasured, and dropping
-// those would take real containers with them.
+// offscreen reports whether the tree measured this node and gave it no area.
+// A node with no bounds attribute is not offscreen -- it is unmeasured, and
+// dropping those would take real containers with them.
 func offscreen(node device.TreeNode) bool {
-	bounds, ok := ElementBounds(node)
+	bounds, ok := parseBounds(node)
 	return ok && bounds.Width == 0 && bounds.Height == 0
 }
 
-// ElementBounds parses the node bounds when present.
+// ElementBounds returns bounds a caller can act on: parsed, and enclosing a
+// real area. A box of zero width and height parses cleanly and centers on the
+// screen corner, so reporting it as usable sent every consumer somewhere the
+// element is not -- a tap to (0,0), an exported point locator aimed there.
+// Measured on iOS 26.2: 12 of 18 rows on one captured screen were such boxes.
 func ElementBounds(node device.TreeNode) (device.Bounds, bool) {
+	bounds, ok := parseBounds(node)
+	if !ok || (bounds.Width == 0 && bounds.Height == 0) {
+		return device.Bounds{}, false
+	}
+	return bounds, true
+}
+
+func parseBounds(node device.TreeNode) (device.Bounds, bool) {
 	raw := node.Attributes["bounds"]
 	if raw == "" {
 		return device.Bounds{}, false

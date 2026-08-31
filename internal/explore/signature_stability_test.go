@@ -51,3 +51,31 @@ func TestSignatureStillSeesAVisibleSiblingSwap(t *testing.T) {
 		t.Fatal("two visibly different screens share one digest")
 	}
 }
+
+// The same capture that swapped the pair above listed 18 rows, 12 of them
+// boxes of zero width and height: app-library icons the screen does not show.
+// Every one read as a row an agent could tap.
+func TestTheElementTableLeavesOutWhatHasNoAreaToTouch(t *testing.T) {
+	node := func(name, bounds string) device.TreeNode {
+		return device.TreeNode{Attributes: map[string]string{
+			"elementType": "44", "id": name, "accessibilityText": name, "bounds": bounds,
+		}}
+	}
+	flat, err := FlattenScreen(device.TreeNode{
+		Attributes: map[string]string{"elementType": "0"},
+		Children: []device.TreeNode{
+			node("Reminders", "[0,0][0,0]"),
+			node("Add", "[10,20][110,60]"),
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(flat) != 1 || flat[0].Node.Attributes["id"] != "Add" {
+		var got []string
+		for _, e := range flat {
+			got = append(got, e.Node.Attributes["id"])
+		}
+		t.Fatalf("table = %v, want only the element with an area", got)
+	}
+}
