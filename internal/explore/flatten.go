@@ -74,7 +74,7 @@ func withTitleFirst(title string, salient []string) []string {
 		if len(ordered) >= salientLabelCount {
 			break
 		}
-		if label == title {
+		if sameName(label, title) {
 			continue
 		}
 		ordered = append(ordered, label)
@@ -273,12 +273,16 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			if usable && title == "" && navigationTitle(node, insideBar) {
 				title = trimmed
 			}
-			// A container and the label inside it carry the same string --
+			// A container and the label inside it carry the same name --
 			// Android's ViewGroup product_lockup around TextView product_name,
-			// iOS's cell around its own text -- so taking both spends the whole
-			// list on one word and names the screen "contacts-contacts".
+			// iOS's cell around its own text, an image "Search" beside a
+			// keyboard key "search" -- so taking both spends the whole list on
+			// one word and names the screen "contacts-contacts".
+			duplicate := slices.ContainsFunc(salient, func(taken string) bool {
+				return sameName(taken, trimmed)
+			})
 			if usable && len(salient) < salientLabelCount &&
-				!namesTheApplication(node) && !slices.Contains(salient, trimmed) {
+				!namesTheApplication(node) && !duplicate {
 				salient = append(salient, trimmed)
 			}
 		}

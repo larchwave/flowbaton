@@ -51,3 +51,33 @@ func TestComputeSignatureKeepsASingleLabelSingle(t *testing.T) {
 		t.Fatalf("salient = %q, want %q", got, want)
 	}
 }
+
+// Two labels that differ only in case read as one name: Key lowercases both,
+// so keeping them spends the list on a word the reader sees twice. Captured
+// live on iOS 26.2, 2026-08-31: the contacts search screen carries an image
+// labelled "Search" and a keyboard key labelled "search".
+func TestComputeSignatureTreatsCaseVariantsAsOneLabel(t *testing.T) {
+	t.Parallel()
+
+	tree := device.TreeNode{
+		Attributes: map[string]string{"bounds": "[0,0][402,874]"},
+		Children: []device.TreeNode{
+			node(map[string]string{"elementType": "43", "id": "magnifyingglass", "accessibilityText": "Search"}),
+			node(map[string]string{"elementType": "9", "id": "Search", "accessibilityText": "search"}),
+			node(map[string]string{"elementType": "48", "accessibilityText": "Groups"}),
+		},
+	}
+	if got, want := ComputeSignature("app", tree).Salient, []string{"Search", "Groups"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("salient = %q, want %q", got, want)
+	}
+}
+
+// The navigation title moves in front of the labels rather than repeating
+// when the two differ only in case, for the same reason.
+func TestWithTitleFirstDropsACaseVariantOfTheTitle(t *testing.T) {
+	t.Parallel()
+
+	if got, want := withTitleFirst("Lists", []string{"lists", "Edit"}), []string{"Lists", "Edit"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ordered = %q, want %q", got, want)
+	}
+}

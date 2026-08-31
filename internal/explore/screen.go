@@ -55,6 +55,14 @@ func (s ScreenSignature) Same(other ScreenSignature) bool {
 	return s.AppID == other.AppID && s.TreeDigest == other.TreeDigest
 }
 
+// sameName reports whether two labels read as one name. Key slugifies every
+// label, so "Search" and "search" -- an image and a keyboard key on one
+// contacts screen, iOS 26.2 -- name a screen "search-search". A check on the
+// raw strings lets that pair straight through the guard meant to stop it.
+func sameName(first, second string) bool {
+	return slugify(first) == slugify(second)
+}
+
 func slugify(value string) string {
 	out := make([]rune, 0, len(value))
 	lastDash := false
