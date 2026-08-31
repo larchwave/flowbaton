@@ -206,6 +206,9 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 		if transportGone(obsErr) {
 			return "", fmt.Errorf("%w: observe after %s: %v", explore.ErrDeviceUnreachable, tool, obsErr)
 		}
+		if observationLost(obsErr) {
+			return "", fmt.Errorf("%w: observe after %s: %v", explore.ErrScreenUnobservable, tool, obsErr)
+		}
 		s.stale = true
 		if execErr == nil {
 			execErr = fmt.Errorf("observe after %s: %w", tool, obsErr)
@@ -482,10 +485,23 @@ func (s *toolSession) handleObserve(ctx context.Context, _ json.RawMessage) (str
 		if transportGone(err) {
 			return "", fmt.Errorf("%w: observe: %v", explore.ErrDeviceUnreachable, err)
 		}
+		if observationLost(err) {
+			return "", fmt.Errorf("%w: observe: %v", explore.ErrScreenUnobservable, err)
+		}
 		return "", fmt.Errorf("observe: %w", err)
 	}
 	s.replaceCurrent(observation)
 	return elementTable(observation), nil
+}
+
+// observationLost reports whether a failed observation will fail the same way
+// on every retry. transportGone catches an endpoint that is gone; this catches
+// one that answered and said the request cannot work as posed. The tester's
+// toolbox has no way to launch an app, so a runner precondition such as "none
+// of com.example is in the foreground" is as final as a refused dial.
+func observationLost(err error) bool {
+	var retryable device.RetryableError
+	return errors.As(err, &retryable) && !retryable.Retryable()
 }
 
 // transportGone reports whether err says the driver's endpoint is no longer

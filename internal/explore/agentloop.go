@@ -17,6 +17,15 @@ var ErrStopRequested = errors.New("explore: stop requested")
 // waits and retries against a dead endpoint (seen live, 2026-08-28).
 var ErrDeviceUnreachable = errors.New("explore: device unreachable")
 
+// ErrScreenUnobservable is returned (wrapped) by a tool handler when the
+// driver answered the observation with a failure it says will repeat -- the
+// app under test left the foreground, say. It ends the loop for the same
+// reason ErrDeviceUnreachable does, but the device is fine and the cause must
+// not be reported as an unreachable one. The tester has no tool that restores
+// an app to the foreground: seen live 2026-08-31, a run spent ten of fifteen
+// steps on waits, taps and swipes that all failed with the same message.
+var ErrScreenUnobservable = errors.New("explore: screen cannot be observed")
+
 // ToolHandler executes one tool call and returns the text shown to the
 // model. Returning ErrStopRequested (possibly wrapped) ends the loop with
 // Stopped set; any other error is reported to the model as a tool failure
@@ -106,6 +115,7 @@ func runToolCall(ctx context.Context, box ToolBox, call ToolCall) (string, error
 		return text, nil
 	}
 	if errors.Is(err, ErrStopRequested) || errors.Is(err, ErrDeviceUnreachable) ||
+		errors.Is(err, ErrScreenUnobservable) ||
 		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return text, err
 	}

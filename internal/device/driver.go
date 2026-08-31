@@ -21,6 +21,24 @@ const ContractVersionV0 = "v0"
 // it runs rather than halfway through.
 var ErrUnsupported = errors.New("device: operation not supported on this platform")
 
+// RetryableError is a driver error that can say whether resending the same
+// request could plausibly succeed. A driver answering "this cannot work as
+// posed" -- a runner precondition, say -- implements it, so a
+// platform-neutral caller can tell a condition that will repeat from one
+// worth another attempt without importing the platform package.
+//
+// Implementing it is optional. A driver whose errors do not answer the
+// question gets the older behavior: a caller retries or reports, and cannot
+// tell the two apart. Today internal/ios answers it, because its runner
+// refuses a request whose precondition fails. internal/android does not, and
+// nothing is lost by that yet: its agent reads the accessibility hierarchy
+// through UiAutomation across every window, so it has no foreground
+// precondition to refuse on.
+type RetryableError interface {
+	error
+	Retryable() bool
+}
+
 type Platform string
 type Direction string
 type Orientation string
