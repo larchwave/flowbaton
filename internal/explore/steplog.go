@@ -1,6 +1,9 @@
 package explore
 
-import "fmt"
+import (
+	"fmt"
+	"unicode/utf8"
+)
 
 // StepLine renders one executed step as a single line: the action, its text or
 // direction, the status, whether the screen changed, and any note or error.
@@ -10,17 +13,17 @@ import "fmt"
 func StepLine(step StepRecord) string {
 	line := fmt.Sprintf("step %d: %s", step.Index+1, step.Action.Kind)
 	if step.Action.Text != "" {
-		line += fmt.Sprintf(" %q", truncateText(step.Action.Text, 40))
+		line += fmt.Sprintf(" %q", Truncate(step.Action.Text, 40))
 	}
 	if step.Action.Direction != "" {
 		line += " " + step.Action.Direction
 	}
 	line += fmt.Sprintf(" status=%s changed=%v", step.Status, !step.After.Same(step.Before))
 	if step.Note != "" {
-		line += " note=" + truncateText(step.Note, 60)
+		line += " note=" + Truncate(step.Note, 60)
 	}
 	if step.ErrText != "" {
-		line += " error=" + truncateText(step.ErrText, 60)
+		line += " error=" + Truncate(step.ErrText, 60)
 	}
 	return line
 }
@@ -39,9 +42,18 @@ func StepLines(steps []StepRecord) []string {
 	return lines
 }
 
-func truncateText(value string, max int) string {
-	if len(value) <= max {
+// Truncate shortens a value to max characters, marking the cut with an
+// ellipsis. It counts runes rather than bytes: a byte offset lands inside a
+// multi-byte character for any label the device shows in a non-Latin script,
+// and %q then escapes the broken tail into \xNN, so the corruption reaches
+// the artifact looking like data.
+//
+// Every consumer of device text shortens it somewhere -- the element table
+// the model reads, the step log, the session report, a failure cause -- and
+// each one grew its own copy of this until they were four. One is enough.
+func Truncate(value string, max int) string {
+	if utf8.RuneCountInString(value) <= max {
 		return value
 	}
-	return value[:max] + "…"
+	return string([]rune(value)[:max]) + "…"
 }

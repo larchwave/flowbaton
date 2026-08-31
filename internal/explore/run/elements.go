@@ -59,7 +59,7 @@ func elementTable(state *explore.ScreenState) string {
 			fmt.Fprintf(builder, " %s", role)
 		}
 		if label := elementLabel(element.Node); label != "" {
-			fmt.Fprintf(builder, " %q", truncate(label, 60))
+			fmt.Fprintf(builder, " %q", explore.Truncate(label, 60))
 		}
 		if id := elementID(element.Node); id != "" {
 			fmt.Fprintf(builder, " id=%s", id)
@@ -83,13 +83,6 @@ func elementTable(state *explore.ScreenState) string {
 		builder.WriteString("(no interactive elements)\n")
 	}
 	return builder.String()
-}
-
-func truncate(value string, max int) string {
-	if len(value) <= max {
-		return value
-	}
-	return value[:max] + "…"
 }
 
 // elementTableMarker is the exact start of a rendered table: the heading

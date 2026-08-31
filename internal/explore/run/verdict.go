@@ -36,7 +36,7 @@ func foldedTreeMatch(texts []string, expected string) (string, bool) {
 	}
 	for _, text := range texts {
 		if strings.Contains(text, needle) {
-			return fmt.Sprintf("text %q is on the final screen", truncate(text, 60)), true
+			return fmt.Sprintf("text %q is on the final screen", explore.Truncate(text, 60)), true
 		}
 	}
 	return "", false

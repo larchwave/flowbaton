@@ -180,13 +180,7 @@ func abortReport(ctx context.Context, crew Crew, report *SessionReport, config C
 }
 
 // truncateCause keeps an error readable in a report line.
-func truncateCause(cause string) string {
-	const limit = 160
-	if len(cause) <= limit {
-		return cause
-	}
-	return cause[:limit] + "..."
-}
+func truncateCause(cause string) string { return Truncate(cause, 160) }
 
 func finishReport(report *SessionReport, config Config) *SessionReport {
 	report.Finished = config.Now()

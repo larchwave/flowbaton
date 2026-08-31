@@ -149,9 +149,9 @@ func endedOnAFailedStep(result explore.TestResult) (string, bool) {
 	}
 	if last.TargetMiss {
 		return "the run ended aiming at something the screen does not have: " +
-			truncate(last.ErrText, 120), true
+			explore.Truncate(last.ErrText, 120), true
 	}
-	return "driver error: " + truncate(last.ErrText, 120), true
+	return "driver error: " + explore.Truncate(last.ErrText, 120), true
 }
 
 // firstUnmet returns the first unmet scenario outcome that went unmet for
@@ -307,12 +307,12 @@ func judgeEvidence(check *explore.OutcomeCheck) string {
 	if check.Evidence == "" {
 		return "the judge recorded no evidence"
 	}
-	return truncate(check.Evidence, 160)
+	return explore.Truncate(check.Evidence, 160)
 }
 
 func evidenceLine(result explore.TestResult, unmet *explore.OutcomeCheck) string {
 	if unmet.Evidence != "" {
-		return truncate(unmet.Evidence, 160)
+		return explore.Truncate(unmet.Evidence, 160)
 	}
 	for i := len(result.Steps) - 1; i >= 0; i-- {
 		step := result.Steps[i]
@@ -320,18 +320,11 @@ func evidenceLine(result explore.TestResult, unmet *explore.OutcomeCheck) string
 			continue
 		}
 		if step.Note != "" {
-			return truncate(step.Note, 160)
+			return explore.Truncate(step.Note, 160)
 		}
 		if step.ErrText != "" {
-			return truncate(step.ErrText, 160)
+			return explore.Truncate(step.ErrText, 160)
 		}
 	}
 	return "no evidence recorded"
-}
-
-func truncate(text string, max int) string {
-	if len(text) <= max {
-		return text
-	}
-	return text[:max] + "..."
 }
