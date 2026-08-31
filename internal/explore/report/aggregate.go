@@ -215,9 +215,19 @@ func severityRank(severity string) int {
 }
 
 // reproSteps renders the step log as imperative lines.
+//
+// A failed step is an attempt, not something that happened, and these lines
+// are instructions for a human. Session mmx43 published "Tap the element with
+// id \"Search\"" as step 1 of a defect nobody could then reproduce: the screen
+// had no such element, which is exactly why the step is in the log. The
+// exporter drops these for the same reason (TestSkippedStepsStayOut); the
+// full attempt, failures included, stays in the session step log.
 func reproSteps(result explore.TestResult) []string {
 	lines := make([]string, 0, len(result.Steps))
 	for _, step := range result.Steps {
+		if step.Status == explore.StepFailed {
+			continue
+		}
 		line := describeAction(step.Action)
 		if line == "" {
 			continue

@@ -534,3 +534,38 @@ func defectLine(t *testing.T, markdown string) string {
 	t.Fatalf("the Defects section lists nothing:\n%s", markdown)
 	return ""
 }
+
+// Measured on session mmx43: the report told the reader to "Tap the element
+// with id "Search"" as reproduce step 1, and that step is in the log because
+// it failed -- the screen had no such element. The exporter already drops
+// failed steps (TestSkippedStepsStayOut); the reproduce list is instructions
+// for a human and an instruction nobody can carry out belongs there even
+// less than in a flow.
+func TestReproduceStepsLeaveOutWhatDidNotHappen(t *testing.T) {
+	result := explore.TestResult{
+		Scenario: explore.Scenario{Name: "search filters the list", Priority: explore.PriorityHigh},
+		Status:   explore.TestFailed,
+		Steps: []explore.StepRecord{
+			{Index: 0, Status: explore.StepFailed, TargetMiss: true,
+				ErrText: `no element matched id "Search" on the current screen",`,
+				Action:  explore.Action{Kind: explore.ActionTap, Target: &explore.Locator{Kind: explore.LocatorID, Value: "Search"}}},
+			{Index: 1, Status: explore.StepOK,
+				Action: explore.Action{Kind: explore.ActionTap, Target: &explore.Locator{Kind: explore.LocatorText, Value: "Search field"}}},
+			{Index: 2, Status: explore.StepOK, Action: explore.Action{Kind: explore.ActionInput, Text: "hank"}},
+		},
+		Outcomes: []explore.OutcomeCheck{{Expected: "the list shows only Hank", Met: false, Evidence: "every contact still shows"}},
+	}
+	markdown, err := Analyst{}.Report(context.Background(), &explore.SessionReport{
+		AppID: "com.example.app", Platform: "ios",
+		Results: []explore.TestResult{result},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(markdown, `id "Search"`) {
+		t.Errorf("the reproduce list tells the reader to tap what was not there:\n%s", markdown)
+	}
+	if !strings.Contains(markdown, `1. Tap "Search field"`) {
+		t.Errorf("the surviving steps do not start the list:\n%s", markdown)
+	}
+}
