@@ -97,8 +97,10 @@ const (
 	// MissUnpromised: the app has no such feature, or the screen cannot
 	// express the expectation at all. Scenario wording, not a defect.
 	MissUnpromised MissReason = "unpromised"
-	// MissUnjudged: no verdict was reached, because the judge model failed
-	// or answered unreadably. An automation problem, not a product one.
+	// MissUnjudged: no verdict was reached, because the judge model failed,
+	// answered unreadably, or said the facts it was given cannot decide the
+	// question (an outcome about colour or shape, which no text table
+	// carries). An automation problem, not a product one.
 	MissUnjudged MissReason = "unjudged"
 )
 

@@ -65,6 +65,13 @@ type workerVerdict struct {
 	// not apply to this app at all. A reply that omits it leaves an unmet
 	// outcome a defect, which is the safe direction.
 	Inapplicable bool `json:"inapplicable"`
+	// Undecidable is set when the facts given cannot answer the question at
+	// all -- an outcome about colour, shape, or highlighting, none of which
+	// a text table carries. Without it the judge answered anyway: two of the
+	// three defects in the mmx57 calendar report turn on a "red
+	// filled-circle selection highlight" and were filed as [High] not
+	// observed.
+	Undecidable bool `json:"undecidable"`
 }
 
 // askWorkerOutcome poses one expected outcome to the worker model against
@@ -82,8 +89,14 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 	prompt := fmt.Sprintf(
 		"Judge one expected outcome of a mobile UI test against the final screen.\n"+
 			"Expected outcome: %s\n\n%s%s%s\n"+
+			"The facts above are text: roles, labels, identifiers and the driver's "+
+			"own checks. They do not carry colour, shape, size, or highlighting. When "+
+			"the outcome turns on something these facts cannot express, set "+
+			"undecidable true and say which fact was missing; do not report it as "+
+			"not met.\n"+
 			"Reply with only a JSON object "+
-			"{\"met\": true|false, \"inapplicable\": true|false, \"evidence\": \"one line\"}.\n"+
+			"{\"met\": true|false, \"inapplicable\": true|false, "+
+			"\"undecidable\": true|false, \"evidence\": \"one line\"}.\n"+
 			"Set inapplicable only when this app has no such feature or the screen "+
 			"cannot express the expectation at all; an outcome the app should have "+
 			"produced and did not is applicable.",
@@ -109,7 +122,13 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 	}
 	check.Met = verdict.Met
 	check.Evidence = verdict.Evidence
-	if !verdict.Met && verdict.Inapplicable {
+	switch {
+	case !verdict.Met && verdict.Undecidable:
+		// A fact gap outranks a judgement about the app: the judge says it
+		// could not look, which is not the same as the app never promising
+		// the outcome.
+		check.Missed = explore.MissUnjudged
+	case !verdict.Met && verdict.Inapplicable:
 		check.Missed = explore.MissUnpromised
 	}
 	return check
