@@ -404,14 +404,19 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     if appIDs.isEmpty {
       return XCUIApplication(bundleIdentifier: springboardID)
     }
+    var states: [(appID: String, rawValue: Int)] = []
     for appID in appIDs {
       let app = XCUIApplication(bundleIdentifier: appID)
-      if app.state == .runningForeground {
+      let state = app.state
+      if state == .runningForeground {
         return app
       }
+      states.append((appID: appID, rawValue: Int(state.rawValue)))
     }
-    throw AutomationError.precondition(
-      "none of \(appIDs.joined(separator: ", ")) is in the foreground")
+    // What each app was doing instead, not merely that none of them was in
+    // front: an app in the background is a flow that navigated away, an app
+    // that is not running is a crash, and the caller has to tell them apart.
+    throw AutomationError.precondition(ForegroundMiss.message(states))
   }
 
   /// coordinate turns the contract's absolute points into an XCUICoordinate,
