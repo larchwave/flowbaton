@@ -336,3 +336,23 @@ func TestPlanNextNamesUnpromisedExpectations(t *testing.T) {
 		t.Fatalf("prompt missing the unpromised expectation:\n%s", prompt)
 	}
 }
+
+// The planner wrote outcomes nothing can check: mmx57's calendar run spent
+// two of six scenarios on a "red filled-circle selection highlight", and the
+// judge has no colour to look at. Telling the planner what the checker sees
+// is upstream of that.
+//
+// Measured against MiniMax-M3 on a cached calendar map, four plans per
+// variant, budget six: without this rule 24 outcomes carried 4 about colour
+// or highlighting; with it, 24 outcomes carried 0, and the outcomes stayed
+// as specific ("The timeline header reads 'Monday - Aug 31, 2026'").
+func TestPromptTellsThePlannerTheScreenArrivesAsText(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildPrompt(explore.PlanRequest{Map: &explore.UIMap{}, Budget: 1}, builtinStyles[0], true, nil)
+	for _, want := range []string{"roles, labels, identifiers", "cannot be checked"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q", want)
+		}
+	}
+}

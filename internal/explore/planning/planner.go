@@ -253,6 +253,7 @@ Rules:
 - Each expected outcome is a single result that can be checked on the screen.
 - Outcomes are judged on the final screen alone, with no memory of earlier screens: name the exact text or element that must be there (or must be absent), never a change relative to before -- no "increments", "updates", "is no longer shown", "changes to".
 - Never copy a count, badge, or timestamp from the map into an outcome the scenario itself will change; expect what the goal produces (the row with the title the step typed, the screen the tap opens), not a number.
+- The screen reaches the checker as text: roles, labels, identifiers. Colour, shape, size, highlighting, and position cannot be checked -- name the text or the element that must be there instead.
 - Balance positive and negative cases.
 - Priority meanings: critical = the screen's core purpose; important = key flows; high = secondary features; normal = supporting behavior; low = cosmetic or boundary detail.
 `
