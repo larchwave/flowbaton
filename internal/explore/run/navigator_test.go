@@ -36,8 +36,11 @@ func TestEnsureReadyRetriesWithKillAndRelaunchOnce(t *testing.T) {
 	if state == nil || !state.Signature.Same(home.Signature) {
 		t.Fatalf("state %+v", state)
 	}
+	// No settle probe between the two launches: the observation that
+	// follows each one is what waits for the screen, within a bound it
+	// keeps. The probe here discarded its own answer.
 	joined := strings.Join(driver.calls, ",")
-	if !strings.Contains(joined, "KillApp:com.example.app,LaunchApp:com.example.app,Settle,KillApp:com.example.app,LaunchApp:com.example.app") {
+	if !strings.Contains(joined, "KillApp:com.example.app,LaunchApp:com.example.app,KillApp:com.example.app,LaunchApp:com.example.app") {
 		t.Fatalf("driver calls %v", driver.calls)
 	}
 }

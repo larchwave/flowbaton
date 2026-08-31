@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	defaultSettleTimeout  = 3 * time.Second
 	maxWaitSeconds        = 10
 	longPressDurationMS   = 800
 	scrollAmountPerSwipe  = 0.4
@@ -29,12 +28,11 @@ const (
 
 // toolDeps are the injected collaborators one tool session operates on.
 type toolDeps struct {
-	driver        device.Driver
-	observer      explore.Observer
-	appID         string
-	sleep         func(context.Context, time.Duration) error
-	now           func() time.Time
-	settleTimeout time.Duration
+	driver   device.Driver
+	observer explore.Observer
+	appID    string
+	sleep    func(context.Context, time.Duration) error
+	now      func() time.Time
 }
 
 func (d toolDeps) validate() error {
@@ -68,9 +66,6 @@ func (d toolDeps) withDefaults() toolDeps {
 	}
 	if filled.now == nil {
 		filled.now = time.Now
-	}
-	if filled.settleTimeout <= 0 {
-		filled.settleTimeout = defaultSettleTimeout
 	}
 	return filled
 }
@@ -196,8 +191,8 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	step := explore.StepRecord{Index: len(s.steps), Action: action, Before: before, After: before, At: s.deps.now()}
 	// Re-observe after a failed call too: a driver error does not prove
 	// the device did nothing, and the table must not describe a screen
-	// that may be gone.
-	s.settle(ctx)
+	// that may be gone. The observation is also what settles the screen:
+	// research.Observer waits for it within a bound it keeps.
 	observation, obsErr := s.deps.observer.Observe(ctx)
 	if obsErr != nil {
 		if err := ctx.Err(); err != nil {
@@ -253,13 +248,6 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	default:
 		return fmt.Sprintf("%s ok, screen changed\n\n%s", tool, elementTable(s.current)), nil
 	}
-}
-
-func (s *toolSession) settle(ctx context.Context) {
-	timeout := s.deps.settleTimeout.Milliseconds()
-	// Settling is best effort: the follow-up observation is the source of
-	// truth, so a settle failure must not fail the step.
-	_, _ = s.deps.driver.WaitForAppToSettle(ctx, device.SettleRequest{AppID: s.deps.appID, TimeoutMillis: &timeout})
 }
 
 func recordLine(tool string, args json.RawMessage) string {

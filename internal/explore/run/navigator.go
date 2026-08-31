@@ -35,20 +35,17 @@ type Navigator struct {
 	Experience explore.ExperienceStore
 	// Sleep is injected by tests; nil means real sleeping.
 	Sleep func(context.Context, time.Duration) error
-	// SettleTimeout bounds the post-launch settle; zero means the default.
-	SettleTimeout time.Duration
 }
 
 var _ explore.Navigator = (*Navigator)(nil)
 
 func (n *Navigator) deps() toolDeps {
 	return toolDeps{
-		driver:        n.Driver,
-		observer:      n.Observer,
-		appID:         n.Config.AppID,
-		sleep:         n.Sleep,
-		now:           n.Config.Now,
-		settleTimeout: n.SettleTimeout,
+		driver:   n.Driver,
+		observer: n.Observer,
+		appID:    n.Config.AppID,
+		sleep:    n.Sleep,
+		now:      n.Config.Now,
 	}.withDefaults()
 }
 
@@ -88,8 +85,6 @@ func (n *Navigator) EnsureReady(ctx context.Context) (*explore.ScreenState, erro
 	if err := launch(); err != nil {
 		return nil, fmt.Errorf("explore/run: launch %s: %w", deps.appID, err)
 	}
-	settle := toolSession{deps: deps}
-	settle.settle(ctx)
 	state, err := n.Observer.Observe(ctx)
 	if err == nil {
 		return state, nil
@@ -103,7 +98,6 @@ func (n *Navigator) EnsureReady(ctx context.Context) (*explore.ScreenState, erro
 	if launchErr := launch(); launchErr != nil {
 		return nil, fmt.Errorf("explore/run: relaunch %s: %w", deps.appID, launchErr)
 	}
-	settle.settle(ctx)
 	state, err = n.Observer.Observe(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("explore/run: app not observable after relaunch: %w", err)

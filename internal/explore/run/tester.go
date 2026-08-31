@@ -31,8 +31,6 @@ type Tester struct {
 	Config   explore.Config
 	// Sleep is injected by tests; nil means real sleeping.
 	Sleep func(context.Context, time.Duration) error
-	// SettleTimeout bounds the post-action settle; zero means the default.
-	SettleTimeout time.Duration
 }
 
 var _ explore.Tester = (*Tester)(nil)
@@ -55,12 +53,11 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 		start = observed
 	}
 	deps := toolDeps{
-		driver:        t.Driver,
-		observer:      t.Observer,
-		appID:         t.Config.AppID,
-		sleep:         t.Sleep,
-		now:           t.Config.Now,
-		settleTimeout: t.SettleTimeout,
+		driver:   t.Driver,
+		observer: t.Observer,
+		appID:    t.Config.AppID,
+		sleep:    t.Sleep,
+		now:      t.Config.Now,
 	}
 	session, err := newToolSession(deps, start)
 	if err != nil {
