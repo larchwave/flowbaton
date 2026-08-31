@@ -95,6 +95,9 @@ func (e *Experience) Record(ctx context.Context, screen explore.ScreenSignature,
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if err := e.adoptOlderName(screen); err != nil {
+		return err
+	}
 	entries, err := e.readEntries(screen)
 	if err != nil {
 		return err
@@ -125,6 +128,28 @@ func (e *Experience) Record(ctx context.Context, screen explore.ScreenSignature,
 	return nil
 }
 
+// adoptOlderName moves a screen's file to the name it has now. A rename
+// rather than a copy: the entries are never in two places, so no read can
+// see a stale half. Reads do not do this -- a lookup that rewrites the
+// filesystem is a surprise -- so the move happens on the next write.
+func (e *Experience) adoptOlderName(screen explore.ScreenSignature) error {
+	current, err := e.filePath(screen)
+	if err != nil {
+		return err
+	}
+	found, err := e.resolvePath(screen)
+	if err != nil {
+		return err
+	}
+	if found == current {
+		return nil
+	}
+	if err := os.Rename(found, current); err != nil {
+		return fmt.Errorf("experience: rename %s: %w", filepath.Base(found), err)
+	}
+	return nil
+}
+
 func (e *Experience) filePath(screen explore.ScreenSignature) (string, error) {
 	key := screen.Key()
 	if key == "" || key != filepath.Base(key) {
@@ -133,8 +158,58 @@ func (e *Experience) filePath(screen explore.ScreenSignature) (string, error) {
 	return filepath.Join(e.dir, key+".md"), nil
 }
 
+// digestSuffix is the part of a screen key that identifies the screen rather
+// than describing it. Key() renders the salient labels and then the digest,
+// so the digest is whatever follows the last dash -- safe because a hex
+// digest carries none, while a slugified label may.
+func digestSuffix(key string) string {
+	if index := strings.LastIndex(key, "-"); index >= 0 {
+		return key[index+1:]
+	}
+	return key
+}
+
+// resolvePath returns the file holding this screen's entries, current name
+// first. Experience is not a cache -- no TTL, and it holds what past sessions
+// learned -- but its filename is the screen KEY, which renders the salient
+// LABELS before the digest. Those labels are display text, and changing how
+// they are picked rewrites every name at once. Same() already says the
+// DIGEST is the screen's identity, so the fallback asks the same question the
+// rest of the package does. Without it a naming change orphans every recipe
+// silently, which is the worst way to lose durable state.
+//
+// A screen with no file yet resolves to its current name, which is what a
+// first write wants.
+func (e *Experience) resolvePath(screen explore.ScreenSignature) (string, error) {
+	current, err := e.filePath(screen)
+	if err != nil {
+		return "", err
+	}
+	if _, statErr := os.Stat(current); statErr == nil {
+		return current, nil
+	}
+	digest := digestSuffix(screen.Key())
+	if digest == "" {
+		return current, nil
+	}
+	entries, readErr := os.ReadDir(e.dir)
+	if readErr != nil {
+		return current, nil
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		if digestSuffix(strings.TrimSuffix(name, ".md")) == digest {
+			return filepath.Join(e.dir, name), nil
+		}
+	}
+	return current, nil
+}
+
 func (e *Experience) readEntries(screen explore.ScreenSignature) ([]explore.MemoryEntry, error) {
-	path, err := e.filePath(screen)
+	path, err := e.resolvePath(screen)
 	if err != nil {
 		return nil, err
 	}
