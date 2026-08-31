@@ -166,9 +166,8 @@ func DecodeReply(text string, target any) error {
 }
 
 func replyExcerpt(text string) string {
-	excerpt := strings.Join(strings.Fields(text), " ")
-	if len(excerpt) > replyExcerptLimit {
-		excerpt = excerpt[:replyExcerptLimit] + "…"
-	}
-	return excerpt
+	// Truncate rather than a byte slice: the excerpt is quoted back to the
+	// model on the retry, and a reply cut through a character would feed it
+	// its own broken text as the example of what not to send.
+	return Truncate(strings.Join(strings.Fields(text), " "), replyExcerptLimit)
 }
