@@ -266,6 +266,14 @@ func screenMatches(state *explore.ScreenState, key string) bool {
 	// shape the crew has for a scenario -- Scenario.StartScreen is a Key() --
 	// while every navigator test used a plain word, so Reach would have spent
 	// its whole turn budget on a screen it was already standing on.
+	//
+	// Key() is a NAME, not an identity: it renders the salient labels and
+	// truncates the digest to eight characters, so two screens Same() calls
+	// different can share one. It is still the right check here, because it
+	// is the only key a scenario carries, and the cost of a false match is
+	// that the scenario starts where the relaunch left it -- what every
+	// scenario did before Reach was wired. Do not turn this into a prefix or
+	// suffix match on the digest; see internal/explore/CLAUDE.md.
 	if strings.EqualFold(state.Signature.Key(), want) {
 		return true
 	}
