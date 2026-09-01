@@ -359,6 +359,13 @@ func stepLogMarkdown(report *explore.SessionReport) string {
 		for _, line := range explore.StepLines(result.Steps) {
 			fmt.Fprintf(builder, "- %s\n", line)
 		}
+		// The tester has a note tool -- "Record a short free-text finding" --
+		// and what it recorded reached TestResult.Notes and stopped there,
+		// with no consumer anywhere. The step log keeps the tool calls for
+		// exactly this reason, so the findings belong beside them.
+		for _, note := range result.Notes {
+			fmt.Fprintf(builder, "- note: %s\n", note)
+		}
 	}
 	return builder.String()
 }
