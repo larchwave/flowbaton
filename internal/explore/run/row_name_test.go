@@ -112,7 +112,7 @@ func TestCheckVisibleEvidenceNamesTheRow(t *testing.T) {
 	}
 }
 
-// Naming a row by its name took away the value it used to stand under, and
+// Naming a row by its name took away the value it had stood under, and
 // for a calendar day the value is what a tester picks on: "1 event" against
 // "No events". iOS carries both -- the name in accessibilityText, the value in
 // text -- so the row carries both. Census over twenty-five captures: 54 of 599
