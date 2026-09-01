@@ -126,7 +126,8 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 			"missing, the verdict is undecidable; if it is that the app has no such "+
 			"control, the verdict is inapplicable. Neither is not_met.",
 		expected, elementTable(facts.Final),
-		driverCheckLines(facts.DriverChecks)+typedLines(facts.Typed)+visitedLines(facts.Visited),
+		layoutLine(facts.Final)+driverCheckLines(facts.DriverChecks)+
+			typedLines(facts.Typed)+visitedLines(facts.Visited),
 		sessionTagLine(facts.SessionTag))
 	verdict := workerVerdict{}
 	_, err := explore.ChatJSON(ctx, llm, explore.ChatRequest{Messages: []explore.Message{
@@ -258,6 +259,71 @@ func visitedLines(visited []string) string {
 
 // driverCheckLines renders check_visible results for the judge; blank when
 // the run made none.
+// layoutRowTolerance is how far two elements' tops may differ and still count
+// as the same row. A calendar's day cells do not share a pixel exactly.
+const layoutRowTolerance = 12
+
+// layoutLine describes how the screen's labelled elements are arranged. Three
+// sessions asked the judge a question about layout -- a vertical split, an
+// agenda beneath a grid, a list against a month grid -- and the element table
+// answers none of them: it lists identifiers and drops the geometry it
+// already holds. mmx79's judge said so itself, "the facts only list element
+// identifiers and do not describe whether they form an agenda-style list or a
+// month calendar grid".
+//
+// How many rows hold more than one element is the statistic that separates
+// them, and the widest row is not: Calendar's month grid and its day timeline
+// BOTH answer "up to 7 across", because the timeline carries a week strip.
+// Measured on two live captures of this app:
+//
+//	month grid    17 rows, widths [1 1 1 1 1 1 2 2 2 2 3 4 4 5 7 7 7], 11 wide
+//	day timeline  27 rows, widths [1 x20, 2 4 4 5 6 7],                 6 wide
+//
+// Raw bounds per row would answer the question too and would cost this
+// table's length again, on every judged outcome.
+func layoutLine(state *explore.ScreenState) string {
+	if state == nil {
+		return ""
+	}
+	tops := []int{}
+	perRow := map[int]int{}
+	for _, element := range state.Elements {
+		bounds, ok := explore.ElementBounds(element.Node)
+		if !ok {
+			continue
+		}
+		row := -1
+		for _, top := range tops {
+			if bounds.Y-top <= layoutRowTolerance && top-bounds.Y <= layoutRowTolerance {
+				row = top
+				break
+			}
+		}
+		if row < 0 {
+			row = bounds.Y
+			tops = append(tops, row)
+		}
+		perRow[row]++
+	}
+	if len(tops) == 0 {
+		return ""
+	}
+	wide, widest := 0, 0
+	for _, count := range perRow {
+		if count > 1 {
+			wide++
+		}
+		if count > widest {
+			widest = count
+		}
+	}
+	return fmt.Sprintf(
+		"\nHow this final screen is arranged (driver fact): its elements sit in %d rows, "+
+			"%d of which hold more than one element side by side, the widest %d across. "+
+			"Mostly wide rows are a grid; mostly single rows are a list or a timeline.\n",
+		len(tops), wide, widest)
+}
+
 func driverCheckLines(checks []explore.OutcomeCheck) string {
 	if len(checks) == 0 {
 		return ""
