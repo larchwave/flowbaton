@@ -149,7 +149,7 @@ func filterScenarios(raw []plannedScenario, request explore.PlanRequest, styleNa
 		name := strings.TrimSpace(item.Name)
 		priority, ok := foldPriority(item.Priority)
 		steps := cleanLines(item.Steps)
-		expected := cleanLines(item.Expected)
+		expected := forwardOutcomes(cleanLines(item.Expected))
 		if name == "" || !ok || len(steps) == 0 || len(expected) == 0 {
 			continue
 		}
@@ -167,6 +167,44 @@ func filterScenarios(raw []plannedScenario, request explore.PlanRequest, styleNa
 			Expected:    expected,
 			Status:      explore.ScenarioPending,
 		})
+	}
+	return out
+}
+
+// backwardLooking lists the wordings that make an outcome about the screen
+// BEFORE the step, which the judge never sees: it is handed the final screen
+// alone. The prompt rules say not to write these, and the model wrote them
+// anyway -- mmx57 and mmx60 each lost a scenario to one, the second with the
+// judge's own evidence reading "has changed from timeline to list view … but
+// the expected outcome specifies a change, which is not demonstrated". A
+// rule nothing enforces is a rule the model may ignore.
+//
+// The words are matched inside the outcome, so "changes from" catches "the
+// view mode indicator changes from the timeline view" while "Change
+// password", a label on the screen, is untouched.
+var backwardLooking = []string{
+	"no longer", "increments", "decrements",
+	"changes from", "changes to", "changed from", "changed to",
+	"is updated", "has updated", "updates to",
+}
+
+// forwardOutcomes drops the outcomes that look backward. A scenario left
+// with none is dropped by the caller, which is the right answer: there is
+// nothing in it the judge could confirm.
+func forwardOutcomes(expected []string) []string {
+	out := make([]string, 0, len(expected))
+	for _, outcome := range expected {
+		folded := strings.ToLower(outcome)
+		backward := false
+		for _, phrase := range backwardLooking {
+			if strings.Contains(folded, phrase) {
+				backward = true
+				break
+			}
+		}
+		if !backward {
+			out = append(out, outcome)
+		}
 	}
 	return out
 }
