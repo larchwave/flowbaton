@@ -279,6 +279,16 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 // digitRun matches the digit runs of a label.
 var digitRun = regexp.MustCompile(`[0-9]+`)
 
+// yearDigits is the length at which a digit run stops reading as a count.
+// A run this long is a year, an identifier, or an amount, and generalizing
+// it aims the selector at a family instead of at a row: the years screen of
+// a calendar names the current month "Current month, September 2026" and
+// every other month "October 2026", so `September \d+` was honestly unique
+// the day it was written and `October \d+` matched two rows on that same
+// screen. The uniqueness check below runs at record time and cannot see the
+// month roll over. A tester taps rows counted in ones and tens.
+const yearDigits = 4
+
 // generalizeCount answers a text selector that survives a changed count.
 // A label unique on one screen can still carry app state -- "All, 12
 // reminders" names a row by how much is in it -- and a flow written with
@@ -297,7 +307,17 @@ func generalizeCount(state *explore.ScreenState, label string) (string, bool) {
 	}
 	// QuoteMeta escapes the metacharacters and leaves digits alone, so the
 	// digit runs of the quoted text are still the digit runs of the label.
-	pattern := digitRun.ReplaceAllString(regexp.QuoteMeta(label), `\d+`)
+	generalized := false
+	pattern := digitRun.ReplaceAllStringFunc(regexp.QuoteMeta(label), func(run string) string {
+		if len(run) >= yearDigits {
+			return run
+		}
+		generalized = true
+		return `\d+`
+	})
+	if !generalized {
+		return "", false
+	}
 	// A label that is nothing but a count identifies nothing once the count
 	// is gone: the pattern would be `\d+`, which the device resolves to
 	// every number on the screen -- a price, a page number, a badge.
