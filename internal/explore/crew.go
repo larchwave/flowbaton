@@ -248,8 +248,28 @@ func abortReport(ctx context.Context, crew Crew, report *SessionReport, config C
 	return finishReport(report, config)
 }
 
-// truncateCause keeps an error readable in a report line.
-func truncateCause(cause string) string { return Truncate(cause, 160) }
+// causeBudget is how many runes of a failure cause a report line carries,
+// split between the head and the root.
+const causeBudget = 200
+
+// truncateCause keeps an error readable in a report line without throwing away
+// the part that answers anything. A wrapped Go error puts the root cause last
+// and its wrappers first, so cutting the tail is cutting the answer: mmx82
+// ended a run on "... precondition: no named application is in the foreground:
+// com.apple.mobilecal is running in the background" and the note stopped at
+// "no named application is in", one clause short of the crash-or-background
+// distinction the runner had just been rebuilt to draw.
+//
+// The head says what was being done and the tail says why it failed, so the
+// cut goes in the middle, where the wrappers are.
+func truncateCause(cause string) string {
+	runes := []rune(cause)
+	if len(runes) <= causeBudget {
+		return cause
+	}
+	head := causeBudget / 2
+	return string(runes[:head]) + "…" + string(runes[len(runes)-(causeBudget-head):])
+}
 
 func finishReport(report *SessionReport, config Config) *SessionReport {
 	report.Finished = config.Now()
