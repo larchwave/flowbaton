@@ -80,7 +80,12 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 		walk = nil
 	}
 	commands = append(commands, walk...)
-	if screen := strings.TrimSpace(result.Scenario.StartScreen); screen != "" && len(walk) == 0 {
+	// The screen the run BEGAN on, which is not always the one it was planned
+	// for: a walk can fail and the scenario runs from wherever the relaunch
+	// left the app. mmx75 stamped "recorded on screen september-2026-72133efa"
+	// on a flow whose walk to that screen had failed, which is the one thing
+	// the run had already disproved. The first step's Before is the fact.
+	if screen := recordedScreen(result); screen != "" && len(walk) == 0 {
 		launch.HeadComment = fmt.Sprintf(
 			"recorded on screen %s; launchApp does not navigate there", screen)
 	}
@@ -103,6 +108,17 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 		return nil, fmt.Errorf("export: emitted flow failed validation: %w", err)
 	}
 	return data, nil
+}
+
+// recordedScreen names the screen the run's first step ran on, falling back
+// to the screen it was planned for when no step recorded one.
+func recordedScreen(result *explore.TestResult) string {
+	for _, step := range result.Steps {
+		if key := step.Before.Key(); key != "" {
+			return key
+		}
+	}
+	return strings.TrimSpace(result.Scenario.StartScreen)
 }
 
 // secretCounter numbers the environment placeholders one export writes. A nil

@@ -118,3 +118,36 @@ func TestAWalkThatCannotBeWrittenLeavesTheFlowIntact(t *testing.T) {
 		t.Fatalf("the flow no longer parses: %v\n%s", err, data)
 	}
 }
+
+// The head comment names the screen a reader has to set up by hand, so it
+// has to be the screen the run actually began on. mmx75 exported a flow
+// stamped "recorded on screen september-2026-72133efa" for a scenario whose
+// walk to that screen had failed: the comment repeated the plan's intent,
+// which is the one thing the run had already disproved.
+func TestTheFlowNamesTheScreenTheRunBeganOnNotTheOneItWantedd(t *testing.T) {
+	t.Parallel()
+
+	began := explore.ScreenSignature{AppID: "com.apple.mobilecal", TreeDigest: "d1",
+		Salient: []string{"August", "single day"}}
+	result := &explore.TestResult{
+		Scenario: explore.Scenario{Name: "Anything", StartScreen: "september-2026-72133efa"},
+		Status:   explore.TestPassed,
+		Steps: []explore.StepRecord{{
+			Index: 1, Status: explore.StepOK, Before: began,
+			Action: explore.Action{Kind: explore.ActionTap, Target: &explore.Locator{
+				Kind: explore.LocatorID, Value: "searchbar-button",
+			}},
+		}},
+	}
+	data, err := Exporter{}.ExportFlow(result, "com.apple.mobilecal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	if strings.Contains(body, "september-2026-72133efa") {
+		t.Fatalf("the flow names a screen the run never stood on:\n%s", body)
+	}
+	if !strings.Contains(body, began.Key()) {
+		t.Fatalf("the flow does not name the screen it began on (%s):\n%s", began.Key(), body)
+	}
+}
