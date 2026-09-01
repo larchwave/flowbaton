@@ -1,9 +1,12 @@
 package run
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/explore"
 )
 
 // Reach is given a screen key, and the only key the crew has for a scenario
@@ -52,5 +55,47 @@ func TestScreenMatchesStillAcceptsAPlainWord(t *testing.T) {
 	}
 	if !screenMatches(makeState("app", root), "settings") {
 		t.Error("a plain word no longer matches a salient label")
+	}
+}
+
+// Reach asks the worker model to bring the app to a screen named by key,
+// and the key the crew hands it is a ScreenSignature.Key():
+// "settings-apple-account-c6c0dfad". A model cannot navigate to a digest.
+// The labels in front of it are the screen's own salient labels, which is
+// the one readable thing the key carries, so the prompt spells them out.
+func TestReachTellsTheModelWhatTheScreenLooksLike(t *testing.T) {
+	t.Parallel()
+
+	home := makeState("com.example.app", screen("Home", button("Open", "open_button", "[0,0][100,50]")))
+	driver := &fakeDriver{}
+	observer := &fakeObserver{states: []*explore.ScreenState{home, home, home}}
+	worker := &scriptedLLM{replies: []explore.Message{
+		toolCall("1", "finish", `{"status":"passed","summary":"done"}`),
+	}}
+	navigator := newNavigator(driver, observer, worker, nil)
+	_, _ = navigator.Reach(context.Background(), "settings-apple-account-c6c0dfad")
+
+	if len(worker.requests) == 0 {
+		t.Fatal("the worker was never asked")
+	}
+	joined := ""
+	for _, message := range worker.requests[0].Messages {
+		joined += message.Text + "\n"
+	}
+	if !strings.Contains(joined, "settings apple account") {
+		t.Errorf("the prompt does not say what the screen shows:\n%s", joined)
+	}
+}
+
+// A key with no readable part is the digest alone. There is nothing to
+// spell out, and inventing one would be worse than saying only the key.
+func TestScreenWordsAnswersNothingForABareDigest(t *testing.T) {
+	t.Parallel()
+
+	if words := screenWords("4d3ffed3"); words != "" {
+		t.Errorf("screenWords(digest) = %q, want empty", words)
+	}
+	if words := screenWords("settings-apple-account-c6c0dfad"); words != "settings apple account" {
+		t.Errorf("screenWords = %q", words)
 	}
 }

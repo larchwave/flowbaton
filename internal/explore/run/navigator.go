@@ -10,6 +10,10 @@ import (
 	"github.com/larchwave/flowbaton/internal/explore"
 )
 
+// screenKeyDigestLength is how many digest characters ScreenSignature.Key()
+// appends to the slugified labels.
+const screenKeyDigestLength = 8
+
 // navigatorLoopBound caps the tool-loop turns Reach may spend on one key.
 const navigatorLoopBound = 8
 
@@ -137,7 +141,8 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 	conversation := []explore.Message{
 		{Role: explore.RoleSystem, Text: "You steer a mobile app to a named screen using only the given tools. " +
 			"Ground every action in the newest element table. Call finish with status passed once the screen is reached."},
-		{Role: explore.RoleUser, Text: fmt.Sprintf("Bring the app to the screen named %q.\n\n%s", key, elementTable(session.current))},
+		{Role: explore.RoleUser, Text: fmt.Sprintf("Bring the app to the screen named %q.%s\n\n%s",
+			key, screenWordsSentence(key), elementTable(session.current))},
 	}
 	for turn := 0; turn < navigatorLoopBound; turn++ {
 		loop, loopErr := explore.RunToolLoop(ctx, n.Worker, conversation, box, 1)
@@ -167,6 +172,50 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 		}
 	}
 	return nil, &ReachError{Key: key, Reason: fmt.Sprintf("not reached within %d turns", navigatorLoopBound)}
+}
+
+// screenWords renders the readable part of a screen key. A key from a
+// signature is the salient labels slugified and joined, then a dash and
+// eight digest characters -- "settings-apple-account-c6c0dfad" -- and a
+// model asked to navigate to that reads a digest. The labels are the one
+// thing in it a model can act on.
+//
+// A key that is nothing but a digest answers empty: inventing a name would
+// be worse than saying only the key. A salient label that slugifies to
+// eight hex characters loses that one word, which costs a hint, not a
+// match: nothing keys on this.
+func screenWords(key string) string {
+	trimmed := strings.TrimSpace(key)
+	cut := strings.LastIndex(trimmed, "-")
+	if cut < 0 {
+		return ""
+	}
+	if !looksLikeDigest(trimmed[cut+1:]) {
+		return strings.ReplaceAll(trimmed, "-", " ")
+	}
+	return strings.ReplaceAll(trimmed[:cut], "-", " ")
+}
+
+func looksLikeDigest(part string) bool {
+	if len(part) != screenKeyDigestLength {
+		return false
+	}
+	for _, r := range part {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			return false
+		}
+	}
+	return true
+}
+
+// screenWordsSentence wraps screenWords for a prompt, and says nothing when
+// there is nothing to say.
+func screenWordsSentence(key string) string {
+	words := screenWords(key)
+	if words == "" {
+		return ""
+	}
+	return fmt.Sprintf(" Its labels read %q.", words)
 }
 
 func (n *Navigator) recipe(ctx context.Context, screen explore.ScreenSignature, key string) (string, bool) {
