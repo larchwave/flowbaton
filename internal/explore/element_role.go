@@ -122,6 +122,37 @@ func ElementRole(node device.TreeNode) string {
 // accessibilityText or title. A table that reads only the Android keys
 // shows every iOS row as "-", which left a live researcher with nothing
 // but geometry to name the screen's controls by.
+// ControlLabel names a row for a model-facing table. A switch is the reason
+// it is not ElementLabel: iOS answers one with its state in the value,
+// ElementLabel prefers text, and the row came out labelled "1" with the
+// control's name only on the row above it. Everything else keeps the label it
+// always had, and nothing matches on this -- selectors and exported flows go
+// on reading ElementLabel.
+func ControlLabel(node device.TreeNode) string {
+	if IsCheckable(node) {
+		for _, key := range []string{"accessibilityText", "label", "name", "title"} {
+			if value := strings.TrimSpace(node.Attributes[key]); value != "" {
+				return value
+			}
+		}
+	}
+	return ElementLabel(node)
+}
+
+// ControlState answers how a row with an on/off state is set, and says
+// whether it has one at all. A row without one must say nothing: iOS reports
+// checked false for every element on screen, and marking those would call
+// every control a switch that is off.
+func ControlState(node device.TreeNode) (string, bool) {
+	if !IsCheckable(node) || node.Checked == nil {
+		return "", false
+	}
+	if *node.Checked {
+		return "on", true
+	}
+	return "off", true
+}
+
 func ElementLabel(node device.TreeNode) string {
 	for _, key := range []string{"text", "label", "name", "hintText", "accessibilityText", "title"} {
 		if value := strings.TrimSpace(node.Attributes[key]); value != "" {

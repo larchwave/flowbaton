@@ -54,17 +54,19 @@ func visionTaskPrompt(table string) string {
 // model conversations.
 func elementTable(elements []explore.FlatElement) string {
 	var b strings.Builder
-	b.WriteString("| eidx | role | label | bounds | clickable | enabled |\n")
-	b.WriteString("|---|---|---|---|---|---|\n")
+	b.WriteString("| eidx | role | label | state | bounds | clickable | enabled |\n")
+	b.WriteString("|---|---|---|---|---|---|---|\n")
 	for _, element := range elements {
 		bounds := "-"
 		if parsed, ok := explore.ElementBounds(element.Node); ok {
 			bounds = hierarchy.FormatBounds(parsed)
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
+		state, _ := explore.ControlState(element.Node)
+		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s | %s |\n",
 			element.EIDX,
 			tableCell(nodeRole(element.Node)),
 			tableCell(nodeLabel(element.Node)),
+			tableCell(state),
 			bounds,
 			flagCell(element.Node.Clickable),
 			flagCell(element.Node.Enabled),
@@ -97,8 +99,10 @@ func nodeRole(node device.TreeNode) string {
 	return explore.ElementRole(node)
 }
 
+// nodeLabel names a row for a model-facing table: a switch by its own name
+// rather than by the value iOS answers with. Nothing matches on it.
 func nodeLabel(node device.TreeNode) string {
-	return explore.ElementLabel(node)
+	return explore.ControlLabel(node)
 }
 
 func nodeID(node device.TreeNode) string {
