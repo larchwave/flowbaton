@@ -120,8 +120,8 @@ func elementTable(state *explore.ScreenState) string {
 		}
 		// Which way a switch is set, and which row the platform calls the
 		// selected one, are nowhere else on the screen.
-		if state := explore.RowState(element.Node); state != "" {
-			builder.WriteString(" " + state)
+		if mark := explore.RowState(element.Node); mark != "" {
+			builder.WriteString(" " + mark)
 		}
 		builder.WriteString("\n")
 	}
