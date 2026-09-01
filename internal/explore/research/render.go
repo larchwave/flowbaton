@@ -99,8 +99,10 @@ func nodeRole(node device.TreeNode) string {
 	return explore.ElementRole(node)
 }
 
-// nodeLabel names a row for a model-facing table: a switch by its own name
-// rather than by the value iOS answers with. Nothing matches on it.
+// nodeLabel names a row for a model-facing table by its NAME rather than by
+// the value iOS answers with in text -- a switch by its setting's name, a
+// calendar day by its date. Nothing matches on it; explore.ElementLabel is
+// what selectors and the exporter read.
 func nodeLabel(node device.TreeNode) string {
 	return explore.ControlLabel(node)
 }
