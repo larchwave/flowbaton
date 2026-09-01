@@ -228,6 +228,18 @@ func trailingCycle(steps []explore.StepRecord) int {
 	count := 0
 	for index := len(steps) - 1; index >= 0; index-- {
 		step := steps[index]
+		// A step that failed or left the screen alone is not a way out of a
+		// cycle, and ending the count on one hides the loop wrapped around
+		// it. mmx74 spent a scenario toggling between the month view and the
+		// list view with a dead scroll after each pair: the stall count broke
+		// on the toggles, which moved, and this count broke on the scrolls,
+		// which did not, so neither warning ever fired. Such a step is
+		// counted but never widens the pair -- a stall alone is the stall
+		// detector's, and leaves this one with nothing to name.
+		if step.Status == explore.StepFailed || step.Status == explore.StepNoChange {
+			count++
+			continue
+		}
 		if step.Status != explore.StepOK || !known(step.After) || !known(step.Before) {
 			break
 		}
