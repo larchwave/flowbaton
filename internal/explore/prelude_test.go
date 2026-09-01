@@ -109,3 +109,48 @@ func TestASuccessfulWalkIsOnTheRecord(t *testing.T) {
 		t.Fatalf("notes = %q, want the start screen the navigator walked to", notes)
 	}
 }
+
+// The planner writes a scenario against one screen and is supposed to record
+// its key, and mmx74 shows what happens when it forgets: "Open inbox from
+// footer" carried no start screen, so nothing checked where the run began,
+// and its flow failed on its first action with "element not found". The crew
+// does not have to take the planner's word for it -- the plan was made from a
+// state the crew is holding.
+func TestTheCrewFillsInAStartScreenThePlannerLeftOut(t *testing.T) {
+	t.Parallel()
+
+	planned := ScreenSignature{AppID: "app", TreeDigest: "planned", Salient: []string{"September"}}
+	elsewhere := ScreenSignature{AppID: "app", TreeDigest: "elsewhere", Salient: []string{"Years"}}
+	fake := &fakeCrew{
+		state: &ScreenState{Signature: planned},
+		// The relaunch between scenarios comes back on a restored view,
+		// which is the case EnsureReady cannot rule out.
+		readyState:   &ScreenState{Signature: elsewhere},
+		reachedState: &ScreenState{Signature: planned},
+		reachSteps:   []StepRecord{{Index: 1, Status: StepOK}},
+		plans: [][]Scenario{
+			{{Name: "a", Priority: PriorityNormal}, {Name: "b", Priority: PriorityNormal}},
+		},
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	report, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 2, Styles: []string{"normal"},
+		Clock: func() time.Time { return clock },
+	}, crew)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first scenario stands on the planned screen already; the second
+	// starts after the relaunch and has to be walked back.
+	if len(fake.reached) != 1 || fake.reached[0] != planned.Key() {
+		t.Fatalf("reached %v, want one walk to the screen the plan was made from (%s)",
+			fake.reached, planned.Key())
+	}
+	if walk := report.Results[1].Prelude; len(walk) != 1 {
+		t.Fatalf("prelude = %+v, want the walk on the second result", walk)
+	}
+}

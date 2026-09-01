@@ -130,6 +130,7 @@ type fakeCrew struct {
 	// reached records the key of every Reach call.
 	reached      []string
 	reachedState *ScreenState
+	readyState   *ScreenState
 	reachSteps   []StepRecord
 	reachErr     error
 }
@@ -161,6 +162,11 @@ func (f *fakeCrew) RunScenario(_ context.Context, s Scenario, start *ScreenState
 }
 func (f *fakeCrew) EnsureReady(context.Context) (*ScreenState, error) {
 	f.readyCalls++
+	// Only the relaunches BETWEEN scenarios come back elsewhere; the one
+	// that opens the session leaves the app where the plan is made.
+	if f.readyState != nil && f.readyCalls > 1 {
+		return f.readyState, nil
+	}
 	return f.state, nil
 }
 func (f *fakeCrew) Reach(_ context.Context, key string) (*ScreenState, []StepRecord, error) {

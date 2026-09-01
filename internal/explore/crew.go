@@ -108,6 +108,12 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			continue
 		}
 		dryRounds = 0
+		// The screen the plan was made against. The planner is asked to
+		// record it on each scenario and does not always: mmx74's "Open
+		// inbox from footer" carried none, so nothing checked where its run
+		// began and its flow failed on its first action. The crew is holding
+		// the answer either way -- this is the state the UI map came from.
+		planScreen := state.Signature.Key()
 		plan := Plan{AppID: config.AppID, Scenarios: scenarios}
 		for _, scenario := range plan.Pending() {
 			if executed >= config.MaxTests {
@@ -127,7 +133,11 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			// screen, which is the common case and costs nothing.
 			reachNote := ""
 			var walk []StepRecord
-			if key := scenario.StartScreen; key != "" && state != nil &&
+			startScreen := scenario.StartScreen
+			if startScreen == "" {
+				startScreen = planScreen
+			}
+			if key := startScreen; key != "" && state != nil &&
 				!state.Signature.NamesTheSameScreen(key) {
 				reached, reachSteps, reachErr := crew.Navigator.Reach(ctx, key)
 				switch {
