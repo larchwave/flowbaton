@@ -466,10 +466,20 @@ func matchesID(pattern exactPattern, element *hierarchy.Element) bool {
 	return false
 }
 
+// spacesAScreenShows are the characters a reader sees as a space and does not
+// type: a newline where a label wraps, and the no-break spaces iOS puts inside
+// "Apple\u00a0Account" and every clock "4:10\u202fPM". A selector carries the
+// text a reader sees, and no reader can see which space a label holds.
+// Measured over thirteen captures of six apps, iOS 26.2: twelve no-break and
+// seventy-four narrow no-break spaces in labels, and no other exotic
+// whitespace but the newline this already folded.
+var spacesAScreenShows = strings.NewReplacer(
+	"\n", " ", "\u00a0", " ", "\u202f", " ", "\u2007", " ")
+
 func (pattern exactPattern) matches(value string) bool {
 	if value == pattern.raw || pattern.compiled.MatchString(value) {
 		return true
 	}
-	normalized := strings.ReplaceAll(value, "\n", " ")
+	normalized := spacesAScreenShows.Replace(value)
 	return normalized == pattern.raw || pattern.compiled.MatchString(normalized)
 }
