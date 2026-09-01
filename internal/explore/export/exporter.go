@@ -84,6 +84,17 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 			commands = append(commands, node)
 		}
 	}
+	// A flow that only launches the app asserts nothing and passes on
+	// replay whatever the app does, so it is a green that means nothing on
+	// the same tally as a flow that tests something. Six of seventy
+	// exported flows were launch-only, three of them from mmx69, where one
+	// came from a scenario whose every device call failed against a dead
+	// runner and was called passed anyway. The verdict is a separate
+	// question; a flow with no action is one this can refuse to write, and
+	// the caller prints the refusal and moves on.
+	if len(commands) == 1 {
+		return nil, fmt.Errorf("export: the run has no action to replay, only a launch")
+	}
 	data, err := encodeFlow(appID, result.Scenario.Name, commands)
 	if err != nil {
 		return nil, err
