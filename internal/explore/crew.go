@@ -162,9 +162,14 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			if err != nil {
 				// An app that left the foreground is one relaunch from
 				// usable, and the end of this loop relaunches. mmx70 lost
-				// five of its six scenarios to a single swipe iOS read as
-				// the home gesture. A device that is unreachable still ends
-				// the session: no relaunch reaches a dead runner.
+				// five of its six scenarios to one: its first swipe ran, the
+				// observation after it answered "none of com.apple.mobilecal
+				// is in the foreground", and the five scenarios that had not
+				// started were never attempted. WHY the app left is not
+				// established -- a direction-only swipe up starts at the
+				// centre of the screen, and replaying one against Calendar
+				// leaves the app in front. A device that is unreachable
+				// still ends the session: no relaunch reaches a dead runner.
 				if !errors.Is(err, ErrScreenUnobservable) {
 					return abortReport(ctx, crew, report, config),
 						fmt.Errorf("explore: scenario %q: %w", scenario.Name, err)

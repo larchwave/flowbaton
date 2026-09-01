@@ -466,12 +466,15 @@ func TestRunSessionNotesAFailedReachAndRunsAnyway(t *testing.T) {
 	}
 }
 
-// mmx70 lost five of its six scenarios to one swipe. The tester swiped up,
-// iOS read it as the home gesture, Calendar left the foreground, and the
-// observation that followed answered "none of com.apple.mobilecal is in the
+// mmx70 lost five of its six scenarios to one. Its first swipe ran and the
+// observation after it answered "none of com.apple.mobilecal is in the
 // foreground". The tester loop ends on that by design -- it has no tool that
 // restores an app -- and the crew turned the scenario's error into the
-// session's.
+// session's, so five scenarios that had not started were never attempted.
+//
+// Why the app left is not established. A direction-only swipe up starts at
+// the centre of the screen, and replaying one against Calendar leaves the
+// app in front, so the swipe is not the cause it first looked like.
 //
 // A relaunch is exactly what fixes an app that left the foreground, and the
 // end of the scenario loop already relaunches. A device that is unreachable
