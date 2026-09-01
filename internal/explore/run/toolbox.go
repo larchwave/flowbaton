@@ -212,11 +212,25 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
+		// Whichever way the run ends, the action that ended it is the
+		// evidence somebody came for. mmx71 lost the app to a tap twice and
+		// the step log named neither: the run ends on the observation that
+		// follows, and this path returned before the step was recorded, so
+		// the report read "tester turn 22" with sixteen steps listed.
+		endRun := func(sentinel error) (string, error) {
+			step.Status = explore.StepFailed
+			step.ErrText = fmt.Sprintf("observe after %s: %v", tool, obsErr)
+			if execErr != nil {
+				step.ErrText = execErr.Error() + "; " + step.ErrText
+			}
+			s.steps = append(s.steps, step)
+			return "", fmt.Errorf("%w: observe after %s: %v", sentinel, tool, obsErr)
+		}
 		if transportGone(obsErr) {
-			return "", fmt.Errorf("%w: observe after %s: %v", explore.ErrDeviceUnreachable, tool, obsErr)
+			return endRun(explore.ErrDeviceUnreachable)
 		}
 		if observationLost(obsErr) {
-			return "", fmt.Errorf("%w: observe after %s: %v", explore.ErrScreenUnobservable, tool, obsErr)
+			return endRun(explore.ErrScreenUnobservable)
 		}
 		s.stale = true
 		if execErr == nil {
