@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -120,6 +121,8 @@ type fakeCrew struct {
 	requests    []PlanRequest
 	failAfter   int
 	failVerdict string
+	failErr     error
+	failEvery   bool
 	reportFail  bool
 	readyCalls  int
 	// starts records the state each scenario was handed.
@@ -146,9 +149,12 @@ func (f *fakeCrew) PlanNext(_ context.Context, request PlanRequest) ([]Scenario,
 func (f *fakeCrew) RunScenario(_ context.Context, s Scenario, start *ScreenState) (*TestResult, error) {
 	f.ran = append(f.ran, s.Name)
 	f.starts = append(f.starts, start)
-	if f.failAfter > 0 && len(f.ran) > f.failAfter {
-		return &TestResult{Scenario: s, Status: TestStopped, Verdict: f.failVerdict},
-			errors.New("device unreachable")
+	if f.failEvery || (f.failAfter > 0 && len(f.ran) > f.failAfter) {
+		err := error(errors.New("device unreachable"))
+		if f.failErr != nil {
+			err = f.failErr
+		}
+		return &TestResult{Scenario: s, Status: TestStopped, Verdict: f.failVerdict}, err
 	}
 	return &TestResult{Scenario: s, Status: TestPassed, Outcomes: f.outcomes}, nil
 }
@@ -457,5 +463,68 @@ func TestRunSessionNotesAFailedReachAndRunsAnyway(t *testing.T) {
 	}
 	if !strings.Contains(report.Results[0].Notes[0], "no recipe worked") {
 		t.Errorf("note = %q, want the reach error in it", report.Results[0].Notes[0])
+	}
+}
+
+// mmx70 lost five of its six scenarios to one swipe. The tester swiped up,
+// iOS read it as the home gesture, Calendar left the foreground, and the
+// observation that followed answered "none of com.apple.mobilecal is in the
+// foreground". The tester loop ends on that by design -- it has no tool that
+// restores an app -- and the crew turned the scenario's error into the
+// session's.
+//
+// A relaunch is exactly what fixes an app that left the foreground, and the
+// end of the scenario loop already relaunches. A device that is unreachable
+// still ends the session: no relaunch reaches a dead runner.
+func TestRunSessionCarriesOnWhenTheAppLeavesTheForeground(t *testing.T) {
+	state := &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}}
+	fake := &fakeCrew{
+		state:       state,
+		failAfter:   0,
+		plans:       [][]Scenario{{{Name: "a", Priority: PriorityNormal}, {Name: "b", Priority: PriorityNormal}}},
+		failEvery:   true,
+		failErr:     fmt.Errorf("tester turn 1: %w: observe after swipe", ErrScreenUnobservable),
+		failVerdict: "stopped",
+	}
+	crew := Crew{Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	report, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 2, Clock: func() time.Time { return clock },
+	}, crew)
+	if err != nil {
+		t.Fatalf("the session ended on a scenario's lost foreground: %v", err)
+	}
+	if !slices.Equal(fake.ran, []string{"a", "b"}) {
+		t.Fatalf("ran %q, want both scenarios attempted", fake.ran)
+	}
+	if len(report.Results) != 2 {
+		t.Fatalf("results %d, want both kept", len(report.Results))
+	}
+	if len(report.Results[0].Notes) == 0 ||
+		!strings.Contains(report.Results[0].Notes[0], "foreground") {
+		t.Errorf("no note says the app left the foreground: %+v", report.Results[0].Notes)
+	}
+}
+
+// A dead runner still ends the session: no relaunch reaches it.
+func TestRunSessionStillStopsWhenTheDeviceIsUnreachable(t *testing.T) {
+	state := &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}}
+	fake := &fakeCrew{
+		state:     state,
+		plans:     [][]Scenario{{{Name: "a", Priority: PriorityNormal}, {Name: "b", Priority: PriorityNormal}}},
+		failEvery: true,
+		failErr:   fmt.Errorf("tester turn 1: %w", ErrDeviceUnreachable),
+	}
+	crew := Crew{Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	if _, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 2, Clock: func() time.Time { return clock },
+	}, crew); err == nil {
+		t.Fatal("an unreachable device did not end the session")
+	}
+	if len(fake.ran) != 1 {
+		t.Errorf("ran %q, want the session to stop after the first", fake.ran)
 	}
 }
