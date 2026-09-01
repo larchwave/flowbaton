@@ -82,6 +82,11 @@ func elementTable(state *explore.ScreenState) string {
 		if label := explore.ControlLabel(element.Node); label != "" {
 			fmt.Fprintf(builder, " %q", explore.Truncate(label, 60))
 		}
+		// The name and the value are two facts, and iOS keeps them in two
+		// attributes. A day of a calendar month is chosen on the second.
+		if value := explore.RowValue(element.Node); value != "" {
+			fmt.Fprintf(builder, " value %q", explore.Truncate(value, 60))
+		}
 		if id := elementID(element.Node); id != "" {
 			fmt.Fprintf(builder, " id=%s", id)
 		}

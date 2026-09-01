@@ -138,6 +138,24 @@ func ControlLabel(node device.TreeNode) string {
 	return ElementLabel(node)
 }
 
+// RowValue answers the value a row carries when that is not already its name.
+// iOS splits the two -- the name in accessibilityText, the value in text --
+// and naming a row by its name would otherwise drop the value entirely: a
+// calendar day is picked on "1 event" against "No events", which is nowhere
+// else on the screen. Android puts the name in text and has no split, so this
+// is empty there. A text input is left out: the table says what it HOLDS, and
+// a secure one says nothing.
+func RowValue(node device.TreeNode) string {
+	if IsTextInput(node) {
+		return ""
+	}
+	value := strings.TrimSpace(node.Attributes["text"])
+	if value == ControlLabel(node) {
+		return ""
+	}
+	return value
+}
+
 // RowState says how a row is set, for a model-facing table: whether a control
 // with an on/off state is on, and whether the platform marks this row as the
 // selected one. Empty for a row with neither, which is nearly all of them --

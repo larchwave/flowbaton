@@ -32,7 +32,7 @@ func TestElementTableNamesARowRatherThanValuingIt(t *testing.T) {
 			t.Errorf("the table does not name the day %s:\n%s", want, table)
 		}
 	}
-	if strings.Contains(table, "No events") {
+	if strings.Contains(table, `button "No events"`) {
 		t.Errorf("a day is still named after its value:\n%s", table)
 	}
 }
@@ -109,5 +109,45 @@ func TestCheckVisibleEvidenceNamesTheRow(t *testing.T) {
 	}
 	if strings.Contains(reply, "3 events") {
 		t.Errorf("the check names the row by its value: %s", reply)
+	}
+}
+
+// Naming a row by its name took away the value it used to stand under, and
+// for a calendar day the value is what a tester picks on: "1 event" against
+// "No events". iOS carries both -- the name in accessibilityText, the value in
+// text -- so the row carries both. Census over twenty-five captures: 54 of 599
+// rows have a value that differs from their name, and 31 of them are one
+// month of a calendar.
+func TestElementTableKeepsAValueBesideTheName(t *testing.T) {
+	t.Parallel()
+
+	table := elementTable(makeState("com.apple.mobilecal", screen("September",
+		iosNode(map[string]string{"elementType": "9", "accessibilityText": "Saturday, August 29", "text": "1 event"}),
+		iosNode(map[string]string{"elementType": "9", "accessibilityText": "Sunday, August 30", "text": "No events"}),
+		// A row whose value IS its name says it once.
+		iosNode(map[string]string{"elementType": "48", "accessibilityText": "September", "text": "September"}),
+	)))
+	if !strings.Contains(table, `"Saturday, August 29" value "1 event"`) {
+		t.Errorf("the row lost the value it stands under:\n%s", table)
+	}
+	if strings.Contains(table, `"September" value`) {
+		t.Errorf("a row whose value is its name says it twice:\n%s", table)
+	}
+}
+
+// A field says what it holds and never says it twice, and a secure one still
+// says nothing at all.
+func TestElementTableDoesNotValueAFieldTwice(t *testing.T) {
+	t.Parallel()
+
+	table := elementTable(makeState("com.example.app", screen("Search",
+		iosNode(map[string]string{"elementType": "45", "accessibilityText": "Search", "text": "Kate"}),
+		iosNode(map[string]string{"elementType": "50", "accessibilityText": "Password", "text": "hunter2"}),
+	)))
+	if strings.Contains(table, `value "Kate"`) {
+		t.Errorf("a field says what it holds twice:\n%s", table)
+	}
+	if strings.Contains(table, "hunter2") {
+		t.Errorf("a secure field printed what was typed into it:\n%s", table)
 	}
 }
