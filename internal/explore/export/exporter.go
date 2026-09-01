@@ -71,9 +71,13 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 	// The walk to the start screen belongs to the flow, not to a comment
 	// asking the reader to perform it: the navigator already made it on the
 	// device, and its steps replay the same way the run's own do.
-	walk, err := stepCommands(result.Prelude, nil)
-	if err != nil {
-		return nil, err
+	// A walk the exporter cannot write costs the flow nothing it had before
+	// the walk existed: it is setup for a run that already passed, so the
+	// flow falls back to naming its start screen rather than being refused
+	// over its prologue.
+	walk, walkErr := stepCommands(result.Prelude, nil)
+	if walkErr != nil {
+		walk = nil
 	}
 	commands = append(commands, walk...)
 	if screen := strings.TrimSpace(result.Scenario.StartScreen); screen != "" && len(walk) == 0 {

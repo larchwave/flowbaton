@@ -77,3 +77,44 @@ func TestAWalkAloneIsNotAFlow(t *testing.T) {
 		t.Fatal("ExportFlow() = nil error, want a refusal for a flow with no action of its own")
 	}
 }
+
+// A walk is setup the exporter adds on top of a run that already passed.
+// When one of its steps has no flow selector -- a tree path, which nothing
+// can write -- the flow is still worth every line it had before the walk
+// existed. Refusing the whole export would lose a passing flow to its
+// prologue.
+func TestAWalkThatCannotBeWrittenLeavesTheFlowIntact(t *testing.T) {
+	t.Parallel()
+
+	result := &explore.TestResult{
+		Scenario: explore.Scenario{Name: "Anything", StartScreen: "somewhere-1234abcd"},
+		Status:   explore.TestPassed,
+		Prelude: []explore.StepRecord{{
+			Index: 1, Status: explore.StepOK,
+			Action: explore.Action{Kind: explore.ActionTap, Target: &explore.Locator{
+				Kind: explore.LocatorPath, Value: "/0/2/7", Label: "a nameless row",
+			}},
+		}},
+		Steps: []explore.StepRecord{{
+			Index: 1, Status: explore.StepOK,
+			Action: explore.Action{Kind: explore.ActionTap, Target: &explore.Locator{
+				Kind: explore.LocatorID, Value: "toggle-day-list-view",
+			}},
+		}},
+	}
+	data, err := Exporter{}.ExportFlow(result, "com.apple.mobilecal")
+	if err != nil {
+		t.Fatalf("ExportFlow() = %v, want the flow without its unwritable walk", err)
+	}
+	body := string(data)
+	if !strings.Contains(body, "toggle-day-list-view") {
+		t.Fatalf("the run's own action is missing:\n%s", body)
+	}
+	// With no walk to offer, the flow owes the reader the old instruction.
+	if !strings.Contains(body, "launchApp does not navigate there") {
+		t.Fatalf("the flow neither walks nor says where it was recorded:\n%s", body)
+	}
+	if _, err := flow.ParseBytes("exported.yaml", data); err != nil {
+		t.Fatalf("the flow no longer parses: %v\n%s", err, data)
+	}
+}
