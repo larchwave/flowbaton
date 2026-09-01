@@ -531,3 +531,28 @@ func TestRunSessionStillStopsWhenTheDeviceIsUnreachable(t *testing.T) {
 		t.Errorf("ran %q, want the session to stop after the first", fake.ran)
 	}
 }
+
+// The crew must ask the signature the same question the navigator asks on
+// arrival. It checked exact key equality, so a scenario whose start
+// screen was in front under a different digest -- the common case, since the
+// digest covers the whole tree -- still cost a reach: a kill, a launch and an
+// observation, all for a check the navigator answers on its first line.
+func TestRunSessionSkipsAReachWhenTheLabelsAlreadyMatch(t *testing.T) {
+	here := &ScreenState{Signature: ScreenSignature{
+		AppID: "app", Salient: []string{"Search", "Add"}, TreeDigest: "cbc05d8a11112222"}}
+	fake := &fakeCrew{
+		state: here,
+		plans: [][]Scenario{{{Name: "a", Priority: PriorityNormal, StartScreen: "search-add-4d3ffed3"}}},
+	}
+	crew := Crew{Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	if _, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 1, Clock: func() time.Time { return clock },
+	}, crew); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.reached) != 0 {
+		t.Errorf("reached %q, want none: the screen in front already carries those labels", fake.reached)
+	}
+}

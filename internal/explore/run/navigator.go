@@ -10,10 +10,6 @@ import (
 	"github.com/larchwave/flowbaton/internal/explore"
 )
 
-// screenKeyDigestLength is how many digest characters ScreenSignature.Key()
-// appends to the slugified labels.
-const screenKeyDigestLength = 8
-
 // navigatorLoopBound caps the tool-loop turns Reach may spend on one key.
 const navigatorLoopBound = 8
 
@@ -174,44 +170,10 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 	return nil, &ReachError{Key: key, Reason: fmt.Sprintf("not reached within %d turns", navigatorLoopBound)}
 }
 
-// screenWords renders the readable part of a screen key. A key from a
-// signature is the salient labels slugified and joined, then a dash and
-// eight digest characters -- "settings-apple-account-c6c0dfad" -- and a
-// model asked to navigate to that reads a digest. The labels are the one
-// thing in it a model can act on.
-//
-// A key that is nothing but a digest answers empty: inventing a name would
-// be worse than saying only the key. A salient label that slugifies to
-// eight hex characters loses that one word, which costs a hint, not a
-// match: nothing keys on this.
-func screenWords(key string) string {
-	trimmed := strings.TrimSpace(key)
-	cut := strings.LastIndex(trimmed, "-")
-	if cut < 0 {
-		return ""
-	}
-	if !looksLikeDigest(trimmed[cut+1:]) {
-		return strings.ReplaceAll(trimmed, "-", " ")
-	}
-	return strings.ReplaceAll(trimmed[:cut], "-", " ")
-}
-
-func looksLikeDigest(part string) bool {
-	if len(part) != screenKeyDigestLength {
-		return false
-	}
-	for _, r := range part {
-		if !strings.ContainsRune("0123456789abcdef", r) {
-			return false
-		}
-	}
-	return true
-}
-
-// screenWordsSentence wraps screenWords for a prompt, and says nothing when
-// there is nothing to say.
+// screenWordsSentence renders a key's labels for a prompt, and says nothing
+// when the key is a bare digest with no labels to render.
 func screenWordsSentence(key string) string {
-	words := screenWords(key)
+	words := explore.ScreenKeyWords(key)
 	if words == "" {
 		return ""
 	}
@@ -309,37 +271,11 @@ func screenMatches(state *explore.ScreenState, key string) bool {
 	if want == "" {
 		return false
 	}
-	// A key from a signature carries a digest the salient labels never spell
-	// out, so the substring pass below can never match one:
-	// "search-add-4d3ffed3" is not inside "Search". That is the only key
-	// shape the crew has for a scenario -- Scenario.StartScreen is a Key() --
-	// while every navigator test used a plain word, so Reach would have spent
-	// its whole turn budget on a screen it was already standing on.
-	//
-	// Key() is a NAME, not an identity, and here the name is what is wanted.
-	// Its digest covers the WHOLE tree, so a different day highlighted or a
-	// different scroll offset renames the screen, and exact equality can only
-	// match a screen nothing has touched. mmx69 measured what that costs:
-	// four scenarios asked to reach "search-add-4d3ffed3", all four spent the
-	// whole eight-turn budget and gave up, and every flow the session
-	// exported carries that same key in its header -- the app was on a search
-	// and add screen each time, with a different month under the toolbar.
-	//
-	// So the labels decide, which is what Reach means by "looks like the
-	// named screen". Two screens whose salient labels agree are the same
-	// screen to navigate to. The cost of a false match is a scenario that
-	// starts on a screen showing the same things, which is nearer than where
-	// the relaunch left it.
-	//
-	// This is a check, not a store key. Do NOT reuse it to look a recipe up:
-	// internal/explore/CLAUDE.md says why the store is named by the whole
-	// digest and why a prefix match there served one screen's recipe to
-	// another.
-	if strings.EqualFold(state.Signature.Key(), want) {
-		return true
-	}
-	if words := screenWords(want); words != "" &&
-		strings.EqualFold(words, screenWords(state.Signature.Key())) {
+	// The signature answers whether the key names it: the whole key, or the
+	// labels alone. The crew asks the same question before it sends a reach,
+	// so the two cannot disagree and send a reach that ends on its first
+	// check, after a kill and a launch the crew had just paid for.
+	if state.Signature.NamesTheSameScreen(want) {
 		return true
 	}
 	for _, salient := range state.Signature.Salient {

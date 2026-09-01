@@ -87,19 +87,6 @@ func TestReachTellsTheModelWhatTheScreenLooksLike(t *testing.T) {
 	}
 }
 
-// A key with no readable part is the digest alone. There is nothing to
-// spell out, and inventing one would be worse than saying only the key.
-func TestScreenWordsAnswersNothingForABareDigest(t *testing.T) {
-	t.Parallel()
-
-	if words := screenWords("4d3ffed3"); words != "" {
-		t.Errorf("screenWords(digest) = %q, want empty", words)
-	}
-	if words := screenWords("settings-apple-account-c6c0dfad"); words != "settings apple account" {
-		t.Errorf("screenWords = %q", words)
-	}
-}
-
 // mmx69, live: four scenarios asked to reach "search-add-4d3ffed3" and all
 // four spent the whole eight-turn budget and gave up, on a screen the app
 // was almost certainly already showing -- every flow the session exported

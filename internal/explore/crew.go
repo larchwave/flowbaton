@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 )
 
 // Crew bundles the role implementations for one exploration session.
@@ -128,7 +127,7 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			// screen, which is the common case and costs nothing.
 			reachNote := ""
 			if key := scenario.StartScreen; key != "" && state != nil &&
-				!strings.EqualFold(state.Signature.Key(), key) {
+				!state.Signature.NamesTheSameScreen(key) {
 				reached, reachErr := crew.Navigator.Reach(ctx, key)
 				switch {
 				case reachErr == nil:

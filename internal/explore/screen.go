@@ -1,6 +1,7 @@
 package explore
 
 import (
+	"strings"
 	"time"
 	"unicode"
 
@@ -49,6 +50,64 @@ func (s ScreenSignature) Key() string {
 		return slug
 	}
 	return slug + "-" + digest
+}
+
+// screenKeyDigestLength is how many digest characters Key() appends to the
+// slugified labels.
+const screenKeyDigestLength = 8
+
+// ScreenKeyWords renders the readable part of a screen key: the salient
+// labels Key() slugified, with the digest dropped and the dashes turned back
+// into spaces. A key that is nothing but a digest has no readable part and
+// answers empty.
+//
+// A salient label that slugifies to eight hex characters loses that one
+// word. Nothing keys on this -- it names a screen for a model and decides
+// whether two keys mean the same screen, never which file to read.
+func ScreenKeyWords(key string) string {
+	trimmed := strings.TrimSpace(key)
+	cut := strings.LastIndex(trimmed, "-")
+	if cut < 0 {
+		return ""
+	}
+	if !looksLikeScreenDigest(trimmed[cut+1:]) {
+		return strings.ReplaceAll(trimmed, "-", " ")
+	}
+	return strings.ReplaceAll(trimmed[:cut], "-", " ")
+}
+
+func looksLikeScreenDigest(part string) bool {
+	if len(part) != screenKeyDigestLength {
+		return false
+	}
+	for _, r := range part {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			return false
+		}
+	}
+	return true
+}
+
+// NamesTheSameScreen reports whether key names this screen. The whole key
+// matches, and so do the labels alone: the digest covers the WHOLE tree, so
+// a different day highlighted or a different scroll offset renames the
+// screen, and a check on the digest can only ever match a screen nothing has
+// touched. mmx69 measured that -- four reaches spent their whole turn budget
+// on a screen the app was already showing.
+//
+// This is a check, not a store key. Do NOT use it to look a recipe up:
+// internal/explore/CLAUDE.md records what a prefix match on the digest cost
+// the store, which is one screen's recipe served to another.
+func (s ScreenSignature) NamesTheSameScreen(key string) bool {
+	want := strings.TrimSpace(key)
+	if want == "" {
+		return false
+	}
+	if strings.EqualFold(s.Key(), want) {
+		return true
+	}
+	words := ScreenKeyWords(want)
+	return words != "" && strings.EqualFold(words, ScreenKeyWords(s.Key()))
 }
 
 // Same reports whether two signatures identify the same screen state.
