@@ -110,21 +110,23 @@ func TestASuccessfulWalkIsOnTheRecord(t *testing.T) {
 	}
 }
 
-// The planner writes a scenario against one screen and is supposed to record
-// its key, and mmx74 shows what happens when it forgets: "Open inbox from
-// footer" carried no start screen, so nothing checked where the run began,
-// and its flow failed on its first action with "element not found". The crew
-// does not have to take the planner's word for it -- the plan was made from a
-// state the crew is holding.
-func TestTheCrewFillsInAStartScreenThePlannerLeftOut(t *testing.T) {
+// 16c91cd filled an absent StartScreen from the screen the plan was made
+// against, and mmx80 shows the cost: every one of its scenarios inherited the
+// same key, a SEARCH screen an earlier scenario had left open, and each was
+// dragged there before it ran. Six walks to one key, two scenarios passed,
+// five ended in execution problems -- the worst session of the day.
+//
+// The planner's key is per scenario; the map's screen is per plan, and using
+// one for the other says every scenario begins where the planner happened to
+// be looking. A scenario with no start screen goes back to running from
+// wherever the relaunch left it, which is what it did before.
+func TestAScenarioWithNoStartScreenIsNotWalkedAnywhere(t *testing.T) {
 	t.Parallel()
 
 	planned := ScreenSignature{AppID: "app", TreeDigest: "planned", Salient: []string{"September"}}
 	elsewhere := ScreenSignature{AppID: "app", TreeDigest: "elsewhere", Salient: []string{"Years"}}
 	fake := &fakeCrew{
-		state: &ScreenState{Signature: planned},
-		// The relaunch between scenarios comes back on a restored view,
-		// which is the case EnsureReady cannot rule out.
+		state:        &ScreenState{Signature: planned},
 		readyState:   &ScreenState{Signature: elsewhere},
 		reachedState: &ScreenState{Signature: planned},
 		reachSteps:   []StepRecord{{Index: 1, Status: StepOK}},
@@ -137,20 +139,51 @@ func TestTheCrewFillsInAStartScreenThePlannerLeftOut(t *testing.T) {
 		Tester: fake, Navigator: fake, Analyst: fake,
 	}
 	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
-	report, err := RunSession(context.Background(), Config{
+	if _, err := RunSession(context.Background(), Config{
 		AppID: "app", MaxTests: 2, Styles: []string{"normal"},
+		Clock: func() time.Time { return clock },
+	}, crew); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.reached) != 0 {
+		t.Fatalf("reached %v, want no walk for a scenario that named no screen", fake.reached)
+	}
+}
+
+// A reach that took no step walked nowhere, and mmx80 wrote "walked to the
+// start screen ... in 0 steps" for one. The note is evidence a reader counts
+// walks from.
+func TestNoNoteForAWalkThatTookNoStep(t *testing.T) {
+	t.Parallel()
+
+	here := ScreenSignature{AppID: "app", TreeDigest: "here", Salient: []string{"September"}}
+	elsewhere := ScreenSignature{AppID: "app", TreeDigest: "elsewhere", Salient: []string{"Years"}}
+	fake := &fakeCrew{
+		state:        &ScreenState{Signature: elsewhere},
+		reachedState: &ScreenState{Signature: here},
+		reachSteps:   nil,
+		plans: [][]Scenario{
+			{{Name: "a", Priority: PriorityNormal, StartScreen: here.Key()}},
+		},
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	report, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 1, Styles: []string{"normal"},
 		Clock: func() time.Time { return clock },
 	}, crew)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The first scenario stands on the planned screen already; the second
-	// starts after the relaunch and has to be walked back.
-	if len(fake.reached) != 1 || fake.reached[0] != planned.Key() {
-		t.Fatalf("reached %v, want one walk to the screen the plan was made from (%s)",
-			fake.reached, planned.Key())
+	if len(fake.reached) != 1 {
+		t.Fatalf("reached %v, want the walk to have been attempted", fake.reached)
 	}
-	if walk := report.Results[1].Prelude; len(walk) != 1 {
-		t.Fatalf("prelude = %+v, want the walk on the second result", walk)
+	for _, note := range report.Results[0].Notes {
+		if strings.Contains(note, "walked to the start screen") {
+			t.Fatalf("note = %q, want no claim of a walk that took no step", note)
+		}
 	}
 }

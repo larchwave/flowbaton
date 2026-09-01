@@ -108,12 +108,6 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			continue
 		}
 		dryRounds = 0
-		// The screen the plan was made against. The planner is asked to
-		// record it on each scenario and does not always: mmx74's "Open
-		// inbox from footer" carried none, so nothing checked where its run
-		// began and its flow failed on its first action. The crew is holding
-		// the answer either way -- this is the state the UI map came from.
-		planScreen := state.Signature.Key()
 		plan := Plan{AppID: config.AppID, Scenarios: scenarios}
 		for _, scenario := range plan.Pending() {
 			if executed >= config.MaxTests {
@@ -133,11 +127,16 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			// screen, which is the common case and costs nothing.
 			reachNote := ""
 			var walk []StepRecord
-			startScreen := scenario.StartScreen
-			if startScreen == "" {
-				startScreen = planScreen
-			}
-			if key := startScreen; key != "" && state != nil &&
+			// Only the key the PLANNER wrote. 16c91cd filled an absent one
+			// from the screen the plan was made against, and mmx80 shows the
+			// cost: every scenario of that plan inherited one key, a search
+			// screen an earlier scenario had left open, and each was dragged
+			// there before it ran. Six walks to one key, two scenarios
+			// passed, five ended in execution problems. The planner's key is
+			// per scenario; the map's screen is per plan, and one is not the
+			// other. A scenario that names no screen runs from wherever the
+			// relaunch left it, which is what it did before.
+			if key := scenario.StartScreen; key != "" && state != nil &&
 				!state.Signature.NamesTheSameScreen(key) {
 				reached, reachSteps, reachErr := crew.Navigator.Reach(ctx, key)
 				switch {
@@ -145,9 +144,14 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 					state, walk = reached, reachSteps
 					// A reach that works leaves no trace otherwise, and two
 					// sessions of "no failed reach" then read as proof of a
-					// navigator that may never have been asked.
-					reachNote = fmt.Sprintf(
-						"walked to the start screen %q in %d steps", key, len(reachSteps))
+					// navigator that may never have been asked. A reach that
+					// took no step walked nowhere, and saying it did makes the
+					// note useless for counting walks -- mmx80 wrote "in 0
+					// steps" for one.
+					if len(reachSteps) > 0 {
+						reachNote = fmt.Sprintf(
+							"walked to the start screen %q in %d steps", key, len(reachSteps))
+					}
 				case ctx.Err() != nil:
 					return finishReport(report, config), ctx.Err()
 				default:
