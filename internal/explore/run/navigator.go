@@ -33,6 +33,12 @@ type Navigator struct {
 	Config   explore.Config
 	// Experience optionally stores and serves "reach <key>" recipes.
 	Experience explore.ExperienceStore
+	// unreachable remembers the routes the worker already failed to walk
+	// this session, keyed origin -> target. mmx71 sent the same reach five
+	// times, once per scenario, and all five spent the whole turn budget on
+	// the same key: forty worker turns for nothing. The first failure is
+	// information the session already has.
+	unreachable map[string]bool
 	// Sleep is injected by tests; nil means real sleeping.
 	Sleep func(context.Context, time.Duration) error
 }
@@ -126,10 +132,18 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 	session.record = true
 	box := session.box()
 	origin := state.Signature
+	// A recipe is replayed whatever happened before: replaying costs no
+	// model turns, which is the thing being rationed here.
 	if body, ok := n.recipe(ctx, origin, key); ok {
 		if session.replay(ctx, box, body) && screenMatches(session.current, key) {
 			return session.current, nil
 		}
+	}
+	// Only this route is refused. Another origin is another way there.
+	route := origin.Key() + " -> " + key
+	if n.unreachable[route] {
+		return nil, &ReachError{Key: key,
+			Reason: "the worker did not reach it from this screen earlier in this session"}
 	}
 	if n.Worker == nil {
 		return nil, &ReachError{Key: key, Reason: "no recipe worked and no worker model is configured"}
@@ -158,6 +172,7 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 			return session.current, nil
 		}
 		if loop.Stopped {
+			n.rememberUnreachable(route)
 			return nil, &ReachError{Key: key, Reason: "the model finished on a screen that does not match"}
 		}
 		if !loop.Exhausted {
@@ -167,6 +182,7 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 			})
 		}
 	}
+	n.rememberUnreachable(route)
 	return nil, &ReachError{Key: key, Reason: fmt.Sprintf("not reached within %d turns", navigatorLoopBound)}
 }
 
@@ -178,6 +194,17 @@ func screenWordsSentence(key string) string {
 		return ""
 	}
 	return fmt.Sprintf(" Its labels read %q.", words)
+}
+
+// rememberUnreachable records that the worker could not walk this route, so
+// the next scenario does not spend the same budget on the same failure.
+// Only a worker failure is remembered: a recipe that stops working is worth
+// re-deriving, and a route the worker never tried is not a failure.
+func (n *Navigator) rememberUnreachable(route string) {
+	if n.unreachable == nil {
+		n.unreachable = map[string]bool{}
+	}
+	n.unreachable[route] = true
 }
 
 func (n *Navigator) recipe(ctx context.Context, screen explore.ScreenSignature, key string) (string, bool) {
