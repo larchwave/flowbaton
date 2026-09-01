@@ -22,11 +22,17 @@ type PlanRequest struct {
 	// Existing lists scenario names already planned or executed, for
 	// dedup.
 	Existing []string
-	// Unpromised lists expected outcomes the judge ruled this app never
-	// offers, gathered from earlier runs of the same session. Naming them
-	// keeps the planner from writing the same unverifiable expectation
-	// every round.
-	Unpromised []string
+	// Unmet lists expected outcomes earlier runs of this session looked for
+	// and did not find. Naming them keeps the planner from writing the same
+	// expectation every round: mmx78 planned the same invented day view
+	// three times.
+	//
+	// The claim is deliberately weak. The earlier field carried only the
+	// outcomes a judge ruled the app never offers, which is a judgement no
+	// session ever made -- every report says "0 with an expectation the app
+	// never promised" while filing defects of exactly that kind. "A run
+	// looked and did not find it" needs nobody's opinion.
+	Unmet []string
 	// Focus optionally narrows planning to one feature or region.
 	Focus string
 	// Budget caps how many scenarios to emit.

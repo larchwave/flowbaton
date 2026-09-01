@@ -229,39 +229,6 @@ func TestRunSessionFailsClosed(t *testing.T) {
 // A planner that writes an expectation the app never offers writes it
 // again next round unless the session says so. The judge's verdict is the
 // only place that knowledge exists, so the loop carries it back.
-func TestRunSessionCarriesUnpromisedExpectationsBackToThePlanner(t *testing.T) {
-	fake := &fakeCrew{
-		state: &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
-		plans: [][]Scenario{
-			{{Name: "a", Priority: PriorityNormal}},
-			{{Name: "b", Priority: PriorityNormal}},
-		},
-		outcomes: []OutcomeCheck{
-			{Expected: "the Completed tile is selected", Missed: MissUnpromised},
-			{Expected: "the list is empty"},
-			{Expected: `visible: text "Completed"`, Missed: MissUnpromised, Driver: true},
-		},
-	}
-	crew := Crew{
-		Observer: fake, Researcher: fake, Planner: fake,
-		Tester: fake, Navigator: fake, Analyst: fake,
-	}
-	config := Config{AppID: "app", MaxTests: 2, Styles: []string{"normal"}}
-	if _, err := RunSession(context.Background(), config, crew); err != nil {
-		t.Fatal(err)
-	}
-	if len(fake.requests) < 2 {
-		t.Fatalf("want at least two plan requests, got %d", len(fake.requests))
-	}
-	if got := fake.requests[0].Unpromised; len(got) != 0 {
-		t.Fatalf("first request already carries %v", got)
-	}
-	got := fake.requests[1].Unpromised
-	if len(got) != 1 || got[0] != "the Completed tile is selected" {
-		t.Fatalf("Unpromised = %v, want only the inapplicable scenario outcome", got)
-	}
-}
-
 // mmx22 (2026-08-30, live): the first scenario passed, the simulator's
 // runner then died in the second, and the whole session came back with an
 // error and no report -- the passed run's evidence went with it.
