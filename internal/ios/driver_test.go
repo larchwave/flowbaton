@@ -296,7 +296,7 @@ func TestContentDescriptorConvertsTheAccessibilityTree(t *testing.T) {
 			{
 				Identifier:  "toggle",
 				Label:       "Notifications",
-				ElementType: 40, // switch — checkable per specs/02 line 49
+				ElementType: 40, // switch — checkable, and valueless, so the trait rules
 				Enabled:     false,
 				Selected:    true,
 				Frame:       Frame{X: 16, Y: 200, Width: 60, Height: 30},
@@ -390,13 +390,14 @@ func TestContentDescriptorConvertsTheAccessibilityTree(t *testing.T) {
 	}
 }
 
-func TestCheckableElementTypesAreExactlyTheThreeTheSpecNames(t *testing.T) {
+func TestCheckableElementTypesAreExactlyThree(t *testing.T) {
 	t.Parallel()
 
-	// specs/02-device-drivers.md line 49: "Checkable elementTypes: checkbox=12,
-	// switch=40, toggle=41." Anything else has no checked state at all, and
-	// reporting false for it would make `checked: false` match every button on
-	// screen.
+	// checkbox=12, switch=40, toggle=41. Anything else has no checked state at
+	// all, and reporting false for it would make `checked: false` match every
+	// button on screen. No spec in this tree names the codes -- an earlier
+	// comment here quoted one that is not in specs/02-device-drivers.md -- so
+	// checkableTypes and this test are the whole rule.
 	for elementType, wantCheckable := range map[int]bool{
 		12: true, 40: true, 41: true,
 		11: false, 39: false, 42: false, 0: false,

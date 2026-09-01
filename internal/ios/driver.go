@@ -35,13 +35,35 @@ import (
 // Platform is the device platform this driver reports.
 const Platform = device.Platform("ios")
 
-// checkableTypes are the XCUIElementTypes that have a checked state at all,
-// per specs/02-device-drivers.md line 49: checkbox=12, switch=40, toggle=41.
-// Every other type has no checked state, which is not the same as false.
+// checkableTypes are the XCUIElementTypes that have a checked state at all:
+// checkbox=12, switch=40, toggle=41. Every other type has no checked state,
+// which is not the same as false. No spec names these codes -- the driver
+// contract carries only the field (contracts/v0/driver.json, TreeNode.checked)
+// -- so this map is the whole rule.
 var checkableTypes = map[int]bool{12: true, 40: true, 41: true}
 
 func checkableElementType(elementType int) bool {
 	return checkableTypes[elementType]
+}
+
+// checkedFromValue reads a checkable element's state from its accessibility
+// value, and says whether the value spoke at all. Measured on iOS 26.2,
+// Settings > Accessibility > Motion: six switches answer "1" or "0" with
+// selected false throughout. Any other value belongs to something that is not
+// a state -- a slider's percentage, a field's text -- and leaves the trait in
+// charge.
+func checkedFromValue(value *string) (bool, bool) {
+	if value == nil {
+		return false, false
+	}
+	switch strings.ToLower(strings.TrimSpace(*value)) {
+	case "1", "true", "on":
+		return true, true
+	case "0", "false", "off":
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 // Driver drives one simulator.
@@ -363,6 +385,13 @@ func convertAXElement(element AXElement) device.TreeNode {
 	checked := false
 	if checkableElementType(element.ElementType) {
 		checked = element.Selected
+		// A switch answers with its accessibility VALUE and leaves the
+		// selected trait false, so the trait alone reports every iOS switch
+		// as off. The trait stays as the fallback: a checkbox that carries
+		// no value has nothing else to read.
+		if state, ok := checkedFromValue(element.Value); ok {
+			checked = state
+		}
 	}
 	node := device.TreeNode{
 		Attributes: attributes,
