@@ -99,3 +99,40 @@ func TestScreenWordsAnswersNothingForABareDigest(t *testing.T) {
 		t.Errorf("screenWords = %q", words)
 	}
 }
+
+// mmx69, live: four scenarios asked to reach "search-add-4d3ffed3" and all
+// four spent the whole eight-turn budget and gave up, on a screen the app
+// was almost certainly already showing -- every flow the session exported
+// carries that same key in its header.
+//
+// The digest covers the WHOLE tree, so a different day highlighted or a
+// different scroll offset renames the screen. Exact equality can therefore
+// only ever match a screen nothing has touched. The labels are what Reach
+// means by "looks like the named screen", so the labels decide.
+func TestScreenMatchesAcceptsAKeyWithTheSameLabels(t *testing.T) {
+	t.Parallel()
+
+	root := device.TreeNode{
+		Attributes: map[string]string{"class": "android.widget.FrameLayout", "bounds": "[0,0][402,874]"},
+		Children: []device.TreeNode{
+			{Attributes: map[string]string{"elementType": "9", "accessibilityText": "Search",
+				"bounds": "[0,0][200,60]"}},
+			{Attributes: map[string]string{"elementType": "9", "accessibilityText": "Add",
+				"bounds": "[200,0][402,60]"}},
+			// The month grid below the toolbar, which changes every day.
+			{Attributes: map[string]string{"elementType": "48", "text": "September 2026",
+				"bounds": "[0,60][402,120]"}},
+		},
+	}
+	state := makeState("app", root)
+	if key := state.Signature.Key(); key == "search-add-4d3ffed3" {
+		t.Fatalf("the fixture accidentally has the live digest %q", key)
+	}
+	if !screenMatches(state, "search-add-4d3ffed3") {
+		t.Errorf("screenMatches refused a screen whose labels are the key's: state key %q",
+			state.Signature.Key())
+	}
+	if screenMatches(state, "inbox-close-4d3ffed3") {
+		t.Error("a key with different labels matched")
+	}
+}

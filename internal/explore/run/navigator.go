@@ -316,14 +316,30 @@ func screenMatches(state *explore.ScreenState, key string) bool {
 	// while every navigator test used a plain word, so Reach would have spent
 	// its whole turn budget on a screen it was already standing on.
 	//
-	// Key() is a NAME, not an identity: it renders the salient labels and
-	// truncates the digest to eight characters, so two screens Same() calls
-	// different can share one. It is still the right check here, because it
-	// is the only key a scenario carries, and the cost of a false match is
-	// that the scenario starts where the relaunch left it -- what every
-	// scenario did before Reach was wired. Do not turn this into a prefix or
-	// suffix match on the digest; see internal/explore/CLAUDE.md.
+	// Key() is a NAME, not an identity, and here the name is what is wanted.
+	// Its digest covers the WHOLE tree, so a different day highlighted or a
+	// different scroll offset renames the screen, and exact equality can only
+	// match a screen nothing has touched. mmx69 measured what that costs:
+	// four scenarios asked to reach "search-add-4d3ffed3", all four spent the
+	// whole eight-turn budget and gave up, and every flow the session
+	// exported carries that same key in its header -- the app was on a search
+	// and add screen each time, with a different month under the toolbar.
+	//
+	// So the labels decide, which is what Reach means by "looks like the
+	// named screen". Two screens whose salient labels agree are the same
+	// screen to navigate to. The cost of a false match is a scenario that
+	// starts on a screen showing the same things, which is nearer than where
+	// the relaunch left it.
+	//
+	// This is a check, not a store key. Do NOT reuse it to look a recipe up:
+	// internal/explore/CLAUDE.md says why the store is named by the whole
+	// digest and why a prefix match there served one screen's recipe to
+	// another.
 	if strings.EqualFold(state.Signature.Key(), want) {
+		return true
+	}
+	if words := screenWords(want); words != "" &&
+		strings.EqualFold(words, screenWords(state.Signature.Key())) {
 		return true
 	}
 	for _, salient := range state.Signature.Salient {
