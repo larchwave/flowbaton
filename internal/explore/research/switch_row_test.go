@@ -42,6 +42,22 @@ func TestResearchTableNamesASwitchAndSaysHowItIsSet(t *testing.T) {
 			t.Errorf("the table does not carry %q:\n%s", want, table)
 		}
 	}
+	// The platform's own selection reaches the same cell.
+	sel := true
+	root.Children = append(root.Children, device.TreeNode{
+		Attributes: map[string]string{
+			"elementType": "9", "accessibilityText": "Today, Tuesday, September 1",
+			"bounds": "[36,600][96,644]"},
+		Selected: &sel,
+	})
+	elements, err = explore.FlattenScreen(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withDay := elementTable(elements); !strings.Contains(withDay, "| selected |") {
+		t.Errorf("the selected row is not marked:\n%s", withDay)
+	}
+
 	// A row with no checked state says nothing rather than claiming off.
 	for _, line := range strings.Split(table, "\n") {
 		if strings.Contains(line, "Back") && strings.Contains(line, "| off |") {

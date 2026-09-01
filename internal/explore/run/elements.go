@@ -97,16 +97,25 @@ func elementTable(state *explore.ScreenState) string {
 		}
 		if explore.IsTextInput(element.Node) {
 			builder.WriteString(" text-field")
-			if fieldContent(element.Node) == "" {
+			// The row names the field now, so what it holds has to be said
+			// here or nowhere. A secure field says only that it is one: its
+			// content is a secret by declaration and must not reach a prompt,
+			// a step log, or an artifact, the same rule the recorder keeps.
+			switch content := fieldContent(element.Node); {
+			case explore.IsSecureTextInput(element.Node):
+				builder.WriteString(" secure")
+			case content == "":
 				builder.WriteString(" empty")
+			default:
+				fmt.Fprintf(builder, " holding %q", explore.Truncate(content, 60))
 			}
 		}
 		if element.Node.Focused != nil && *element.Node.Focused {
 			builder.WriteString(" focused")
 		}
-		// Which way a switch is set is the whole point of a row that has one,
-		// and it is nowhere else on the screen.
-		if state, ok := explore.ControlState(element.Node); ok {
+		// Which way a switch is set, and which row the platform calls the
+		// selected one, are nowhere else on the screen.
+		if state := explore.RowState(element.Node); state != "" {
 			builder.WriteString(" " + state)
 		}
 		builder.WriteString("\n")

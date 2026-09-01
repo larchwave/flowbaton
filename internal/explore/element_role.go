@@ -122,35 +122,50 @@ func ElementRole(node device.TreeNode) string {
 // accessibilityText or title. A table that reads only the Android keys
 // shows every iOS row as "-", which left a live researcher with nothing
 // but geometry to name the screen's controls by.
-// ControlLabel names a row for a model-facing table. A switch is the reason
-// it is not ElementLabel: iOS answers one with its state in the value,
-// ElementLabel prefers text, and the row came out labelled "1" with the
-// control's name only on the row above it. Everything else keeps the label it
-// always had, and nothing matches on this -- selectors and exported flows go
-// on reading ElementLabel.
+// ControlLabel names a row for a model-facing table. iOS answers with an
+// element's accessibility VALUE in text and its NAME in accessibilityText,
+// and ElementLabel prefers text -- so a switch read "1" and the month strip of
+// a calendar read "No events" thirty-one times, one name between every day on
+// screen. Android puts a widget's name in text and has no such split, so no
+// Android row moves. Nothing matches on this: selectors, locators, and
+// exported flows go on reading ElementLabel.
 func ControlLabel(node device.TreeNode) string {
-	if IsCheckable(node) {
-		for _, key := range []string{"accessibilityText", "label", "name", "title"} {
-			if value := strings.TrimSpace(node.Attributes[key]); value != "" {
-				return value
-			}
+	if node.Attributes["elementType"] == "" {
+		return ElementLabel(node)
+	}
+	for _, key := range []string{"accessibilityText", "label", "name", "title"} {
+		// A whitespace-only name names nothing, and taking it would leave a
+		// row blank where it had a value to show.
+		if value := strings.TrimSpace(node.Attributes[key]); value != "" {
+			return value
 		}
 	}
 	return ElementLabel(node)
 }
 
-// ControlState answers how a row with an on/off state is set, and says
-// whether it has one at all. A row without one must say nothing: iOS reports
-// checked false for every element on screen, and marking those would call
-// every control a switch that is off.
-func ControlState(node device.TreeNode) (string, bool) {
-	if !IsCheckable(node) || node.Checked == nil {
-		return "", false
+// RowState says how a row is set, for a model-facing table: whether a control
+// with an on/off state is on, and whether the platform marks this row as the
+// selected one. Empty for a row with neither, which is nearly all of them --
+// iOS reports checked and selected false for every element on screen, and
+// marking those would call every button an unselected switch.
+//
+// The selected mark carries the calendar's own day: of the 125 nodes of a
+// Calendar day view captured on iOS 26.2, exactly one is flagged, and two
+// sessions filed a defect whose evidence was that no fact said which day the
+// screen was showing.
+func RowState(node device.TreeNode) string {
+	marks := make([]string, 0, 2)
+	if IsCheckable(node) && node.Checked != nil {
+		if *node.Checked {
+			marks = append(marks, "on")
+		} else {
+			marks = append(marks, "off")
+		}
 	}
-	if *node.Checked {
-		return "on", true
+	if node.Selected != nil && *node.Selected {
+		marks = append(marks, "selected")
 	}
-	return "off", true
+	return strings.Join(marks, " ")
 }
 
 func ElementLabel(node device.TreeNode) string {

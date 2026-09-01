@@ -61,7 +61,7 @@ func elementTable(elements []explore.FlatElement) string {
 		if parsed, ok := explore.ElementBounds(element.Node); ok {
 			bounds = hierarchy.FormatBounds(parsed)
 		}
-		state, _ := explore.ControlState(element.Node)
+		state := explore.RowState(element.Node)
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s | %s |\n",
 			element.EIDX,
 			tableCell(nodeRole(element.Node)),
