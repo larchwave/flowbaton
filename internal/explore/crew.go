@@ -259,9 +259,20 @@ func finishReport(report *SessionReport, config Config) *SessionReport {
 // Every unmet outcome counts, not only the ones a judge called inapplicable.
 // That narrower feed never fired once, which left the planner free to rebuild
 // a scenario around the same missing thing every round.
+//
+// "Looked for and did not find" is a claim about a run that ran, and two
+// kinds of result cannot support it while arriving with Met false like any
+// other. A run that stopped never finished its work: mmx69 passed a scenario
+// whose eighteen device calls all failed against a dead runner, and banning
+// what that run "did not find" would take the next plan's subject away on no
+// evidence. An unjudged outcome is the same mistake one level down -- an
+// undecidable, a model failure, an unreadable reply -- where nobody looked.
 func collectUnmet(known []string, result TestResult) []string {
+	if result.Status == TestStopped {
+		return known
+	}
 	for _, check := range result.Outcomes {
-		if check.Met || check.Driver {
+		if check.Met || check.Driver || check.Missed == MissUnjudged {
 			continue
 		}
 		if slices.Contains(known, check.Expected) {

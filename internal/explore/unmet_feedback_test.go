@@ -57,3 +57,46 @@ func TestAnUnmetOutcomeReachesTheNextPlanner(t *testing.T) {
 		t.Fatalf("Unmet = %v, want no driver probe; those are the run's evidence", got)
 	}
 }
+
+// "Looked for and did not find" is a claim about a run that ran. Two kinds
+// of result cannot support it, and both arrive with Met false like any other:
+// an outcome the judge never reached a verdict on -- an undecidable, a model
+// failure, an unreadable reply -- and every outcome of a run that stopped
+// before it finished its work. mmx69 passed a scenario whose eighteen device
+// calls all failed against a dead runner; banning what that run "did not
+// find" would take the next plan's subject away on no evidence at all.
+func TestAnUnjudgedOrStoppedRunBansNothing(t *testing.T) {
+	t.Parallel()
+
+	expectation := "The screen displays a day view"
+	unjudged := TestResult{
+		Status: TestFailed,
+		Outcomes: []OutcomeCheck{
+			{Expected: expectation, Met: false, Missed: MissUnjudged},
+		},
+	}
+	if got := collectUnmet(nil, unjudged); len(got) != 0 {
+		t.Fatalf("Unmet = %v, want nothing from an outcome nobody judged", got)
+	}
+
+	stopped := TestResult{
+		Status: TestStopped,
+		Outcomes: []OutcomeCheck{
+			{Expected: expectation, Met: false},
+		},
+	}
+	if got := collectUnmet(nil, stopped); len(got) != 0 {
+		t.Fatalf("Unmet = %v, want nothing from a run that never finished", got)
+	}
+
+	// The case the feed exists for still passes through.
+	ran := TestResult{
+		Status: TestFailed,
+		Outcomes: []OutcomeCheck{
+			{Expected: expectation, Met: false},
+		},
+	}
+	if got := collectUnmet(nil, ran); len(got) != 1 || got[0] != expectation {
+		t.Fatalf("Unmet = %v, want the outcome a finished run did not find", got)
+	}
+}
