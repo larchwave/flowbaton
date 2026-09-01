@@ -133,6 +133,11 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 				switch {
 				case reachErr == nil:
 					state, walk = reached, reachSteps
+					// A reach that works leaves no trace otherwise, and two
+					// sessions of "no failed reach" then read as proof of a
+					// navigator that may never have been asked.
+					reachNote = fmt.Sprintf(
+						"walked to the start screen %q in %d steps", key, len(reachSteps))
 				case ctx.Err() != nil:
 					return finishReport(report, config), ctx.Err()
 				default:

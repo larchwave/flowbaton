@@ -2,6 +2,7 @@ package explore
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -75,5 +76,36 @@ func TestNoWalkIsRecordedWhenTheScenarioAlreadyStandsThere(t *testing.T) {
 	}
 	if walk := report.Results[0].Prelude; len(walk) != 0 {
 		t.Fatalf("prelude = %+v, want nothing to prepend", walk)
+	}
+}
+
+// Two sessions in a row reported no failed reach, which reads as "the
+// navigator works" and could equally mean "no scenario ever asked". A reach
+// that succeeds has to say so, or its absence proves nothing.
+func TestASuccessfulWalkIsOnTheRecord(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCrew{
+		state:      &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		reachSteps: []StepRecord{{Index: 1, Status: StepOK}},
+		plans: [][]Scenario{
+			{{Name: "a", Priority: PriorityNormal, StartScreen: "elsewhere-12345678"}},
+		},
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	report, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 1, Styles: []string{"normal"},
+		Clock: func() time.Time { return clock },
+	}, crew)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notes := strings.Join(report.Results[0].Notes, "\n")
+	if !strings.Contains(notes, "elsewhere-12345678") {
+		t.Fatalf("notes = %q, want the start screen the navigator walked to", notes)
 	}
 }
