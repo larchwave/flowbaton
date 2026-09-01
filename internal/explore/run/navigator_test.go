@@ -97,7 +97,10 @@ func TestReachRunsToolLoopAndRecordsTheRecipe(t *testing.T) {
 	if len(store.recorded) != 1 || store.recorded[0].Title != "reach settings" {
 		t.Fatalf("recorded %+v", store.recorded)
 	}
-	if !strings.Contains(store.recorded[0].Body, `tap {"eidx":0}`) {
+	// The model tapped e0 and the recipe names the element instead: an
+	// index means something only on the screen it was read from, and the
+	// same line has to be able to become "tapOn:" in an exported flow.
+	if !strings.Contains(store.recorded[0].Body, `tap {"id":"open_button"}`) {
 		t.Fatalf("recipe body %q", store.recorded[0].Body)
 	}
 }

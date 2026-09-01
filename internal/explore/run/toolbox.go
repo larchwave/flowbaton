@@ -239,7 +239,7 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	}
 	s.steps = append(s.steps, step)
 	if step.Status != explore.StepFailed && s.record {
-		s.recording = append(s.recording, recordLine(tool, args))
+		s.recording = append(s.recording, recordLine(tool, args, action))
 	}
 	switch step.Status {
 	case explore.StepFailed:
@@ -264,7 +264,45 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 	}
 }
 
-func recordLine(tool string, args json.RawMessage) string {
+// recordLine renders one executed step for a stored recipe. A target is
+// written as the selector the toolbox resolved, not as the index the model
+// sent: an index means something only on the screen it was read from, and a
+// recipe has two readers -- the replay, which is looked up on an exact
+// digest match and so would survive an index, and an exported flow, which
+// needs "tapOn: General" and can never be built from "eidx":3.
+//
+// The locator is the exporter's own: an id first, then the row's name
+// regex-quoted, and a point or a path when neither answers. The tap tool
+// reads text as a regex through the same matcher, so the quoted value means
+// itself. A point or path locator has no selector form and keeps the
+// arguments the model sent, as does every screen-level action.
+// targetArguments renders a locator as tap-tool arguments, or empty when the
+// locator names a place rather than an element.
+func targetArguments(target *explore.Locator) string {
+	if target == nil {
+		return ""
+	}
+	switch target.Kind {
+	case explore.LocatorID:
+		encoded, err := json.Marshal(map[string]string{"id": target.Value})
+		if err != nil {
+			return ""
+		}
+		return string(encoded)
+	case explore.LocatorText:
+		encoded, err := json.Marshal(map[string]string{"text": target.Value})
+		if err != nil {
+			return ""
+		}
+		return string(encoded)
+	}
+	return ""
+}
+
+func recordLine(tool string, args json.RawMessage, action explore.Action) string {
+	if selector := targetArguments(action.Target); selector != "" {
+		return tool + " " + selector
+	}
 	compact := &bytes.Buffer{}
 	if len(args) == 0 || json.Compact(compact, args) != nil {
 		return tool + " {}"
