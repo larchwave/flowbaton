@@ -260,6 +260,15 @@ func screenMatches(state *explore.ScreenState, key string) bool {
 	if want == "" {
 		return false
 	}
+	// A key from a signature carries a digest the salient labels never spell
+	// out, so the substring pass below can never match one:
+	// "search-add-4d3ffed3" is not inside "Search". That is the only key
+	// shape the crew has for a scenario -- Scenario.StartScreen is a Key() --
+	// while every navigator test used a plain word, so Reach would have spent
+	// its whole turn budget on a screen it was already standing on.
+	if strings.EqualFold(state.Signature.Key(), want) {
+		return true
+	}
 	for _, salient := range state.Signature.Salient {
 		if strings.Contains(strings.ToLower(salient), want) {
 			return true

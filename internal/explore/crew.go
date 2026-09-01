@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Crew bundles the role implementations for one exploration session.
@@ -116,8 +117,41 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 				break
 			}
 			planned = append(planned, scenario.Name)
+			// The planner wrote this scenario against the UI map of one
+			// screen and recorded that screen's key. The relaunch above
+			// cannot put the app back on it: it kills and relaunches, and
+			// an app that restores its last view relaunches on that view.
+			// Nine of thirty-four replayed flows failed on their first
+			// action for that reason -- six of them on 2026-09-01 were
+			// Calendar, restored into its years view, where not one
+			// recorded start screen exists.
+			//
+			// Reach is skipped for a scenario already standing on its
+			// screen, which is the common case and costs nothing.
+			reachNote := ""
+			if key := scenario.StartScreen; key != "" && state != nil &&
+				!strings.EqualFold(state.Signature.Key(), key) {
+				reached, reachErr := crew.Navigator.Reach(ctx, key)
+				switch {
+				case reachErr == nil:
+					state = reached
+				case ctx.Err() != nil:
+					return finishReport(report, config), ctx.Err()
+				default:
+					// Not a failed session. The scenario runs from wherever
+					// the relaunch left the app, which is what every
+					// scenario did before Reach was wired, and the note is
+					// what tells the report's reader why it began somewhere
+					// else.
+					reachNote = fmt.Sprintf(
+						"could not reach the start screen %q: %v", key, reachErr)
+				}
+			}
 			result, err := crew.Tester.RunScenario(ctx, scenario, state)
 			if result != nil {
+				if reachNote != "" {
+					result.Notes = append(result.Notes, reachNote)
+				}
 				if err != nil && result.Verdict == "" {
 					// "run stopped before a verdict" is also what a spent step
 					// budget says. A reader of the report has to be able to

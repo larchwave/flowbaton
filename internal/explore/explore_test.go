@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -123,6 +124,10 @@ type fakeCrew struct {
 	readyCalls  int
 	// starts records the state each scenario was handed.
 	starts []*ScreenState
+	// reached records the key of every Reach call.
+	reached      []string
+	reachedState *ScreenState
+	reachErr     error
 }
 
 func (f *fakeCrew) Observe(context.Context) (*ScreenState, error) { return f.state, nil }
@@ -151,7 +156,14 @@ func (f *fakeCrew) EnsureReady(context.Context) (*ScreenState, error) {
 	f.readyCalls++
 	return f.state, nil
 }
-func (f *fakeCrew) Reach(context.Context, string) (*ScreenState, error) {
+func (f *fakeCrew) Reach(_ context.Context, key string) (*ScreenState, error) {
+	f.reached = append(f.reached, key)
+	if f.reachErr != nil {
+		return nil, f.reachErr
+	}
+	if f.reachedState != nil {
+		return f.reachedState, nil
+	}
 	return f.state, nil
 }
 func (f *fakeCrew) Report(_ context.Context, r *SessionReport) (string, error) {
@@ -375,5 +387,75 @@ func TestRunSessionStartsEveryScenarioFromARelaunch(t *testing.T) {
 	// already done and whose flows are already exportable.
 	if fake.readyCalls != 2 {
 		t.Fatalf("EnsureReady ran %d times, want one per scenario start and none after the last", fake.readyCalls)
+	}
+}
+
+// The planner writes a scenario against the UI map of one screen and records
+// that screen's key. EnsureReady cannot put the app back on it: it kills and
+// relaunches, and an app that restores its last view relaunches on that
+// view. Nine of thirty-four replayed flows failed on their first action for
+// that reason -- on 2026-09-01 six of them were Calendar, which had restored
+// into its years view where not one recorded start screen exists.
+//
+// Reach is what navigates, and it was implemented, documented and never
+// called. It is called now, and only when the relaunch landed somewhere
+// else: a scenario already on its screen costs nothing.
+func TestRunSessionReachesTheScenarioStartScreen(t *testing.T) {
+	here := &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "here"}}
+	there := &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "there"}}
+	fake := &fakeCrew{
+		state:        here,
+		reachedState: there,
+		plans: [][]Scenario{{
+			{Name: "away", Priority: PriorityNormal, StartScreen: there.Signature.Key()},
+			{Name: "home", Priority: PriorityNormal, StartScreen: here.Signature.Key()},
+		}},
+	}
+	crew := Crew{Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	if _, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 2, Clock: func() time.Time { return clock },
+	}, crew); err != nil {
+		t.Fatalf("session: %v", err)
+	}
+	if want := []string{there.Signature.Key()}; !slices.Equal(fake.reached, want) {
+		t.Fatalf("reached = %q, want only the scenario whose screen differs", fake.reached)
+	}
+	if len(fake.starts) != 2 || fake.starts[0] != there {
+		t.Errorf("the first scenario began on %+v, want the reached screen", fake.starts[0])
+	}
+}
+
+// A reach that fails must not fail the session: the scenario runs from
+// wherever the relaunch left the app, which is what it did before Reach was
+// wired at all. The note is what tells the report's reader why it began
+// somewhere else.
+func TestRunSessionNotesAFailedReachAndRunsAnyway(t *testing.T) {
+	here := &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "here"}}
+	fake := &fakeCrew{
+		state:    here,
+		reachErr: errors.New("no recipe worked"),
+		plans: [][]Scenario{{
+			{Name: "away", Priority: PriorityNormal, StartScreen: "somewhere-else-00000000"},
+		}},
+	}
+	crew := Crew{Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	report, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 1, Clock: func() time.Time { return clock },
+	}, crew)
+	if err != nil {
+		t.Fatalf("a failed reach ended the session: %v", err)
+	}
+	if len(fake.ran) != 1 {
+		t.Fatalf("scenarios run = %v, want the scenario to run anyway", fake.ran)
+	}
+	if len(report.Results) != 1 || len(report.Results[0].Notes) == 0 {
+		t.Fatalf("no note records the failed reach: %+v", report.Results)
+	}
+	if !strings.Contains(report.Results[0].Notes[0], "no recipe worked") {
+		t.Errorf("note = %q, want the reach error in it", report.Results[0].Notes[0])
 	}
 }
