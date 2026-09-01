@@ -302,6 +302,33 @@ func labelCount(state *explore.ScreenState, label string) int {
 	return count
 }
 
+// tapPoint returns where to tap an element, or a miss when the point is not
+// on the screen. hierarchy.VisibleCenter clips to the viewport, but an
+// element that does not touch the viewport at all falls back to its own
+// geometric centre, which is off the device: session mmx59 tapped 372,-51
+// twice, both taps hit nothing, the scenario passed anyway, and the flow it
+// exported cannot run -- the engine refuses a negative point outright.
+//
+// A tap that cannot land is a miss the tester can answer, by scrolling to
+// the element and observing again. A viewport of no size means nobody
+// measured, so only the coordinates themselves are judged there.
+func tapPoint(bounds, viewport device.Bounds, describe string) (device.Point, error) {
+	point := hierarchy.VisibleCenter(bounds, viewport)
+	offScreen := point.X < 0 || point.Y < 0
+	if viewport.Width > 0 && viewport.Height > 0 {
+		left, top := float64(viewport.X), float64(viewport.Y)
+		offScreen = offScreen ||
+			point.X < left || point.X >= left+float64(viewport.Width) ||
+			point.Y < top || point.Y >= top+float64(viewport.Height)
+	}
+	if offScreen {
+		return device.Point{}, explore.TargetMissError{
+			Reason: fmt.Sprintf("%s is off the screen; scroll to it and observe again", describe),
+		}
+	}
+	return point, nil
+}
+
 // resolvePoint finds the tap point for a target in the current observation.
 func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, error) {
 	modes := 0
@@ -328,7 +355,7 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 					Reason: fmt.Sprintf("element e%d has no usable bounds", *args.EIDX),
 				}
 			}
-			return hierarchy.VisibleCenter(bounds, state.Viewport), nil
+			return tapPoint(bounds, state.Viewport, fmt.Sprintf("element e%d", *args.EIDX))
 		}
 		return device.Point{}, explore.TargetMissError{
 			Reason: fmt.Sprintf("no element e%d in the newest element table; call observe", *args.EIDX),
@@ -352,7 +379,7 @@ func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, er
 	}
 	for _, candidate := range found {
 		if candidate.HasBounds {
-			return hierarchy.VisibleCenter(candidate.Bounds, state.Viewport), nil
+			return tapPoint(candidate.Bounds, state.Viewport, args.describe())
 		}
 	}
 	return device.Point{}, explore.TargetMissError{
