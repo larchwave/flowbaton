@@ -90,3 +90,24 @@ func TestElementTableLeavesAndroidRowsAlone(t *testing.T) {
 		t.Errorf("an android row was renamed:\n%s", table)
 	}
 }
+
+// The driver's own check reaches the judge as a fact, and its evidence names
+// the element it matched. Naming it by its value put "No events" in a line
+// meant to say which day was checked.
+func TestCheckVisibleEvidenceNamesTheRow(t *testing.T) {
+	t.Parallel()
+
+	day := iosNode(map[string]string{
+		"elementType": "9", "accessibilityText": "Tuesday, September 1", "text": "3 events"})
+	session, _ := inputSession(t, screen("September", day))
+	reply, err := session.handleCheckVisible(t.Context(), []byte(`{"eidx":0}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(reply, "Tuesday, September 1") {
+		t.Errorf("the check does not name the row: %s", reply)
+	}
+	if strings.Contains(reply, "3 events") {
+		t.Errorf("the check names the row by its value: %s", reply)
+	}
+}

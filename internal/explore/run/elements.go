@@ -25,6 +25,11 @@ const elementTableHeading = "elements on screen"
 const maxTableRows = 60
 
 // elementLabel returns the human-visible label of a node.
+// elementLabel is the label the SIGNATURE reads, and its one caller is
+// navigator.screenMatches, which reads an element against a screen key. That
+// key is built from signatureLabel, which prefers text the same way, so the
+// two must move together -- a sweep that "unifies" this with
+// explore.ControlLabel breaks the pairing.
 func elementLabel(node device.TreeNode) string {
 	return explore.ElementLabel(node)
 }

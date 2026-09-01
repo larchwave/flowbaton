@@ -564,7 +564,7 @@ func (s *toolSession) handleCheckVisible(ctx context.Context, args json.RawMessa
 		check.Evidence = "no matching element in the current tree"
 	default:
 		check.Met = true
-		check.Evidence = fmt.Sprintf("matched %d element(s), first: %q", len(found), elementLabel(found[0].Node))
+		check.Evidence = fmt.Sprintf("matched %d element(s), first: %q", len(found), explore.ControlLabel(found[0].Node))
 	}
 	return s.recordCheck(check), nil
 }
@@ -603,10 +603,13 @@ func (s *toolSession) checksOnFinalScreen() []explore.OutcomeCheck {
 	return current
 }
 
+// elementByIndex names the row an eidx points at, for a line the model and
+// the judge read. It is the row's NAME, the same string the element table
+// shows, never the value iOS answers with.
 func elementByIndex(state *explore.ScreenState, eidx int) (string, bool) {
 	for _, element := range state.Elements {
 		if element.EIDX == eidx {
-			return elementLabel(element.Node), true
+			return explore.ControlLabel(element.Node), true
 		}
 	}
 	return "", false
