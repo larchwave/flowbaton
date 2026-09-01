@@ -79,6 +79,18 @@ type workerVerdict struct {
 // the run. Those results are facts the driver measured, not claims the
 // tester made, so the judge gets them next to the table. Any model failure
 // counts as not met.
+// judgeSystemRule keeps a judge on the screen it was given. The strictness
+// is the point -- a wrong value must never pass -- but mmx74 filed a High
+// defect against an outcome its own evidence found: it wanted "Tuesday,
+// September 1" and the composer said "Sep 1, 2026", which is the same date
+// wearing the app's format. One date, one time, one number written two ways
+// is one value; a different value stays a different value.
+const judgeSystemRule = "You judge test outcomes strictly from the screen content and " +
+	"the driver checks given to you. An outcome that names a specific value or text is met " +
+	"only when that value or text is on the screen; a different value is not met. A date, a " +
+	"time, a number or an amount written in another format is the same value, not a different " +
+	"one: judge what it means, not how the app spells it."
+
 func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, facts judgeFacts) explore.OutcomeCheck {
 	check := explore.OutcomeCheck{Expected: expected}
 	if llm == nil {
@@ -105,7 +117,7 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 		sessionTagLine(facts.SessionTag))
 	verdict := workerVerdict{}
 	_, err := explore.ChatJSON(ctx, llm, explore.ChatRequest{Messages: []explore.Message{
-		{Role: explore.RoleSystem, Text: "You judge test outcomes strictly from the screen content and the driver checks given to you. An outcome that names a specific value or text is met only when exactly that value or text is on the screen; a different value is not met."},
+		{Role: explore.RoleSystem, Text: judgeSystemRule},
 		{Role: explore.RoleUser, Text: prompt},
 	}}, &verdict)
 	if err != nil {
