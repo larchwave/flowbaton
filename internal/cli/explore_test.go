@@ -87,8 +87,10 @@ func (f *exploreCrewFake) EnsureReady(context.Context) (*explore.ScreenState, er
 	return f.state, nil
 }
 
-func (f *exploreCrewFake) Reach(context.Context, string) (*explore.ScreenState, error) {
-	return f.state, nil
+func (f *exploreCrewFake) Reach(
+	context.Context, string,
+) (*explore.ScreenState, []explore.StepRecord, error) {
+	return f.state, nil, nil
 }
 
 func (f *exploreCrewFake) Report(context.Context, *explore.SessionReport) (string, error) {

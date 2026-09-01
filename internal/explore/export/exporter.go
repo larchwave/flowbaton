@@ -58,14 +58,59 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 	// three sessions on the simulator, two of thirteen failed on their first
 	// action -- one taps text an earlier scenario had typed, the other a
 	// toolbar button that exists only in the day view. Naming the screen
-	// turns "element not found" into a starting point the reader can set up.
-	if screen := strings.TrimSpace(result.Scenario.StartScreen); screen != "" {
+	// turns "element not found" into a starting point. Walking to it, when
+	// the navigator recorded a walk, turns it into a flow that runs.
+	//
+	// The refusal below is what a launch-only flow earns: it asserts nothing
+	// and passes on replay whatever the app does, which is a green that
+	// means nothing on the same tally as a flow that tests something. Six of
+	// seventy exported flows were launch-only, three of them from mmx69,
+	// where one came from a scenario whose every device call failed against
+	// a dead runner and was called passed anyway.
+	commands := []*yaml.Node{launch}
+	// The walk to the start screen belongs to the flow, not to a comment
+	// asking the reader to perform it: the navigator already made it on the
+	// device, and its steps replay the same way the run's own do.
+	walk, err := stepCommands(result.Prelude, nil)
+	if err != nil {
+		return nil, err
+	}
+	commands = append(commands, walk...)
+	if screen := strings.TrimSpace(result.Scenario.StartScreen); screen != "" && len(walk) == 0 {
 		launch.HeadComment = fmt.Sprintf(
 			"recorded on screen %s; launchApp does not navigate there", screen)
 	}
-	commands := []*yaml.Node{launch}
-	secrets := 0
-	for _, step := range result.Steps {
+	// Only the run's own actions answer whether the flow tests anything.
+	// A walk is setup, and a flow that is all setup is the launch-only case
+	// wearing more lines.
+	own, err := stepCommands(result.Steps, &secretCounter{})
+	if err != nil {
+		return nil, err
+	}
+	if len(own) == 0 {
+		return nil, errors.New("export: the run has no action to replay, only a launch")
+	}
+	commands = append(commands, own...)
+	data, err := encodeFlow(appID, result.Scenario.Name, commands)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := flow.ParseBytes("exported-flow.yaml", data); err != nil {
+		return nil, fmt.Errorf("export: emitted flow failed validation: %w", err)
+	}
+	return data, nil
+}
+
+// secretCounter numbers the environment placeholders one export writes. A nil
+// counter refuses to mask, which is what the walk needs: a navigator recipe
+// that typed a secret is never recorded in the first place.
+type secretCounter struct{ n int }
+
+// stepCommands maps steps onto flow commands, skipping the ones that carry
+// nothing to replay.
+func stepCommands(steps []explore.StepRecord, secrets *secretCounter) ([]*yaml.Node, error) {
+	var commands []*yaml.Node
+	for _, step := range steps {
 		// A masked input holds no replayable text. Export it as an env
 		// placeholder so the flow stays runnable once the operator
 		// supplies the secret, instead of typing a literal mask. The
@@ -73,8 +118,11 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 		// (specs/01 reserved environment), and the SECRET fragment is
 		// what the engine's inputText guard and artifact masking key on.
 		if step.Action.Kind == explore.ActionInput && step.Action.Masked {
-			secrets++
-			step.Action.Text = fmt.Sprintf("${FLOWBATON_EXPLORE_SECRET_%d}", secrets)
+			if secrets == nil {
+				return nil, fmt.Errorf("export: step %d: a masked input has no place in a walk", step.Index)
+			}
+			secrets.n++
+			step.Action.Text = fmt.Sprintf("${FLOWBATON_EXPLORE_SECRET_%d}", secrets.n)
 		}
 		node, err := commandNode(step)
 		if err != nil {
@@ -84,25 +132,7 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 			commands = append(commands, node)
 		}
 	}
-	// A flow that only launches the app asserts nothing and passes on
-	// replay whatever the app does, so it is a green that means nothing on
-	// the same tally as a flow that tests something. Six of seventy
-	// exported flows were launch-only, three of them from mmx69, where one
-	// came from a scenario whose every device call failed against a dead
-	// runner and was called passed anyway. The verdict is a separate
-	// question; a flow with no action is one this can refuse to write, and
-	// the caller prints the refusal and moves on.
-	if len(commands) == 1 {
-		return nil, fmt.Errorf("export: the run has no action to replay, only a launch")
-	}
-	data, err := encodeFlow(appID, result.Scenario.Name, commands)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := flow.ParseBytes("exported-flow.yaml", data); err != nil {
-		return nil, fmt.Errorf("export: emitted flow failed validation: %w", err)
-	}
-	return data, nil
+	return commands, nil
 }
 
 // commandNode maps one step onto a flow command. A nil node without error

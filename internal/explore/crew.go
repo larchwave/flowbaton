@@ -126,12 +126,13 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			// Reach is skipped for a scenario already standing on its
 			// screen, which is the common case and costs nothing.
 			reachNote := ""
+			var walk []StepRecord
 			if key := scenario.StartScreen; key != "" && state != nil &&
 				!state.Signature.NamesTheSameScreen(key) {
-				reached, reachErr := crew.Navigator.Reach(ctx, key)
+				reached, reachSteps, reachErr := crew.Navigator.Reach(ctx, key)
 				switch {
 				case reachErr == nil:
-					state = reached
+					state, walk = reached, reachSteps
 				case ctx.Err() != nil:
 					return finishReport(report, config), ctx.Err()
 				default:
@@ -146,6 +147,7 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 			}
 			result, err := crew.Tester.RunScenario(ctx, scenario, state)
 			if result != nil {
+				result.Prelude = walk
 				if reachNote != "" {
 					result.Notes = append(result.Notes, reachNote)
 				}

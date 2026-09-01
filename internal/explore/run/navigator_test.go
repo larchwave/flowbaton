@@ -64,7 +64,7 @@ func TestReachReplaysStoredRecipeWithoutModelTurns(t *testing.T) {
 	}}
 	worker := &scriptedLLM{}
 	navigator := newNavigator(driver, observer, worker, store)
-	state, err := navigator.Reach(context.Background(), "settings")
+	state, _, err := navigator.Reach(context.Background(), "settings")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestReachRunsToolLoopAndRecordsTheRecipe(t *testing.T) {
 	store := &fakeStore{entries: map[string]map[string]string{}}
 	worker := &scriptedLLM{replies: []explore.Message{toolCall("1", "tap", `{"eidx":0}`)}}
 	navigator := newNavigator(driver, observer, worker, store)
-	state, err := navigator.Reach(context.Background(), "settings")
+	state, _, err := navigator.Reach(context.Background(), "settings")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestReachReturnsTypedErrorWhenTheLoopRunsOut(t *testing.T) {
 	}
 	worker := &scriptedLLM{replies: replies}
 	navigator := newNavigator(driver, observer, worker, nil)
-	state, err := navigator.Reach(context.Background(), "nowhere")
+	state, _, err := navigator.Reach(context.Background(), "nowhere")
 	if state != nil {
 		t.Fatalf("state %+v on failure", state)
 	}
@@ -135,7 +135,7 @@ func TestReachStopsOnCancellationMidLoop(t *testing.T) {
 		onCall:  func(int) { cancel() },
 	}
 	navigator := newNavigator(driver, observer, worker, nil)
-	if _, err := navigator.Reach(ctx, "nowhere"); !errors.Is(err, context.Canceled) {
+	if _, _, err := navigator.Reach(ctx, "nowhere"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err %v", err)
 	}
 }

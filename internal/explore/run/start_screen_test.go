@@ -73,7 +73,7 @@ func TestReachTellsTheModelWhatTheScreenLooksLike(t *testing.T) {
 		toolCall("1", "finish", `{"status":"passed","summary":"done"}`),
 	}}
 	navigator := newNavigator(driver, observer, worker, nil)
-	_, _ = navigator.Reach(context.Background(), "settings-apple-account-c6c0dfad")
+	_, _, _ = navigator.Reach(context.Background(), "settings-apple-account-c6c0dfad")
 
 	if len(worker.requests) == 0 {
 		t.Fatal("the worker was never asked")

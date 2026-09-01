@@ -130,6 +130,7 @@ type fakeCrew struct {
 	// reached records the key of every Reach call.
 	reached      []string
 	reachedState *ScreenState
+	reachSteps   []StepRecord
 	reachErr     error
 }
 
@@ -162,15 +163,15 @@ func (f *fakeCrew) EnsureReady(context.Context) (*ScreenState, error) {
 	f.readyCalls++
 	return f.state, nil
 }
-func (f *fakeCrew) Reach(_ context.Context, key string) (*ScreenState, error) {
+func (f *fakeCrew) Reach(_ context.Context, key string) (*ScreenState, []StepRecord, error) {
 	f.reached = append(f.reached, key)
 	if f.reachErr != nil {
-		return nil, f.reachErr
+		return nil, nil, f.reachErr
 	}
 	if f.reachedState != nil {
-		return f.reachedState, nil
+		return f.reachedState, f.reachSteps, nil
 	}
-	return f.state, nil
+	return f.state, f.reachSteps, nil
 }
 func (f *fakeCrew) Report(_ context.Context, r *SessionReport) (string, error) {
 	if f.reportFail {

@@ -37,7 +37,7 @@ func TestReachDoesNotRepeatAFailureFromTheSameScreen(t *testing.T) {
 	worker := &scriptedLLM{replies: replies}
 	navigator := newNavigator(driver, observer, worker, nil)
 
-	if _, err := navigator.Reach(context.Background(), "settings"); err == nil {
+	if _, _, err := navigator.Reach(context.Background(), "settings"); err == nil {
 		t.Fatal("the first reach succeeded; the fixture cannot arrive")
 	}
 	spent := len(worker.requests)
@@ -45,7 +45,7 @@ func TestReachDoesNotRepeatAFailureFromTheSameScreen(t *testing.T) {
 		t.Fatal("the first reach spent no model turns")
 	}
 
-	_, err := navigator.Reach(context.Background(), "settings")
+	_, _, err := navigator.Reach(context.Background(), "settings")
 	if err == nil {
 		t.Fatal("the second reach succeeded")
 	}

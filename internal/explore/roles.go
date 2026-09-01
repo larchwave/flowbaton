@@ -50,8 +50,11 @@ type Navigator interface {
 	// EnsureReady prepares the app for exploration from any state.
 	EnsureReady(ctx context.Context) (*ScreenState, error)
 	// Reach tries to bring the app to the screen named by key,
-	// using learned recipes first.
-	Reach(ctx context.Context, key string) (*ScreenState, error)
+	// using learned recipes first. The steps it took come back with the
+	// screen: they are the prefix an exported flow needs to replay from
+	// the same place, and only the caller of Reach knows the run they
+	// belong to.
+	Reach(ctx context.Context, key string) (*ScreenState, []StepRecord, error)
 }
 
 // Analyst renders a session report: findings clustered by root cause,

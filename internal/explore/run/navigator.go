@@ -114,20 +114,23 @@ func (n *Navigator) EnsureReady(ctx context.Context) (*explore.ScreenState, erro
 // Reach brings the app to the screen named by key: a stored recipe is
 // replayed first, then a small bounded tool loop on the worker model. A
 // successful model-driven path is recorded back into the store.
-func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState, error) {
+func (n *Navigator) Reach(
+	ctx context.Context, key string,
+) (*explore.ScreenState, []explore.StepRecord, error) {
 	if strings.TrimSpace(key) == "" {
-		return nil, &ReachError{Key: key, Reason: "empty screen key"}
+		return nil, nil, &ReachError{Key: key, Reason: "empty screen key"}
 	}
 	state, err := n.EnsureReady(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if screenMatches(state, key) {
-		return state, nil
+		// Already there, so there is nothing to walk and nothing to prepend.
+		return state, nil, nil
 	}
 	session, err := newToolSession(n.deps(), state)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	session.record = true
 	box := session.box()
@@ -136,17 +139,17 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 	// model turns, which is the thing being rationed here.
 	if body, ok := n.recipe(ctx, origin, key); ok {
 		if session.replay(ctx, box, body) && screenMatches(session.current, key) {
-			return session.current, nil
+			return session.current, session.steps, nil
 		}
 	}
 	// Only this route is refused. Another origin is another way there.
 	route := origin.Key() + " -> " + key
 	if n.unreachable[route] {
-		return nil, &ReachError{Key: key,
+		return nil, nil, &ReachError{Key: key,
 			Reason: "the worker did not reach it from this screen earlier in this session"}
 	}
 	if n.Worker == nil {
-		return nil, &ReachError{Key: key, Reason: "no recipe worked and no worker model is configured"}
+		return nil, nil, &ReachError{Key: key, Reason: "no recipe worked and no worker model is configured"}
 	}
 	conversation := []explore.Message{
 		{Role: explore.RoleSystem, Text: "You steer a mobile app to a named screen using only the given tools. " +
@@ -158,7 +161,7 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 		loop, loopErr := explore.RunToolLoop(ctx, n.Worker, conversation, box, 1)
 		conversation = pruneElementTables(loop.Messages)
 		if loopErr != nil {
-			return nil, fmt.Errorf("explore/run: reach %q: %w", key, loopErr)
+			return nil, nil, fmt.Errorf("explore/run: reach %q: %w", key, loopErr)
 		}
 		if screenMatches(session.current, key) {
 			// A recording that masked a secret is not worth keeping: its
@@ -169,11 +172,11 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 				// not fail a reach that succeeded on the device.
 				_ = n.Experience.Record(ctx, origin, entry)
 			}
-			return session.current, nil
+			return session.current, session.steps, nil
 		}
 		if loop.Stopped {
 			n.rememberUnreachable(route)
-			return nil, &ReachError{Key: key, Reason: "the model finished on a screen that does not match"}
+			return nil, nil, &ReachError{Key: key, Reason: "the model finished on a screen that does not match"}
 		}
 		if !loop.Exhausted {
 			conversation = append(conversation, explore.Message{
@@ -183,7 +186,7 @@ func (n *Navigator) Reach(ctx context.Context, key string) (*explore.ScreenState
 		}
 	}
 	n.rememberUnreachable(route)
-	return nil, &ReachError{Key: key, Reason: fmt.Sprintf("not reached within %d turns", navigatorLoopBound)}
+	return nil, nil, &ReachError{Key: key, Reason: fmt.Sprintf("not reached within %d turns", navigatorLoopBound)}
 }
 
 // screenWordsSentence renders a key's labels for a prompt, and says nothing

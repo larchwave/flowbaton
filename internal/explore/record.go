@@ -132,6 +132,11 @@ const (
 type TestResult struct {
 	Scenario Scenario
 	Status   TestStatus
+	// Prelude is what the navigator did to bring the app to the scenario's
+	// start screen, before the run's own first step. A relaunch does not
+	// land on that screen -- an app restores its last view -- so a flow
+	// exported without this walk begins somewhere the recording never was.
+	Prelude  []StepRecord
 	Steps    []StepRecord
 	Outcomes []OutcomeCheck
 	Notes    []string
