@@ -226,6 +226,20 @@ func (s *toolSession) afterMutation(ctx context.Context, tool string, args json.
 		step.After = observation.Signature
 		s.replaceCurrent(observation)
 	}
+	// A gesture whose socket refuses is the case ErrDeviceUnreachable was
+	// written for -- "the runner process died, the socket refuses" -- and the
+	// check ran only on the observation error. mmx69 shows why that is not
+	// enough: eighteen calls to /touch and /swipeV2 answered
+	// "connection refused" while the runner's hierarchy endpoint went on
+	// answering, so every observation succeeded and the run spent its whole
+	// budget on retries against a dead endpoint. The step is recorded first,
+	// so the report keeps the evidence.
+	if execErr != nil && transportGone(execErr) {
+		step.Status = explore.StepFailed
+		step.ErrText = execErr.Error()
+		s.steps = append(s.steps, step)
+		return "", fmt.Errorf("%w: %s: %v", explore.ErrDeviceUnreachable, tool, execErr)
+	}
 	switch {
 	case execErr != nil:
 		var miss explore.TargetMissError
