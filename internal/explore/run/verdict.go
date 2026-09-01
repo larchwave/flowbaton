@@ -59,6 +59,13 @@ func foldedTreeMatch(texts []string, expected string) (string, bool) {
 }
 
 type workerVerdict struct {
+	// Verdict is the one word the prompt asks for. Three independent
+	// booleans let a weak model contradict itself and it did: mmx75 and
+	// mmx77 each wrote the routing reason into evidence and then set
+	// met=false with both flags off, so a fact gap and a feature the app
+	// never had were filed as defects. One word cannot disagree with
+	// itself. The booleans stay for a model that answers in the old shape.
+	Verdict  string `json:"verdict"`
 	Met      bool   `json:"met"`
 	Evidence string `json:"evidence"`
 	// Inapplicable is set only when the model says the expectation does
@@ -107,11 +114,17 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 			"undecidable true and say which fact was missing; do not report it as "+
 			"not met.\n"+
 			"Reply with only a JSON object "+
-			"{\"met\": true|false, \"inapplicable\": true|false, "+
-			"\"undecidable\": true|false, \"evidence\": \"one line\"}.\n"+
-			"Set inapplicable only when this app has no such feature or the screen "+
-			"cannot express the expectation at all; an outcome the app should have "+
-			"produced and did not is applicable.",
+			"{\"verdict\": \"met\"|\"not_met\"|\"inapplicable\"|\"undecidable\", "+
+			"\"evidence\": \"one line\"}.\n"+
+			"Choose exactly one verdict:\n"+
+			"met -- the screen shows it.\n"+
+			"not_met -- the app should have produced it and did not.\n"+
+			"inapplicable -- this app has no such feature, or the screen cannot "+
+			"express the expectation at all.\n"+
+			"undecidable -- the facts above cannot answer the question.\n"+
+			"If the reason you are about to write in evidence is that a fact is "+
+			"missing, the verdict is undecidable; if it is that the app has no such "+
+			"control, the verdict is inapplicable. Neither is not_met.",
 		expected, elementTable(facts.Final),
 		driverCheckLines(facts.DriverChecks)+typedLines(facts.Typed)+visitedLines(facts.Visited),
 		sessionTagLine(facts.SessionTag))
@@ -132,8 +145,28 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 		}
 		return check
 	}
+	return readVerdict(verdict, expected)
+}
+
+// readVerdict maps one model reply onto a check. The word decides when it is
+// one of the four; anything else, including an empty reply, falls back to the
+// booleans, which keeps the safe direction -- an unmet outcome stays a defect.
+func readVerdict(verdict workerVerdict, expected string) explore.OutcomeCheck {
+	check := explore.OutcomeCheck{Expected: expected, Evidence: verdict.Evidence}
+	switch verdict.Verdict {
+	case "met":
+		check.Met = true
+		return check
+	case "not_met":
+		return check
+	case "undecidable":
+		check.Missed = explore.MissUnjudged
+		return check
+	case "inapplicable":
+		check.Missed = explore.MissUnpromised
+		return check
+	}
 	check.Met = verdict.Met
-	check.Evidence = verdict.Evidence
 	switch {
 	case !verdict.Met && verdict.Undecidable:
 		// A fact gap outranks a judgement about the app: the judge says it
