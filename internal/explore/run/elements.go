@@ -58,6 +58,21 @@ func fieldContent(node device.TreeNode) string {
 	return ""
 }
 
+// controlLabel names a row. A switch is the reason it is not elementLabel:
+// iOS answers one with its state in the value, ElementLabel prefers text, and
+// the row came out labelled "1" with the control's name only on the row above
+// it. Everything else keeps the label it always had.
+func controlLabel(node device.TreeNode) string {
+	if explore.IsCheckable(node) {
+		for _, key := range []string{"accessibilityText", "label", "name", "title"} {
+			if value := strings.TrimSpace(node.Attributes[key]); value != "" {
+				return value
+			}
+		}
+	}
+	return elementLabel(node)
+}
+
 // elementTable renders the newest observation as the model-facing element
 // list. Only the latest table is kept in a conversation.
 func elementTable(state *explore.ScreenState) string {
@@ -74,7 +89,7 @@ func elementTable(state *explore.ScreenState) string {
 		if role := elementRole(element.Node); role != "" {
 			fmt.Fprintf(builder, " %s", role)
 		}
-		if label := elementLabel(element.Node); label != "" {
+		if label := controlLabel(element.Node); label != "" {
 			fmt.Fprintf(builder, " %q", explore.Truncate(label, 60))
 		}
 		if id := elementID(element.Node); id != "" {
@@ -103,6 +118,15 @@ func elementTable(state *explore.ScreenState) string {
 		}
 		if element.Node.Focused != nil && *element.Node.Focused {
 			builder.WriteString(" focused")
+		}
+		// Which way a switch is set is the whole point of a row that has one,
+		// and it is nowhere else on the screen.
+		if explore.IsCheckable(element.Node) && element.Node.Checked != nil {
+			if *element.Node.Checked {
+				builder.WriteString(" on")
+			} else {
+				builder.WriteString(" off")
+			}
 		}
 		builder.WriteString("\n")
 	}

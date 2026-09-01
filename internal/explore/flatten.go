@@ -21,6 +21,17 @@ var interestingAttrs = []string{"text", "label", "name", "resource-id", "id", "h
 // is 48 and accepts nothing.
 var iosTextInputTypes = map[string]bool{"45": true, "49": true, "50": true, "52": true}
 
+// iosCheckableTypes are the XCUIElementType codes with a checked state:
+// checkbox=12, switch=40, toggle=41, the same three internal/ios reads a
+// value for. Every other type has no such state, which is not the same as
+// false -- iOS reports checked false for every row on screen.
+var iosCheckableTypes = map[string]bool{"12": true, "40": true, "41": true}
+
+// androidCheckableClasses are the widget class fragments with a checked
+// state. Substrings on purpose: SwitchCompat and AppCompatCheckBox carry the
+// plain names inside their own.
+var androidCheckableClasses = []string{"Switch", "CheckBox", "ToggleButton", "CheckedTextView"}
+
 // androidTextInputClasses are the widget class fragments that accept typed
 // text. TextView alone is a label, so only its editable descendants count.
 var androidTextInputClasses = []string{"EditText", "AutoCompleteTextView"}
@@ -206,6 +217,21 @@ func IsTextInput(node device.TreeNode) bool {
 	return false
 }
 
+// IsCheckable reports whether this element has an on/off state at all.
+// Android names the widget in class; iOS carries a numeric element type.
+func IsCheckable(node device.TreeNode) bool {
+	if iosCheckableTypes[node.Attributes["elementType"]] {
+		return true
+	}
+	class := node.Attributes["class"]
+	for _, fragment := range androidCheckableClasses {
+		if strings.Contains(class, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsSecureTextInput reports whether this element masks what is typed into
 // it: an iOS secure text field or an Android password input. What lands in
 // such a field is a secret by declaration and must never reach recordings.
@@ -257,6 +283,15 @@ func isInteresting(element *hierarchy.Element) bool {
 	// touch, so listing it only offers the agent a row that cannot work.
 	if offscreen(node) {
 		return false
+	}
+	// A switch is the control, not a container for one: iOS frames the whole
+	// settings row as the switch, nests the label and the knob inside it, and
+	// carries the name, the identifier, and the state only on the outer node.
+	// The children-mean-container rule below dropped it and kept the unnamed
+	// knob, so the table offered `switch "0"` and no row said which setting
+	// that was. The inner copy is the same control, listed once.
+	if IsCheckable(node) {
+		return element.Parent == nil || !IsCheckable(element.Parent.Node)
 	}
 	if node.Clickable != nil && *node.Clickable {
 		return true
