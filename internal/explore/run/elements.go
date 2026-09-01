@@ -235,19 +235,30 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 	if id := elementID(element.Node); id != "" {
 		return &explore.Locator{Kind: explore.LocatorID, Value: id}
 	}
-	if label := elementLabel(element.Node); label != "" && labelCount(state, label) == 1 {
+	// The row's NAME, not its value: thirty-one days of a calendar month
+	// strip carry one value between them and a name each, so selecting on the
+	// value could only ever answer a coordinate.
+	if label := explore.ControlLabel(element.Node); label != "" {
 		if pattern, ok := generalizeCount(state, label); ok {
 			return &explore.Locator{Kind: explore.LocatorText, Value: pattern}
 		}
 		// Escaped: a text selector is compiled as a regexp, so an unescaped
 		// "a*b" also matches "b" and "aab", and an unbalanced bracket does
 		// not compile at all and fails the step.
-		return &explore.Locator{Kind: explore.LocatorText, Value: regexp.QuoteMeta(label)}
+		//
+		// Uniqueness comes from the matcher the DEVICE runs, which is what
+		// the generalized branch above already asked. Counting rows of the
+		// table instead answered one for a label the device finds twice --
+		// on a node the table drops, or under an attribute it does not read
+		// -- and a selector matching two elements taps the wrong one.
+		if quoted := regexp.QuoteMeta(label); uniqueOnScreen(state, quoted, label) {
+			return &explore.Locator{Kind: explore.LocatorText, Value: quoted}
+		}
 	}
 	// Both fallbacks below say where the element is and nothing about what it
 	// is. The label that was not unique enough to select on still names it
 	// for whoever reads the report.
-	label := elementLabel(element.Node)
+	label := explore.ControlLabel(element.Node)
 	if bounds, ok := explore.ElementBounds(element.Node); ok {
 		center := hierarchy.VisibleCenter(bounds, state.Viewport)
 		return &explore.Locator{Kind: explore.LocatorPoint, Value: explore.PointLocator(center), Label: label}
@@ -314,10 +325,25 @@ func selectorMatchCount(state *explore.ScreenState, pattern string) int {
 	return len(found)
 }
 
+// uniqueOnScreen reports whether a text selector picks exactly one element.
+// It asks the matcher the DEVICE runs; a tree that cannot be read answers -1
+// and one that is not there finds nothing, and then the table's own count is
+// all there is -- weaker, because the table
+// drops nodes the matcher searches and reads one attribute where the matcher
+// tries three, but better than refusing every name.
+func uniqueOnScreen(state *explore.ScreenState, pattern, label string) bool {
+	if count := selectorMatchCount(state, pattern); count > 0 {
+		return count == 1
+	}
+	// Zero is the same answer as -1 here: the row is on the screen by
+	// construction, so a matcher that finds none of it did not read the tree.
+	return labelCount(state, label) == 1
+}
+
 func labelCount(state *explore.ScreenState, label string) int {
 	count := 0
 	for _, element := range state.Elements {
-		if elementLabel(element.Node) == label {
+		if explore.ControlLabel(element.Node) == label {
 			count++
 		}
 	}
