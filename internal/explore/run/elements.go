@@ -87,6 +87,14 @@ func elementTable(state *explore.ScreenState) string {
 		// load-bearing: which rows accept text, and whether a tap took focus.
 		// The focus mark is Android-only in practice: iOS publishes UI focus,
 		// which a text field with the keyboard open reports as false.
+		// The tester picks from this table, and it picked an element that had
+		// scrolled off the screen twice in one mmx59 scenario. Saying so here
+		// spends a word instead of a turn.
+		if bounds, ok := explore.ElementBounds(element.Node); ok {
+			if _, err := tapPoint(bounds, state.Viewport, "element"); err != nil {
+				builder.WriteString(" off-screen")
+			}
+		}
 		if explore.IsTextInput(element.Node) {
 			builder.WriteString(" text-field")
 			if fieldContent(element.Node) == "" {

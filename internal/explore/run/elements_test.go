@@ -332,3 +332,28 @@ func TestElementTableSaysWhenAFieldIsEmpty(t *testing.T) {
 		t.Fatalf("a field holding text is marked empty: %q", lines[2])
 	}
 }
+
+// An element scrolled off the screen is still listed, and the tester picks
+// it: mmx59 tapped one twice at 372,-51. The row now says so, so the model
+// can scroll first instead of spending a turn on a tap that cannot land.
+func TestElementTableMarksAnElementOffTheScreen(t *testing.T) {
+	t.Parallel()
+
+	state := &explore.ScreenState{
+		Signature: explore.ScreenSignature{TreeDigest: "abcdef0123456789"},
+		Viewport:  device.Bounds{Width: 402, Height: 874},
+		Elements: []explore.FlatElement{
+			{EIDX: 0, Node: device.TreeNode{Attributes: map[string]string{
+				"elementType": "9", "accessibilityText": "Add", "bounds": "[344,-79][400,-23]"}}},
+			{EIDX: 1, Node: device.TreeNode{Attributes: map[string]string{
+				"elementType": "9", "accessibilityText": "Search", "bounds": "[0,100][402,150]"}}},
+		},
+	}
+	lines := strings.Split(elementTable(state), "\n")
+	if !strings.Contains(lines[1], "off-screen") {
+		t.Fatalf("an element off the screen is not marked: %q", lines[1])
+	}
+	if strings.Contains(lines[2], "off-screen") {
+		t.Fatalf("an element on the screen is marked off-screen: %q", lines[2])
+	}
+}
