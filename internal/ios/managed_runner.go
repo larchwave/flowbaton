@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -252,13 +253,18 @@ func realRunnerSpawn(_ context.Context, args, environment []string) (runnerProce
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	return watchRunnerChild(cmd, output), nil
+}
+
+// watchRunnerChild wraps a started child and keeps watch for its exit.
+func watchRunnerChild(cmd *exec.Cmd, output *boundedBuffer) *xcodebuildRunner {
 	runner := &xcodebuildRunner{cmd: cmd, output: output, done: make(chan error, 1)}
 	go func() {
 		reason := runner.describeExit(cmd.Wait())
 		runner.exit.set(reason)
 		runner.done <- reason
 	}()
-	return runner, nil
+	return runner
 }
 
 // exitLatch remembers a child's exit for every later reader.
@@ -301,6 +307,14 @@ func (runner *xcodebuildRunner) exited() <-chan error { return runner.done }
 func (runner *xcodebuildRunner) exitReason() string { return runner.exit.String() }
 
 func (runner *xcodebuildRunner) stopRunner() error {
+	// A child that is already gone is not a stop failure, and this is the one
+	// moment its exit reason is both latched and still worth printing.
+	// Signalling a dead process group answers "no such process", which is the
+	// errno for a question nobody asked: three sessions closed with that and
+	// none of them said the runner had died.
+	if reason := runner.exit.String(); reason != "" {
+		return errors.New(reason)
+	}
 	return stopManagedRunnerCommand(runner.cmd, runner.done)
 }
 
