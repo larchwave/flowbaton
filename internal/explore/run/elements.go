@@ -209,6 +209,35 @@ func idSelectsSomething(state *explore.ScreenState, id string) bool {
 	return err != nil || len(found) > 0
 }
 
+// given names the target fields this call carried, in the order the tool
+// schema lists them.
+func (a targetArgs) given() []string {
+	names := make([]string, 0, 3)
+	if a.EIDX != nil {
+		names = append(names, "eidx")
+	}
+	if a.Text != "" {
+		names = append(names, "text")
+	}
+	if a.ID != "" {
+		names = append(names, "id")
+	}
+	return names
+}
+
+// targetModeRefusal says what arrived, not only what the rule is. mmx76 lost
+// two steps to a model that sent an index and the label of that same row
+// together: the old wording recited all three field names either way, so a
+// reader could not tell too many from none.
+func targetModeRefusal(given []string) string {
+	if len(given) == 0 {
+		return "target needs exactly one of eidx, text, or id; got none"
+	}
+	return fmt.Sprintf(
+		"target needs exactly one of eidx, text, or id; got %s. Send only one, and prefer eidx when the row is in the newest table",
+		strings.Join(given[:len(given)-1], ", ")+" and "+given[len(given)-1])
+}
+
 func (a targetArgs) describe() string {
 	switch {
 	case a.EIDX != nil:
@@ -435,18 +464,8 @@ func tapPoint(bounds, viewport device.Bounds, describe string) (device.Point, er
 
 // resolvePoint finds the tap point for a target in the current observation.
 func resolvePoint(state *explore.ScreenState, args targetArgs) (device.Point, error) {
-	modes := 0
-	if args.EIDX != nil {
-		modes++
-	}
-	if args.Text != "" {
-		modes++
-	}
-	if args.ID != "" {
-		modes++
-	}
-	if modes != 1 {
-		return device.Point{}, explore.TargetMissError{Reason: "target needs exactly one of eidx, text, or id"}
+	if given := args.given(); len(given) != 1 {
+		return device.Point{}, explore.TargetMissError{Reason: targetModeRefusal(given)}
 	}
 	if args.EIDX != nil {
 		for _, element := range state.Elements {
