@@ -52,9 +52,18 @@ func (Exporter) ExportFlow(result *explore.TestResult, appID string) ([]byte, er
 	// restores its last screen replays from there, not from the screen the
 	// recording began on (see EnsureReady in run/navigator.go for the
 	// measurement).
-	commands := []*yaml.Node{
-		keyed("launchApp", mapNode(plain("stopApp"), plain("true"))),
+	launch := keyed("launchApp", mapNode(plain("stopApp"), plain("true")))
+	// A flow replays from wherever launchApp leaves the app, which is not
+	// the screen the scenario was planned against: replaying the flows of
+	// three sessions on the simulator, two of thirteen failed on their first
+	// action -- one taps text an earlier scenario had typed, the other a
+	// toolbar button that exists only in the day view. Naming the screen
+	// turns "element not found" into a starting point the reader can set up.
+	if screen := strings.TrimSpace(result.Scenario.StartScreen); screen != "" {
+		launch.HeadComment = fmt.Sprintf(
+			"recorded on screen %s; launchApp does not navigate there", screen)
 	}
+	commands := []*yaml.Node{launch}
 	secrets := 0
 	for _, step := range result.Steps {
 		// A masked input holds no replayable text. Export it as an env
