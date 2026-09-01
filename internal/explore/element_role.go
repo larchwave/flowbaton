@@ -117,11 +117,6 @@ func ElementRole(node device.TreeNode) string {
 	return node.Attributes["type"]
 }
 
-// ElementLabel returns the human-visible label of a node across both
-// dialects: Android carries it in text (or a hint), iOS in
-// accessibilityText or title. A table that reads only the Android keys
-// shows every iOS row as "-", which left a live researcher with nothing
-// but geometry to name the screen's controls by.
 // ControlLabel names a row for a model-facing table. iOS answers with an
 // element's accessibility VALUE in text and its NAME in accessibilityText,
 // and ElementLabel prefers text -- so a switch read "1" and the month strip of
@@ -168,6 +163,11 @@ func RowState(node device.TreeNode) string {
 	return strings.Join(marks, " ")
 }
 
+// ElementLabel returns the human-visible label of a node across both
+// dialects: Android carries it in text (or a hint), iOS in
+// accessibilityText or title. A table that reads only the Android keys
+// shows every iOS row as "-", which left a live researcher with nothing
+// but geometry to name the screen's controls by.
 func ElementLabel(node device.TreeNode) string {
 	for _, key := range []string{"text", "label", "name", "hintText", "accessibilityText", "title"} {
 		if value := strings.TrimSpace(node.Attributes[key]); value != "" {
