@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/explore"
@@ -279,15 +280,33 @@ func elementLocator(state *explore.ScreenState, element explore.FlatElement) *ex
 // digitRun matches the digit runs of a label.
 var digitRun = regexp.MustCompile(`[0-9]+`)
 
-// yearDigits is the length at which a digit run stops reading as a count.
-// A run this long is a year, an identifier, or an amount, and generalizing
-// it aims the selector at a family instead of at a row: the years screen of
-// a calendar names the current month "Current month, September 2026" and
-// every other month "October 2026", so `September \d+` was honestly unique
-// the day it was written and `October \d+` matched two rows on that same
-// screen. The uniqueness check below runs at record time and cannot see the
-// month roll over. A tester taps rows counted in ones and tens.
-const yearDigits = 4
+// countsSomething answers whether the digit run starting at start in label
+// is a quantity rather than a date, a version, or an ordinal. A number that
+// follows a word belongs to that word and names one thing -- "September 2",
+// "October 2026", "Chapter 3". A number that opens a phrase or follows
+// punctuation is a quantity that drifts with the data: "12 reminders",
+// "7 events", "Total: $5.00 (3 items)".
+//
+// Only a quantity is worth generalizing. A date names one row, and a pattern
+// standing for its family taps whichever member the screen lists first. The
+// uniqueness check below cannot see that, because it runs at record time on
+// the screen in front of it, and the family is ambiguous somewhere else.
+// Measured with the host matcher on captures of one calendar:
+//
+//	week strip  text=Wednesday, September \d+  -> 1   (recorded here)
+//	month grid  text=Wednesday, September \d+  -> 5
+//	years       text=October \d+               -> 2
+//
+// QuoteMeta escapes metacharacters and leaves letters, digits and spaces
+// alone, and never writes a letter, so a run follows a letter in the quoted
+// pattern exactly when it did in the label.
+func countsSomething(label string, start int) bool {
+	before := strings.TrimSuffix(label[:start], " ")
+	if before == "" {
+		return true
+	}
+	return !unicode.IsLetter(rune(before[len(before)-1]))
+}
 
 // generalizeCount answers a text selector that survives a changed count.
 // A label unique on one screen can still carry app state -- "All, 12
@@ -307,27 +326,34 @@ func generalizeCount(state *explore.ScreenState, label string) (string, bool) {
 	}
 	// QuoteMeta escapes the metacharacters and leaves digits alone, so the
 	// digit runs of the quoted text are still the digit runs of the label.
+	quoted := regexp.QuoteMeta(label)
 	generalized := false
-	pattern := digitRun.ReplaceAllStringFunc(regexp.QuoteMeta(label), func(run string) string {
-		if len(run) >= yearDigits {
-			return run
+	pattern := &strings.Builder{}
+	written := 0
+	for _, run := range digitRun.FindAllStringIndex(quoted, -1) {
+		pattern.WriteString(quoted[written:run[0]])
+		written = run[1]
+		if !countsSomething(quoted, run[0]) {
+			pattern.WriteString(quoted[run[0]:run[1]])
+			continue
 		}
 		generalized = true
-		return `\d+`
-	})
+		pattern.WriteString(`\d+`)
+	}
+	pattern.WriteString(quoted[written:])
 	if !generalized {
 		return "", false
 	}
 	// A label that is nothing but a count identifies nothing once the count
 	// is gone: the pattern would be `\d+`, which the device resolves to
 	// every number on the screen -- a price, a page number, a badge.
-	if strings.TrimSpace(strings.ReplaceAll(pattern, `\d+`, "")) == "" {
+	if strings.TrimSpace(strings.ReplaceAll(pattern.String(), `\d+`, "")) == "" {
 		return "", false
 	}
-	if selectorMatchCount(state, pattern) != 1 {
+	if selectorMatchCount(state, pattern.String()) != 1 {
 		return "", false
 	}
-	return pattern, true
+	return pattern.String(), true
 }
 
 // selectorMatchCount answers how many elements the DEVICE would find for a
