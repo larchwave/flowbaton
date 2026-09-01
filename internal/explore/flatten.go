@@ -320,6 +320,15 @@ const (
 	salientLabelLimit = 40
 )
 
+// readsAsAName reports whether a label reads as a name at all: it must say
+// something once Key has rendered it (a label of symbols alone lands there
+// as a blank), it must be words rather than a glyph identifier, and it must
+// be short enough to be a name rather than content.
+func readsAsAName(label string) bool {
+	return slugify(label) != "" && !namesAnIcon(label) &&
+		utf8.RuneCountInString(label) <= salientLabelLimit
+}
+
 // ComputeSignature derives the screen signature for a tree: a digest over
 // normalized structure and text, plus a few salient labels. Digit runs
 // collapse so counters and timestamps do not split one logical screen
@@ -330,6 +339,23 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 	title := ""
 	viewport := device.Bounds{}
 	haveViewport := false
+	// canNameTheScreen reports whether this node's label may stand as the
+	// screen's name: the platform's own furniture may not, and neither may a
+	// second spelling of a name already taken.
+	canNameTheScreen := func(node device.TreeNode, label string) bool {
+		if namesTheApplication(node) || namesItsOwnRole(node) ||
+			coversTheScreen(node, viewport, haveViewport) {
+			return false
+		}
+		// A container and the label inside it carry the same name --
+		// Android's ViewGroup product_lockup around TextView product_name,
+		// iOS's cell around its own text, an image "Search" beside a keyboard
+		// key "search" -- so taking both spends the whole list on one word
+		// and names the screen "contacts-contacts".
+		return !slices.ContainsFunc(salient, func(taken string) bool {
+			return sameName(taken, label)
+		})
+	}
 	var walk func(node device.TreeNode, insideBar bool)
 	walk = func(node device.TreeNode, insideBar bool) {
 		// Chrome is skipped here for the same reason as in FlattenScreen, and
@@ -354,28 +380,14 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 			role := signatureRole(node)
 			label := signatureLabel(node)
 			parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
-			// A label of symbols alone -- an emoji, a glyph from the private
-			// use area -- names nothing: Key drops it, so keeping it would
-			// spend a slot on a blank and make the next real label read as a
-			// repeat of it, both being blank to sameName.
 			trimmed := strings.TrimSpace(label)
-			usable := slugify(trimmed) != "" && !namesAnIcon(trimmed) &&
-				utf8.RuneCountInString(trimmed) <= salientLabelLimit
-			if usable && title == "" && navigationTitle(node, insideBar) {
-				title = trimmed
-			}
-			// A container and the label inside it carry the same name --
-			// Android's ViewGroup product_lockup around TextView product_name,
-			// iOS's cell around its own text, an image "Search" beside a
-			// keyboard key "search" -- so taking both spends the whole list on
-			// one word and names the screen "contacts-contacts".
-			duplicate := slices.ContainsFunc(salient, func(taken string) bool {
-				return sameName(taken, trimmed)
-			})
-			if usable && len(salient) < salientLabelCount &&
-				!namesTheApplication(node) && !namesItsOwnRole(node) && !duplicate &&
-				!coversTheScreen(node, viewport, haveViewport) {
-				salient = append(salient, trimmed)
+			if readsAsAName(trimmed) {
+				if title == "" && navigationTitle(node, insideBar) {
+					title = trimmed
+				}
+				if len(salient) < salientLabelCount && canNameTheScreen(node, trimmed) {
+					salient = append(salient, trimmed)
+				}
 			}
 		}
 		for _, child := range node.Children {
