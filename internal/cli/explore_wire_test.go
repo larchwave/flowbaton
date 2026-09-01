@@ -10,6 +10,7 @@ import (
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/explore"
 	"github.com/larchwave/flowbaton/internal/explore/research"
+	"github.com/larchwave/flowbaton/internal/explore/run"
 )
 
 type wireLLM struct{}
@@ -56,10 +57,17 @@ func TestDefaultExploreCrewAssemblesEveryRole(t *testing.T) {
 	}
 	if crew.Observer == nil || crew.Researcher == nil || crew.Planner == nil ||
 		crew.Tester == nil || crew.Navigator == nil || crew.Analyst == nil ||
-		crew.Exporter == nil || crew.Experience == nil || crew.Knowledge == nil {
+		crew.Exporter == nil {
 		t.Fatalf("assembled crew has a nil role: %+v", crew)
 	}
-	if _, err := crew.Experience.Index(context.Background(), explore.ScreenSignature{AppID: "com.example.app", TreeDigest: "d"}); err != nil {
+	// The experience store reaches the session through the navigator, which
+	// is the only thing that reads or writes it. The Crew carried a second
+	// copy that nothing read.
+	navigator, ok := crew.Navigator.(*run.Navigator)
+	if !ok || navigator.Experience == nil {
+		t.Fatalf("the assembled navigator holds no experience store: %+v", crew.Navigator)
+	}
+	if _, err := navigator.Experience.Index(context.Background(), explore.ScreenSignature{AppID: "com.example.app", TreeDigest: "d"}); err != nil {
 		t.Fatalf("experience store unusable: %v", err)
 	}
 }

@@ -79,10 +79,8 @@ func DefaultExploreCrew(deps ExploreDeps) (explore.Crew, error) {
 			Config:     config,
 			Experience: experience,
 		},
-		Analyst:    report.Analyst{Manager: deps.Models.Manager},
-		Exporter:   export.Exporter{},
-		Experience: experience,
-		Knowledge:  knowledge,
+		Analyst:  report.Analyst{Manager: deps.Models.Manager},
+		Exporter: export.Exporter{},
 	}
 	return crew, nil
 }

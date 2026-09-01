@@ -17,8 +17,6 @@ type Crew struct {
 	Navigator  Navigator
 	Analyst    Analyst
 	Exporter   Exporter
-	Experience ExperienceStore
-	Knowledge  KnowledgeStore
 }
 
 func (c Crew) validate() error {
