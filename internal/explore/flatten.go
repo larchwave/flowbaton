@@ -364,6 +364,31 @@ func readsAsAName(label string) bool {
 		utf8.RuneCountInString(label) <= salientLabelLimit
 }
 
+// checkedMark carries a checkable node's state into the signature, where
+// two rules meet that are each right on their own and together lose the one
+// state change a tester most often makes.
+//
+// signatureLabel reads a node's text first, and iOS answers with a switch's
+// VALUE there -- "0" or "1". normalizeText collapses every digit run to "#"
+// so a clock or a badge does not split one screen into many signatures.
+// Folded together, "0" and "1" become one token. Android never had the
+// state in the digest at all: it carries the flag on the node and leaves
+// the text alone.
+//
+// So a tap that flipped a switch and changed nothing else answered "done,
+// but the screen did not change" -- which tells the tester its action was
+// dead, and tells the judge the outcome was never demonstrated. A count
+// still folds; only a checkable node's own state is added.
+func checkedMark(node device.TreeNode) string {
+	if node.Checked == nil || !IsCheckable(node) {
+		return ""
+	}
+	if *node.Checked {
+		return "|on"
+	}
+	return "|off"
+}
+
 // ComputeSignature derives the screen signature for a tree: a digest over
 // normalized structure and text, plus a few salient labels. Digit runs
 // collapse so counters and timestamps do not split one logical screen
@@ -414,7 +439,7 @@ func ComputeSignature(appID string, root device.TreeNode) ScreenSignature {
 		if !offscreen(node) {
 			role := signatureRole(node)
 			label := signatureLabel(node)
-			parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label))
+			parts = append(parts, role+"|"+signatureID(node)+"|"+normalizeText(label)+checkedMark(node))
 			trimmed := strings.TrimSpace(label)
 			if readsAsAName(trimmed) {
 				if title == "" && navigationTitle(node, insideBar) {
