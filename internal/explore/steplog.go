@@ -18,6 +18,13 @@ func StepLine(step StepRecord) string {
 	if step.Action.Direction != "" {
 		line += " " + step.Action.Direction
 	}
+	// The action's text is what the agent asked for, which for an index
+	// target is a bare "e13": an index into a table nobody kept. The
+	// resolved locator is what the device was actually aimed at, and
+	// without it a log cannot answer which element a step acted on.
+	if target := step.Action.Target; target != nil {
+		line += " -> " + locatorText(*target)
+	}
 	line += fmt.Sprintf(" status=%s changed=%v", step.Status, !step.After.Same(step.Before))
 	if step.Note != "" {
 		line += " note=" + Truncate(step.Note, 60)
@@ -26,6 +33,19 @@ func StepLine(step StepRecord) string {
 		line += " error=" + Truncate(step.ErrText, 60)
 	}
 	return line
+}
+
+// locatorText renders a resolved target for a reader. A point or a tree
+// path says where and never what, so those carry their label alongside.
+func locatorText(target Locator) string {
+	text := string(target.Kind) + " " + Truncate(target.Value, 40)
+	if target.Label != "" {
+		text += fmt.Sprintf(" (%s)", Truncate(target.Label, 40))
+	}
+	if target.Index > 0 {
+		text += fmt.Sprintf(" #%d", target.Index)
+	}
+	return text
 }
 
 // StepLines renders every step of a run. An empty run says so rather than
