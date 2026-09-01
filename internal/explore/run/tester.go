@@ -138,6 +138,17 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 		result.Status = explore.TestStopped
 		result.Notes = append(result.Notes, "step budget exhausted before finish")
 		result.Verdict = "stopped: the step budget ran out before the model finished"
+	case session.finish.Status == "passed" && allMet(checks) && nothingRan(session.steps):
+		// Only a PASS is taken away here. A run that failed for a reason
+		// keeps that reason, which is more use than "nothing ran".
+		//
+		// Not the app's failure and not the judge's: the judge is handed
+		// the FINAL screen and was right about it, but it cannot tell a
+		// screen the run produced from one that was already there. mmx69
+		// passed a scenario whose eighteen device calls all failed against
+		// a dead runner, and two more that executed no step at all.
+		result.Status = explore.TestStopped
+		result.Verdict = "stopped: no action ran, so the screen the outcomes were read on is not this run's work"
 	case session.finish.Status == "passed" && allMet(checks):
 		result.Status = explore.TestPassed
 		result.Verdict = fmt.Sprintf("passed: all %d expected outcome(s) met", len(checks))
@@ -170,6 +181,19 @@ func (t *Tester) fill(result *explore.TestResult, session *toolSession) {
 		result.Outcomes = append([]explore.OutcomeCheck(nil), session.checks...)
 	}
 	result.Finished = t.Config.Now()
+}
+
+// nothingRan reports whether a run executed no action at all: no steps, or
+// every one of them failed. A no-change step counts as having run -- the
+// action landed and the screen stood still, which is the evidence a
+// scenario like "an empty name is refused" is looking for.
+func nothingRan(steps []explore.StepRecord) bool {
+	for _, step := range steps {
+		if step.Status != explore.StepFailed {
+			return false
+		}
+	}
+	return true
 }
 
 func trailingStalls(steps []explore.StepRecord) int {
