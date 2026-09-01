@@ -182,10 +182,19 @@ func filterScenarios(raw []plannedScenario, request explore.PlanRequest, styleNa
 // The words are matched inside the outcome, so "changes from" catches "the
 // view mode indicator changes from the timeline view" while "Change
 // password", a label on the screen, is untouched.
+// The second group was added after three sessions ran WITH the first one
+// and filed a backward outcome anyway. Each phrase was checked against all
+// forty outcomes the sessions have filed and catches only backward-looking
+// ones: "restored", "replaced", "absence" and "new" name the screen before
+// as plainly as "no longer" does. mmx67 shows what that costs -- its tester
+// wrote "the mmx67 row was pre-existing test data" and the judge, holding
+// only the final screen, wrote "the mmx67 tag added by the tester".
 var backwardLooking = []string{
 	"no longer", "increments", "decrements",
 	"changes from", "changes to", "changed from", "changed to",
 	"is updated", "has updated", "updates to",
+
+	"is restored", "are restored", "replaced by", "absence of", "no new",
 }
 
 // forwardOutcomes drops the outcomes that look backward. A scenario left

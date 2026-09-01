@@ -69,3 +69,44 @@ func TestFilterKeepsOutcomesAboutTheFinalScreen(t *testing.T) {
 		t.Fatalf("expected = %q, want both kept", got)
 	}
 }
+
+// Three more wordings the guard let through, each taken verbatim from a
+// session that ran WITH the guard in place. Every phrase below was checked
+// against all forty outcomes the sessions have filed and catches only
+// backward-looking ones.
+//
+//	mmx61  The Tuesday - Sep 1, 2026 day timeline view is restored
+//	mmx66  ... indicated by the absence of the 2026 year header ...,
+//	       replaced by inbox content
+//	mmx67  No new row is added to the 'My Lists' section; ...
+//
+// "restored", "replaced", "absence" and "new" all name the screen before as
+// plainly as "no longer" does: the judge is handed the final screen and
+// cannot tell a row that was just added from one that was always there.
+// mmx67's own tester note and the judge's evidence disagreed about exactly
+// that -- the tester wrote "the mmx67 row was pre-existing test data" and
+// the judge wrote "the mmx67 tag added by the tester".
+func TestFilterDropsTheWordingsThatSurvivedTheFirstList(t *testing.T) {
+	t.Parallel()
+
+	for _, outcome := range []string{
+		"The Tuesday - Sep 1, 2026 day timeline view is restored",
+		"The Contacts screen is replaced by the previous screen.",
+		"The inbox screen is displayed, indicated by the absence of the 2026 year header",
+		"No new row is added to the 'My Lists' section",
+	} {
+		raw := []plannedScenario{{
+			Name:     "A scenario",
+			Priority: "high",
+			Steps:    []string{"Tap something"},
+			Expected: []string{outcome, "The title reads 'Reminders'"},
+		}}
+		got := filterScenarios(raw, explore.PlanRequest{Map: &explore.UIMap{}, Budget: 4}, "normal")
+		if len(got) != 1 {
+			t.Fatalf("%q: scenarios = %d, want 1", outcome, len(got))
+		}
+		if want := []string{"The title reads 'Reminders'"}; !reflect.DeepEqual(got[0].Expected, want) {
+			t.Errorf("%q survived: expected = %q", outcome, got[0].Expected)
+		}
+	}
+}
