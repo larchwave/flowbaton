@@ -264,9 +264,12 @@ func TestRunScenarioPilotStopOrderEndsTheRun(t *testing.T) {
 	}
 }
 
+// Declaring backPress is not a promise the press lands: a driver that offers
+// the tool may still refuse one call, and the handler answers with a note
+// rather than a tool failure the model would spend its budget retrying.
 func TestRunScenarioReportsBackAsUnsupported(t *testing.T) {
 	home := makeState("com.example.app", screen("Home", button("Login", "login_button", "[0,0][100,50]")))
-	driver := &fakeDriver{backErr: device.ErrUnsupported}
+	driver := &fakeDriver{backErr: device.ErrUnsupported, features: map[string]bool{"backPress": true}}
 	observer := &fakeObserver{states: []*explore.ScreenState{home}}
 	worker := &scriptedLLM{replies: []explore.Message{
 		toolCall("1", "back", `{}`),

@@ -19,6 +19,11 @@ import (
 	"github.com/larchwave/flowbaton/internal/strictjson"
 )
 
+// backPressFeature is the capability a driver advertises when it can press
+// the platform back control. Both iOS surfaces declare it false, so the tool
+// is withheld there rather than offered and refused.
+const backPressFeature = "backPress"
+
 const (
 	maxWaitSeconds        = 10
 	longPressDurationMS   = 800
@@ -137,12 +142,17 @@ func emptySchema() json.RawMessage {
 
 // box assembles the device toolbox shared by the Tester and the Navigator.
 func (s *toolSession) box() explore.ToolBox {
+	canBack := s.deps.driver.Capabilities().Features[backPressFeature]
+	pressKey := "Press one keyboard key. Device buttons are not keyboard keys."
+	if canBack {
+		pressKey += " Use back to leave a screen."
+	}
 	specs := []explore.ToolSpec{
 		{Name: "tap", Description: "Tap one element addressed by eidx, text, or id.", Schema: targetSchema()},
 		{Name: "long_press", Description: "Press and hold one element addressed by eidx, text, or id.", Schema: targetSchema()},
 		{Name: "input_text", Description: "Type text into the field that holds keyboard focus. Tap a text-field row first; this fails while nothing on screen takes typed text.", Schema: json.RawMessage(`{"type":"object","properties":{"text":{"type":"string"}},"required":["text"],"additionalProperties":false}`)},
 		{Name: "erase_text", Description: "Erase characters from the field that holds keyboard focus. Tap a text-field row first; this fails while nothing on screen takes typed text.", Schema: json.RawMessage(`{"type":"object","properties":{"characters":{"type":"integer"}},"additionalProperties":false}`)},
-		{Name: "press_key", Description: "Press one keyboard key. Device buttons are not keyboard keys; use back to leave a screen.", Schema: pressKeySchema()},
+		{Name: "press_key", Description: pressKey, Schema: pressKeySchema()},
 		{Name: "swipe", Description: "Swipe the screen in one direction.", Schema: directionSchema()},
 		{Name: "scroll", Description: "Scroll the screen up or down.", Schema: directionSchema()},
 		{Name: "back", Description: "Press the platform back control.", Schema: emptySchema()},
@@ -173,6 +183,10 @@ func (s *toolSession) box() explore.ToolBox {
 		"check_visible": s.handleCheckVisible,
 		"note":          s.handleNote,
 		"finish":        s.handleFinish,
+	}
+	if !canBack {
+		specs = slices.DeleteFunc(specs, func(spec explore.ToolSpec) bool { return spec.Name == "back" })
+		delete(handlers, "back")
 	}
 	return explore.ToolBox{Specs: specs, Handlers: handlers}
 }

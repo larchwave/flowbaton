@@ -110,6 +110,7 @@ type fakeDriver struct {
 	backErr  error
 	inputErr error
 	killErr  error
+	features map[string]bool
 }
 
 func (f *fakeDriver) log(name string) { f.calls = append(f.calls, name) }
@@ -222,7 +223,7 @@ func (f *fakeDriver) WaitForAppToSettle(context.Context, device.SettleRequest) (
 }
 
 func (f *fakeDriver) Capabilities() device.Capabilities {
-	return device.Capabilities{Platform: "android"}
+	return device.Capabilities{Platform: "android", Features: f.features}
 }
 
 func (f *fakeDriver) SetPermissions(context.Context, device.PermissionsRequest) error { return nil }
