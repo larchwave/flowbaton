@@ -366,6 +366,21 @@ func stepLogMarkdown(report *explore.SessionReport) string {
 		for _, note := range result.Notes {
 			fmt.Fprintf(builder, "- note: %s\n", note)
 		}
+		// A pass left no trace of what it was granted for: the report quotes
+		// evidence only under a finding. Without the verdict beside the steps
+		// nobody can ask whether an outcome was credited to the final screen
+		// or merely to the action that was supposed to produce it.
+		for _, check := range result.Outcomes {
+			if check.Driver {
+				continue
+			}
+			verdict := "not met"
+			if check.Met {
+				verdict = "met"
+			}
+			fmt.Fprintf(builder, "- %s %q: %s\n",
+				verdict, check.Expected, explore.Truncate(check.Evidence, 300))
+		}
 	}
 	return builder.String()
 }
