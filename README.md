@@ -8,6 +8,10 @@
 YAML flows for Android and iOS Simulator UI tests. One Go binary parses, runs,
 and records them. Optional AI with your own key. No telemetry.
 
+<p align="center">
+  <img src="docs/assets/hero.webp" width="720" alt="A hand holding a written flow passes a baton to a robotic arm reaching out of a phone screen, which taps another device">
+</p>
+
 ```yaml
 appId: com.example.app
 ---
