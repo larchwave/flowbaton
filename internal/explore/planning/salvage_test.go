@@ -46,3 +46,19 @@ func TestPlanNextStillFailsWhenNothingSurvives(t *testing.T) {
 		t.Fatal("want an error when the reply carries no whole scenario")
 	}
 }
+
+// A retry that never arrives must not cost more than a retry that arrives
+// broken: whatever the first reply carried whole is already in hand.
+func TestPlanNextKeepsTheFirstReplyWhenTheRetryNeverArrives(t *testing.T) {
+	llm := &scriptedLLM{replies: []string{brokenReply()}}
+	planner := &Planner{LLM: llm}
+	scenarios, err := planner.PlanNext(context.Background(), explore.PlanRequest{
+		Map: testMap(), Style: "normal", Budget: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scenarios) != 2 {
+		t.Fatalf("got %d scenarios, want the two the first reply carried whole", len(scenarios))
+	}
+}

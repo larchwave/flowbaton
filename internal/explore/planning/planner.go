@@ -104,6 +104,10 @@ func (p *Planner) converse(ctx context.Context, messages []explore.Message) (pla
 	if decodeErr == nil {
 		return reply, nil
 	}
+	// Whatever this reply carried whole is already in hand, and the retry
+	// can only add to it: a second call that never arrives must not cost
+	// more than one that arrives broken.
+	salvaged := salvageScenarios(response.Message.Text)
 	retry := append(append([]explore.Message(nil), messages...),
 		response.Message,
 		explore.Message{
@@ -112,11 +116,17 @@ func (p *Planner) converse(ctx context.Context, messages []explore.Message) (pla
 		})
 	response, err = p.LLM.Chat(ctx, explore.ChatRequest{Messages: retry})
 	if err != nil {
+		if len(salvaged) > 0 {
+			return planReply{Scenarios: salvaged}, nil
+		}
 		return planReply{}, fmt.Errorf("planning: retry chat: %w", err)
 	}
 	reply, decodeErr = decodeReply(response.Message.Text)
 	if decodeErr != nil {
-		if salvaged := salvageScenarios(response.Message.Text); len(salvaged) > 0 {
+		if second := salvageScenarios(response.Message.Text); len(second) > 0 {
+			salvaged = second
+		}
+		if len(salvaged) > 0 {
 			return planReply{Scenarios: salvaged}, nil
 		}
 		return planReply{}, fmt.Errorf("planning: decode scenarios: %w", decodeErr)
