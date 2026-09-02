@@ -127,7 +127,7 @@ func askWorkerOutcome(ctx context.Context, llm explore.LLM, expected string, fac
 			"control, the verdict is inapplicable. Neither is not_met.",
 		expected, elementTable(facts.Final),
 		layoutLine(facts.Final)+driverCheckLines(facts.DriverChecks)+
-			typedLines(facts.Typed)+visitedLines(facts.Visited),
+			typedLines(facts.Typed)+visitedLines(facts.Visited)+actionLines(facts.Actions),
 		sessionTagLine(facts.SessionTag))
 	verdict := workerVerdict{}
 	_, err := explore.ChatJSON(ctx, llm, explore.ChatRequest{Messages: []explore.Message{
@@ -185,7 +185,10 @@ func readVerdict(verdict workerVerdict, expected string) explore.OutcomeCheck {
 // call; they are all answers to "what actually happened", so they travel
 // together.
 type judgeFacts struct {
-	Final        *explore.ScreenState
+	Final *explore.ScreenState
+	// Actions are the run's steps, so the judge can answer what it did and
+	// not only where it ended.
+	Actions      []explore.StepRecord
 	DriverChecks []explore.OutcomeCheck
 	Typed        []string
 	// SessionTag is the label the tester was told to stamp on anything it
@@ -240,6 +243,35 @@ func visitedScreens(steps []explore.StepRecord) []string {
 // journey: it says nothing the final table does not already show, so it
 // stays out of the prompt rather than inviting the model to reason about a
 // list of length one.
+// actionLines names what the run did, in order. mmx85's judge asked for it:
+// "The driver facts do not specify which button was tapped, so it cannot be
+// confirmed whether the interface associated with that button is now open."
+// It was being told the screens the run visited and the text it typed, and
+// nothing about the actions between them.
+//
+// A failed step is left out. It did not happen, and listing it invites the
+// judge to credit an action the device refused. The rendering is the step
+// log's, which has named the resolved target since c14b63d -- "id
+// inbox-button" rather than "e13", which is the shape the question wants.
+func actionLines(steps []explore.StepRecord) string {
+	done := make([]explore.StepRecord, 0, len(steps))
+	for _, step := range steps {
+		if step.Status == explore.StepFailed {
+			continue
+		}
+		done = append(done, step)
+	}
+	if len(done) == 0 {
+		return ""
+	}
+	builder := &strings.Builder{}
+	builder.WriteString("\nWhat the run did, in order (driver facts):\n")
+	for _, step := range done {
+		fmt.Fprintf(builder, "- %s\n", explore.StepLine(step))
+	}
+	return builder.String()
+}
+
 func visitedLines(visited []string) string {
 	if len(visited) < 2 {
 		return ""

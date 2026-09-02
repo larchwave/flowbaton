@@ -127,6 +127,7 @@ func (t *Tester) RunScenario(ctx context.Context, scenario explore.Scenario, sta
 		Typed:        typedTexts(session.steps),
 		SessionTag:   t.Config.SessionName,
 		Visited:      visitedScreens(session.steps),
+		Actions:      session.steps,
 	})
 	t.fill(result, session)
 	result.Outcomes = append(append([]explore.OutcomeCheck(nil), checks...), session.checks...)
