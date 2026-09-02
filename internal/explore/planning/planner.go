@@ -149,7 +149,7 @@ func filterScenarios(raw []plannedScenario, request explore.PlanRequest, styleNa
 		name := strings.TrimSpace(item.Name)
 		priority, ok := foldPriority(item.Priority)
 		steps := cleanLines(item.Steps)
-		expected := forwardOutcomes(cleanLines(item.Expected))
+		expected := checkableOutcomes(cleanLines(item.Expected))
 		if name == "" || !ok || len(steps) == 0 || len(expected) == 0 {
 			continue
 		}
@@ -197,25 +197,49 @@ var backwardLooking = []string{
 	"is restored", "are restored", "replaced by", "absence of", "no new",
 }
 
-// forwardOutcomes drops the outcomes that look backward. A scenario left
-// with none is dropped by the caller, which is the right answer: there is
-// nothing in it the judge could confirm.
-func forwardOutcomes(expected []string) []string {
+// unobservable lists the wordings that make an outcome about how the screen
+// LOOKS, which the checker never sees: it is handed roles, labels and
+// identifiers. The prompt has carried that rule since mmx57 and the model
+// writes them anyway -- mmx84 lost three of twelve scenarios to colour, with
+// the judge answering "cannot confirm the red selected indicator colour"
+// three times over. A rule nothing enforces is a rule the model may ignore.
+//
+// Each phrase was checked against all 72 outcomes these sessions have filed.
+// Six matched: an "accent color", a "red filled-circle selection highlight"
+// twice, a "blue filled button", a "dot indicator" twice. None was a false
+// positive.
+//
+// A bare colour word is deliberately NOT here. An app may label a calendar
+// "Red", and that label is text the checker can read; the phrases above name
+// an appearance, not a word on the screen.
+var unobservable = []string{
+	"colour", "color", "highlight", "filled-circle", "filled button",
+	"dot indicator",
+}
+
+// checkableOutcomes drops the outcomes the judge could not confirm whatever
+// the app did: the ones that look backward, and the ones about appearance. A
+// scenario left with none is dropped by the caller, which is the right
+// answer -- there is nothing in it the judge could confirm.
+func checkableOutcomes(expected []string) []string {
 	out := make([]string, 0, len(expected))
 	for _, outcome := range expected {
 		folded := strings.ToLower(outcome)
-		backward := false
-		for _, phrase := range backwardLooking {
-			if strings.Contains(folded, phrase) {
-				backward = true
-				break
-			}
+		if containsAny(folded, backwardLooking) || containsAny(folded, unobservable) {
+			continue
 		}
-		if !backward {
-			out = append(out, outcome)
-		}
+		out = append(out, outcome)
 	}
 	return out
+}
+
+func containsAny(folded string, phrases []string) bool {
+	for _, phrase := range phrases {
+		if strings.Contains(folded, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func foldPriority(raw string) (explore.Priority, bool) {
