@@ -392,12 +392,15 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 	// already on the remote, where correcting it would mean rewriting a
 	// published object. The next eight are dependency-update commits and
 	// their merges, made on the hosting side without trailers and published
-	// there; the last is the merge that brought them into this history --
+	// there; the next is the merge that brought them into this history --
 	// made locally with --no-edit, so it could have carried the trailers
-	// and did not, and was noticed only after the push. Keeping the list
-	// exact avoids that rewrite and makes any widening visible; a new entry
-	// here is a miss, not an exemption. A merge made locally takes a
-	// trailered message.
+	// and did not, and was noticed only after the push. The last four are
+	// the same story repeating: two dependency-update commits and their two
+	// pull-request merges, made and published on the hosting side. The merge
+	// that brought THOSE in is not here, because a merge made locally takes
+	// a trailered message and that one does. Keeping the list exact avoids
+	// that rewrite and makes any widening visible; a new entry here is a
+	// miss, not an exemption.
 	grandfathered := map[string]bool{
 		"9acd46adfc5889a46ddc029f78e1b389f25c66ac": false,
 		"3b3b22b886a27112eac6e2e712b8f86ee7d2d155": false,
@@ -419,9 +422,13 @@ func TestCommitHistoryUsesLoreTrailers(t *testing.T) {
 		"2b9bec310469f6a3175d2bf78b1db789f5669a7b": false,
 		"7bad373298249a1e3892b4fd688ae72a67d0d9bf": false,
 		"d3f37036281dfb9f9cb21aa376669ebdb49563da": false,
+		"b0c09fd41814e66985578f0edcc0d9369c8c21c3": false,
+		"6e22fe06a0d68045132c4f6d5552087c81794554": false,
+		"0479960cae5b4ad6b2617fd6f7fcc6b32fc0beca": false,
+		"bda26e922d3f34b3e182ea1782506d330e083a67": false,
 	}
-	if len(grandfathered) != 20 {
-		t.Fatalf("Lore grandfather set has %d entries, want exactly 20", len(grandfathered))
+	if len(grandfathered) != 24 {
+		t.Fatalf("Lore grandfather set has %d entries, want exactly 24", len(grandfathered))
 	}
 	hasGitMetadata, err := repositoryHasGitMetadata(repoRoot(t))
 	if err != nil {
