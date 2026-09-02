@@ -116,9 +116,43 @@ func (p *Planner) converse(ctx context.Context, messages []explore.Message) (pla
 	}
 	reply, decodeErr = decodeReply(response.Message.Text)
 	if decodeErr != nil {
+		if salvaged := salvageScenarios(response.Message.Text); len(salvaged) > 0 {
+			return planReply{Scenarios: salvaged}, nil
+		}
 		return planReply{}, fmt.Errorf("planning: decode scenarios: %w", decodeErr)
 	}
 	return reply, nil
+}
+
+// salvageScenarios reads the scenarios a broken reply did carry, up to the
+// entry that broke it. A model that closes the last array with the wrong
+// bracket costs the session every scenario it wrote correctly before that
+// byte, and the planner validates each entry on its own anyway, so a prefix
+// is worth exactly as much per entry as a whole reply.
+func salvageScenarios(text string) []plannedScenario {
+	decoder := json.NewDecoder(strings.NewReader(explore.UnfencedJSON(text)))
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil
+		}
+		if key, ok := token.(string); ok && key == "scenarios" {
+			break
+		}
+	}
+	// The array bracket itself, without which More reads the wrong value.
+	if token, err := decoder.Token(); err != nil || token != json.Delim('[') {
+		return nil
+	}
+	var salvaged []plannedScenario
+	for decoder.More() {
+		var item plannedScenario
+		if err := decoder.Decode(&item); err != nil {
+			break
+		}
+		salvaged = append(salvaged, item)
+	}
+	return salvaged
 }
 
 func decodeReply(text string) (planReply, error) {
