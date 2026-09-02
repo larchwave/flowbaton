@@ -1,27 +1,27 @@
 # Contributing to FlowBaton
 
-FlowBaton accepts focused issues and pull requests for the CLI, engine, device
-drivers, tests, and documentation.
+Issues and pull requests for the CLI, engine, drivers, tests, and docs.
 
 ## Before opening a change
 
-- Keep the change limited to one behavior or maintenance goal.
+- Keep the change to one behavior or one maintenance goal.
 - Add or update tests for behavior changes.
-- Update contracts and specifications when a public shape changes.
+- When a public shape changes, update the contracts and the specs in the
+  same change.
 - Do not commit credentials, device data, build output, or local logs.
-- Add no runtime dependency without the license and notice updates required by
+- Add no runtime dependency without the license and notice updates in
   `docs/dependency-policy.md`.
 
 ## Build requirements
 
-- Go 1.25 or newer
+- Go 1.26 or newer (module floor 1.26; CI uses 1.26.1)
 - Android SDK and Java 17 for Android work
 - Xcode with an installed iOS Simulator runtime for iOS work
 - XcodeGen 2.44.1 for the iOS Xcode project
 
 ## Local checks
 
-Run the checks that cover your change. Go changes normally require:
+Run the checks that cover your change. Go changes normally need:
 
 ```sh
 go test ./...
@@ -30,7 +30,7 @@ gofmt -l .
 git diff --check
 ```
 
-Android changes also require:
+Android changes also need:
 
 ```sh
 cd drivers/android
@@ -38,7 +38,7 @@ cd drivers/android
   :core:test :agent:lintDebug :agent:assembleDebug :agent:assembleDebugAndroidTest
 ```
 
-iOS changes also require:
+iOS changes also need:
 
 ```sh
 xcodegen generate --spec drivers/ios/project.yml --project drivers/ios
@@ -53,7 +53,7 @@ xcodebuild -project drivers/ios/FlowBatonIOSRunner.xcodeproj \
 
 ## Commit messages
 
-Use an imperative subject and include these trailers in the commit body:
+Imperative subject, then these trailers in the body:
 
 ```text
 Confidence: high | medium | low
@@ -64,6 +64,6 @@ Not-tested: checks that did not run, with the reason
 
 ## Review
 
-Describe the user-visible outcome, changed boundaries, test results, and known
-risks. Maintainers may ask for a smaller change when independent concerns are
-mixed together.
+Describe the user-visible outcome, the boundaries that changed, the tests
+that ran, and known risks. Maintainers may ask for a smaller change when
+independent concerns are mixed together.

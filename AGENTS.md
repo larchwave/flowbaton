@@ -3,7 +3,10 @@
 FlowBaton is a mobile UI automation toolkit: a Go host CLI, an Android device
 agent, and an iOS runner that drives Simulators and physical devices (iOS 17+
 hardware over usbmuxd). Test flows are plain YAML. `-p ios` covers both iOS
-flavors — the UDID decides whether a Simulator or an attached device runs.
+flavors. The UDID decides whether a Simulator or an attached device runs.
+
+Physical iOS is in this tree and still hardening. Prefer a Simulator unless
+the operator named a hardware UDID.
 
 ## CLI surface
 
@@ -28,11 +31,11 @@ flowbaton                              # print the command summary
 Prefer `flowbaton mcp` when you can register MCP servers: it exposes
 `check_syntax`, `list_devices`, `start_device`, `hierarchy`, `query`,
 `run_flow`, `screenshot`, and `explore` without shelling out. `run_flow`
-executes a flow on a device for real — pass `platform`, `udid`, and either
-`path` (confined to the base directory) or inline `yaml`. `start_device`
-boots a simulator or launches an emulator and waits for readiness. `explore`
-runs an autonomous AI exploration session against one app (`appId` +
-`platform`) and needs a configured AI provider on the host.
+executes a flow on a device: pass `platform`, `udid`, and either `path`
+(confined to the base directory) or inline `yaml`. `start_device` boots a
+simulator or launches an emulator and waits for readiness. `explore` runs
+an autonomous AI session against one app (`appId` + `platform`) and needs a
+configured AI provider on the host.
 
 ## Flow shape
 
@@ -48,15 +51,15 @@ Validate any flow you generate with `check-syntax` before offering it.
 
 ## Repository map
 
-- `cmd/flowbaton` — process entry and command dispatch
-- `internal/cli` — command parsing and host orchestration
-- `internal/flow` — YAML decoding and source diagnostics
-- `internal/engine` — deterministic command execution
-- `internal/device` — platform-neutral driver surface
-- `internal/capability` — side-effect-free preflight checks
-- `drivers/android`, `drivers/ios` — on-device agent and runner code
-- `contracts/` — machine-readable public and driver contracts
-- `specs/` — normative product behavior
+- `cmd/flowbaton`: process entry and command dispatch
+- `internal/cli`: command parsing and host orchestration
+- `internal/flow`: YAML decoding and source diagnostics
+- `internal/engine`: deterministic command execution
+- `internal/device`: platform-neutral driver surface
+- `internal/capability`: side-effect-free preflight checks
+- `drivers/android`, `drivers/ios`: on-device agent and runner code
+- `contracts/`: machine-readable public and driver contracts
+- `specs/`: product behavior
 
 Contract and spec changes must land together with both producer and consumer
 sides in one reviewed change.

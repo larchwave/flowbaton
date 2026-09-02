@@ -1,31 +1,27 @@
-# FlowBaton Development Plan
+# Roadmap
 
-## Product goal
+## v1
 
-Publish a signed Apache-2.0 v1 that can discover, validate, and execute mobile
-UI flows on supported Android devices and iOS Simulators.
+A signed Apache-2.0 release that discovers, validates, and runs YAML flows on
+Android devices and iOS Simulators.
 
-## Delivery stages
+That tag also needs green Go, Android, and iOS checks; attested archives;
+checksums; an SBOM; anonymous download of every advertised surface; and
+unsupported features failing before device mutation. The full gate is
+[docs/release-policy.md](docs/release-policy.md).
 
-1. Stabilize the flow parser, execution engine, and device-neutral contracts.
-2. Complete Android agent installation, lifecycle, and device operations.
-3. Complete iOS runner installation, lifecycle, and simulator operations.
-4. Finish CLI reporting, recording, sharding, shell completion, and MCP tools.
-5. Harden error handling, cancellation, timeouts, and debug artifacts.
-6. Publish signed archives, checksums, an SBOM, install scripts, and public
-   documentation.
+## After v1
 
-## Release requirements
+- Physical iOS. The driver is already in this tree; hardware evidence is
+  still required.
+- Hardening of `explore` and `flowbaton serve`.
 
-- All committed contracts and product specifications agree with the code.
-- Go, Android, and iOS checks pass on their supported toolchains.
-- The release workflow uses immutable action pins and least-privilege tokens.
-- Every archive contains the license, notice, README, and support documents.
-- Release assets are downloadable without project credentials.
-- Checksums and signatures validate each published archive.
-- Unsupported features fail with a clear error before device mutation.
+Hosted accounts, billing, telemetry, and remote render services stay out of
+this repository.
 
-## Current work
+## Now
 
-The current milestone hardens cross-platform driver packaging, expands device
-smoke coverage, and closes the release requirements above.
+FlowBaton is pre-alpha. Android and iOS Simulator execution work. Physical
+iOS, explore, and the multi-node runtime are in this tree and still
+hardening. Homebrew v0.1.1 predates some of that; a source build tracks
+`main`.

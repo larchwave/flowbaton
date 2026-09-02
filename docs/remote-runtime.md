@@ -1,8 +1,9 @@
 # Remote DeviceSession runtime
 
-`flowbaton serve` runs the Integration v1 and DeviceSession v1 HTTPS service.
-Local CLI runs do not need this service. It is for operators who need a shared,
-authenticated pool of Android devices, iOS Simulators, or web targets.
+`flowbaton serve` is an optional HTTPS service for a shared, authenticated
+pool of Android devices, iOS Simulators, or web targets. Local
+`flowbaton test` does not use it. The service speaks Integration v1 and
+DeviceSession v1.
 
 ## Required inputs
 
