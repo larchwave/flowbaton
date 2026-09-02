@@ -5,12 +5,14 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/larchwave/flowbaton)](https://goreportcard.com/report/github.com/larchwave/flowbaton)
 [![License](https://img.shields.io/github/license/larchwave/flowbaton)](LICENSE)
 
-YAML flows for Android and iOS Simulator UI tests. One Go binary parses, runs,
-and records them. Optional AI with your own key. No telemetry.
+Mobile UI automation for Android and iOS. One Go binary: CLI, MCP, and
+optional explore with your own key. No telemetry.
 
 <p align="center">
   <img src="docs/assets/hero.webp" width="720" alt="A hand holding a written flow passes a baton to a robotic arm reaching out of a phone screen, which taps another device">
 </p>
+
+The usual way to drive a device is a YAML flow:
 
 ```yaml
 appId: com.example.app
@@ -26,7 +28,7 @@ appId: com.example.app
 flowbaton test -p ios --device <simulator-udid> login.yaml
 ```
 
-The same YAML is valid on Android. Unsupported commands fail in preflight,
+The same file is valid on Android. Unsupported commands fail in preflight,
 before the device is touched.
 
 ## Install

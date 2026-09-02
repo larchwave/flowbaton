@@ -1,7 +1,8 @@
 # FlowBaton
 
-> YAML flows for Android and iOS Simulator UI tests. One Go binary. Optional
-> AI with your own key. SLSA-attested releases. Apache-2.0. Pre-alpha.
+> Mobile UI automation for Android and iOS. One Go binary: CLI, MCP, optional
+> explore with your own key. Flows are YAML. SLSA-attested. Apache-2.0.
+> Pre-alpha.
 
 A flow is a YAML file: an `appId` header, `---`, then a list of commands such
 as `launchApp`, `tapOn`, `inputText`, `assertVisible`. Validate any flow with
