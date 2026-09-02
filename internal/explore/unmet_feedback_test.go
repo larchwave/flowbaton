@@ -100,3 +100,75 @@ func TestAnUnjudgedOrStoppedRunBansNothing(t *testing.T) {
 		t.Fatalf("Unmet = %v, want the outcome a finished run did not find", got)
 	}
 }
+
+// The Unmet feed reaches the planner between plans, and a plan is written all
+// at once. mmx82 wrote eight scenarios in one call, five of them the same test
+// with cosmetic variations -- "a day with multiple event bars", "with +6 more
+// events", "with mixed color event bars", "with a single pink event bar" --
+// and all five failed on one invented expectation, which the report then filed
+// as a single High defect naming five tests. Dedup by name cannot see it: the
+// names differ. The expectations do not.
+func TestAScenarioIsSkippedWhenEveryOutcomeWasAlreadyMissed(t *testing.T) {
+	t.Parallel()
+
+	invented := "An inline image element labelled 'event image' is visible"
+	fake := &fakeCrew{
+		state: &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		plans: [][]Scenario{{
+			{Name: "a", Priority: PriorityNormal, Expected: []string{invented}},
+			{Name: "b", Priority: PriorityNormal, Expected: []string{invented}},
+			{Name: "c", Priority: PriorityNormal, Expected: []string{"something else"}},
+		}},
+		outcomes: []OutcomeCheck{{Expected: invented, Met: false}},
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	report, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 3, Styles: []string{"normal"},
+		Clock: func() time.Time { return clock },
+	}, crew)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(fake.ran, "b") {
+		t.Fatalf("ran %v, want b skipped: every outcome it checks was already missed", fake.ran)
+	}
+	if !slices.Contains(fake.ran, "c") {
+		t.Fatalf("ran %v, want c to run: it checks something nothing has looked for", fake.ran)
+	}
+	if len(report.Results) != 2 {
+		t.Fatalf("%d results, want the two scenarios that ran", len(report.Results))
+	}
+}
+
+// A scenario that expects nothing has no outcome to have missed, and skipping
+// it on an empty set would skip every such scenario forever.
+func TestAScenarioExpectingNothingIsStillRun(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeCrew{
+		state: &ScreenState{Signature: ScreenSignature{AppID: "app", TreeDigest: "d1"}},
+		plans: [][]Scenario{{
+			{Name: "a", Priority: PriorityNormal, Expected: []string{"x"}},
+			{Name: "b", Priority: PriorityNormal},
+		}},
+		outcomes: []OutcomeCheck{{Expected: "x", Met: false}},
+	}
+	crew := Crew{
+		Observer: fake, Researcher: fake, Planner: fake,
+		Tester: fake, Navigator: fake, Analyst: fake,
+	}
+	clock := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	if _, err := RunSession(context.Background(), Config{
+		AppID: "app", MaxTests: 2, Styles: []string{"normal"},
+		Clock: func() time.Time { return clock },
+	}, crew); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(fake.ran, "b") {
+		t.Fatalf("ran %v, want the scenario with no expectations to run", fake.ran)
+	}
+}

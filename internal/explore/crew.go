@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Crew bundles the role implementations for one exploration session.
@@ -114,6 +115,17 @@ func RunSession(ctx context.Context, config Config, crew Crew) (*SessionReport, 
 				break
 			}
 			planned = append(planned, scenario.Name)
+			// A plan is written all at once, so the Unmet list cannot reach
+			// the planner in time to stop a repeat INSIDE one plan. mmx82
+			// wrote five scenarios that were one test with cosmetic
+			// variations -- "a day with multiple event bars", "with +6 more
+			// events", "with a single pink event bar" -- and all five failed
+			// on the same invented expectation, which the report filed as one
+			// defect naming five tests. Dedup by name cannot see that; the
+			// names differ and the expectations do not.
+			if allAlreadyMissed(scenario.Expected, unmet) {
+				continue
+			}
 			// The planner wrote this scenario against the UI map of one
 			// screen and recorded that screen's key. The relaunch above
 			// cannot put the app back on it: it kills and relaunches, and
@@ -274,6 +286,32 @@ func truncateCause(cause string) string {
 func finishReport(report *SessionReport, config Config) *SessionReport {
 	report.Finished = config.Now()
 	return report
+}
+
+// allAlreadyMissed reports whether every outcome a scenario checks has already
+// been looked for and not found this session. Running it again can only
+// produce the finding the report already carries.
+//
+// A scenario that expects nothing is never skipped: an empty set is vacuously
+// contained in any list, and skipping on that would skip every such scenario
+// for the whole session.
+func allAlreadyMissed(expected, missed []string) bool {
+	if len(expected) == 0 {
+		return false
+	}
+	for _, want := range expected {
+		found := false
+		for _, seen := range missed {
+			if strings.EqualFold(strings.TrimSpace(want), strings.TrimSpace(seen)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // collectUnmet adds the expected outcomes a run looked for and did not find.
