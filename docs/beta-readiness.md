@@ -49,18 +49,18 @@ notarization, public attestation, or anonymous release delivery.
 
 ## Publication requirements still open
 
-1. Complete signing on a new tagged candidate. All six Apple credentials
-   and the scoped Homebrew deploy key are configured. `beta.3` passed every
-   prerequisite job and built its archives; CI signing then failed because
-   the Developer ID G1 intermediate was unavailable on the clean runner.
-   The signing harness now imports the pinned public Apple intermediate.
-2. Use the notarization check for command-line code. The exact `beta.3`
-   Darwin archive passed local signing and Apple notarization, but `spctl`
-   rejected the bare executable as not an app. Signature verification plus
-   the required `notarized` code requirement and online ticket check replace
-   that app-specific assessment. The corrected path still needs CI proof.
-3. Pass every native host installer and Homebrew smoke, including Intel and
-   Apple silicon; retain signed archives, checksums, SBOM, and provenance.
+1. Complete installer smokes on the corrected candidate. `beta.4` passed
+   all platform tests, archive construction, both Darwin signing/notarization
+   jobs, provenance attestation, and Homebrew installation on both Mac hosts.
+2. Correct the remaining installer failures observed on those clean hosts:
+   Windows smoke used PowerShell's read-only home variable, the Mac smoke
+   home traversed the system `/var` symlink, and driver extraction counted
+   fewer trailing tar padding bytes than the manifest's complete payload.
+   These fixes retain cache confinement and full payload size/hash checks.
+3. Pin iOS build and Mac installer smoke to Xcode 26.2. The previous runner
+   default was 16.4, which excluded the current local Xcode 26.2 from the
+   packaged runner compatibility range. Rerun the exact tagged candidate through the four native host installer
+   gates. Earlier successes do not establish the corrected candidate's result.
 4. Pass the workflow's anonymous probe against the published tag, assets,
    policy, and beta cask. Do not retain a release when its gates fail.
 

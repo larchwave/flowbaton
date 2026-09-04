@@ -176,6 +176,17 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Select the release Xcode toolchain
+        shell: bash
+        run: |
+          developer_dir="/Applications/Xcode_26.2.app/Contents/Developer"
+          test -d "$developer_dir" || { printf 'Required release Xcode is missing: %s\n' "$developer_dir" >&2; exit 1; }
+          sudo xcode-select --switch "$developer_dir"
+          xcode_version_output="$(xcodebuild -version)"
+          xcode_version="$(printf '%s\n' "$xcode_version_output" | sed -n '1p')"
+          xcode_build="$(printf '%s\n' "$xcode_version_output" | sed -n '2p')"
+          test "$xcode_version" = "Xcode 26.2" || { printf 'Unexpected release Xcode version: %s\n' "$xcode_version" >&2; exit 1; }
+          test "$xcode_build" = "Build version 17C52" || { printf 'Unexpected release Xcode build: %s\n' "$xcode_build" >&2; exit 1; }
       - name: Run Swift package tests
         run: swift test --package-path drivers/ios
       - name: Install XcodeGen 2.44.1
@@ -503,6 +514,18 @@ jobs:
         with:
           name: release-candidate-${{ github.sha }}
           path: candidate
+      - name: Select the release Xcode toolchain
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          developer_dir="/Applications/Xcode_26.2.app/Contents/Developer"
+          test -d "$developer_dir" || { printf 'Required release Xcode is missing: %s\n' "$developer_dir" >&2; exit 1; }
+          sudo xcode-select --switch "$developer_dir"
+          xcode_version_output="$(xcodebuild -version)"
+          xcode_version="$(printf '%s\n' "$xcode_version_output" | sed -n '1p')"
+          xcode_build="$(printf '%s\n' "$xcode_version_output" | sed -n '2p')"
+          test "$xcode_version" = "Xcode 26.2" || { printf 'Unexpected release Xcode version: %s\n' "$xcode_version" >&2; exit 1; }
+          test "$xcode_build" = "Build version 17C52" || { printf 'Unexpected release Xcode build: %s\n' "$xcode_build" >&2; exit 1; }
       - name: Install Android identity tools
         if: runner.os != 'macOS'
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1

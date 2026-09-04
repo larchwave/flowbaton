@@ -83,6 +83,95 @@ func TestManagerAcquirePublishesVerifiedTarGzipAtomicallyAndReusesCache(t *testi
 	}
 }
 
+func TestManagerAcquireConsumesTarRecordPaddingForPayloadVerification(t *testing.T) {
+	t.Parallel()
+
+	asset, archive := tarGzipAssetForTest(t)
+	asset, archive = padTarGzipAssetForTest(t, asset, archive, 10*1024)
+
+	acquired := acquireTestAsset(t, Manager{
+		CacheRoot: realTempDir(t),
+		Verifier:  &concurrentVerifier{},
+	}, asset, archive)
+	assertAssetFiles(t, acquired.Directory, asset.Files)
+}
+
+func TestManagerAcquireRejectsUnverifiedTarRecordTail(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		mutate  func([]byte) []byte
+		wantErr error
+	}{
+		{
+			name: "tampered padding",
+			mutate: func(payload []byte) []byte {
+				payload[len(payload)-1] = 1
+				return payload
+			},
+			wantErr: ErrPayloadHashMismatch,
+		},
+		{
+			name: "excess trailing byte",
+			mutate: func(payload []byte) []byte {
+				return append(payload, 1)
+			},
+			wantErr: ErrPayloadSizeMismatch,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			asset, archive := tarGzipAssetForTestVariant(t, test.name)
+			asset, archive = padTarGzipAssetForTest(t, asset, archive, 10*1024)
+			payload := gunzipAssetForTest(t, archive)
+			archive = gzipAssetPayloadForTest(t, test.mutate(payload))
+			asset.Archive.SHA256 = hashHex(archive)
+			asset.Archive.Size = int64(len(archive))
+
+			manifest := Manifest{SchemaVersion: ManifestSchemaVersion, ManifestVersion: "test-v1", Assets: []Asset{asset}}
+			resolved, err := Resolve(manifest, runtimeForAsset(asset), requestForAsset(asset))
+			if err != nil {
+				t.Fatalf("Resolve() error = %v", err)
+			}
+			_, err = (Manager{
+				CacheRoot: realTempDir(t),
+				Source:    &countingArchiveSource{contents: archive},
+				Verifier:  &concurrentVerifier{},
+			}).Acquire(context.Background(), resolved)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("Acquire() error = %v, want %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestManagerAcquireValidatesGzipTrailerAfterTarEOF(t *testing.T) {
+	t.Parallel()
+
+	asset, archive := tarGzipAssetForTestVariant(t, "invalid-gzip-trailer")
+	asset, archive = padTarGzipAssetForTest(t, asset, archive, 10*1024)
+	archive[len(archive)-8] ^= 0xff
+	asset.Archive.SHA256 = hashHex(archive)
+
+	manifest := Manifest{SchemaVersion: ManifestSchemaVersion, ManifestVersion: "test-v1", Assets: []Asset{asset}}
+	resolved, err := Resolve(manifest, runtimeForAsset(asset), requestForAsset(asset))
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	_, err = (Manager{
+		CacheRoot: realTempDir(t),
+		Source:    &countingArchiveSource{contents: archive},
+		Verifier:  &concurrentVerifier{},
+	}).Acquire(context.Background(), resolved)
+	if err == nil || !strings.Contains(err.Error(), "read tar+gzip asset tail: gzip: invalid checksum") {
+		t.Fatalf("Acquire() error = %v, want tar tail gzip checksum failure", err)
+	}
+}
+
 func TestManagerAcquireRequiresResolvedContractAndDependenciesBeforeMutation(t *testing.T) {
 	t.Parallel()
 
@@ -1099,6 +1188,62 @@ func tarGzipAssetForTestArchive(t *testing.T, variant string, extra *tar.Header,
 		},
 	}
 	return asset, append([]byte(nil), gzipBuffer.Bytes()...)
+}
+
+func padTarGzipAssetForTest(t *testing.T, asset Asset, archive []byte, recordSize int) (Asset, []byte) {
+	t.Helper()
+	const tarBlockSize = 512
+	payload := gunzipAssetForTest(t, archive)
+	padding := recordSize - len(payload)%recordSize
+	if padding == 0 {
+		padding = recordSize
+	}
+	if padding <= 2*tarBlockSize {
+		t.Fatalf("test tar padding = %d, want bytes beyond the two EOF blocks", padding)
+	}
+	payload = append(payload, make([]byte, padding)...)
+	archive = gzipAssetPayloadForTest(t, payload)
+	asset.AssetHash = hashHex(payload)
+	asset.Archive.SHA256 = hashHex(archive)
+	asset.Archive.Size = int64(len(archive))
+	asset.Archive.UncompressedSHA256 = asset.AssetHash
+	asset.Archive.UncompressedSize = int64(len(payload))
+	return asset, archive
+}
+
+func gunzipAssetForTest(t *testing.T, archive []byte) []byte {
+	t.Helper()
+	reader, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		t.Fatalf("open test gzip: %v", err)
+	}
+	payload, readErr := io.ReadAll(reader)
+	closeErr := reader.Close()
+	if readErr != nil {
+		t.Fatalf("read test gzip: %v", readErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("close test gzip: %v", closeErr)
+	}
+	return payload
+}
+
+func gzipAssetPayloadForTest(t *testing.T, payload []byte) []byte {
+	t.Helper()
+	var compressed bytes.Buffer
+	writer, err := gzip.NewWriterLevel(&compressed, gzip.BestCompression)
+	if err != nil {
+		t.Fatalf("gzip.NewWriterLevel: %v", err)
+	}
+	writer.Header.ModTime = time.Unix(0, 0)
+	writer.Header.OS = 255
+	if _, err := writer.Write(payload); err != nil {
+		t.Fatalf("write gzip payload: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close gzip payload: %v", err)
+	}
+	return append([]byte(nil), compressed.Bytes()...)
 }
 
 func gzipAssetForTest(t *testing.T) (Asset, []byte, []byte) {

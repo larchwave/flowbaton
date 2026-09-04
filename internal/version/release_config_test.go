@@ -193,6 +193,20 @@ func TestReleaseWorkflowPublishesStableAndBetaChannelsSeparately(t *testing.T) {
 	}
 }
 
+func TestWindowsReleaseSmokeDoesNotAssignPowerShellHome(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join("..", "..", "scripts", "release", "smoke-windows.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for lineNumber, line := range strings.Split(string(contents), "\n") {
+		assignment := strings.TrimSpace(line)
+		remainder, found := strings.CutPrefix(strings.ToLower(assignment), "$home")
+		if found && strings.HasPrefix(strings.TrimSpace(remainder), "=") {
+			t.Fatalf("smoke-windows.ps1:%d assigns PowerShell's read-only $HOME variable: %s", lineNumber+1, assignment)
+		}
+	}
+}
+
 func renderHomebrewCask(t *testing.T, version string) string {
 	t.Helper()
 	python := releasePython(t)

@@ -5,6 +5,7 @@ candidate="${1:?usage: smoke-posix.sh CANDIDATE_DIR VERSION}"
 version="${2:?usage: smoke-posix.sh CANDIDATE_DIR VERSION}"
 install_script="${GITHUB_WORKSPACE:-$(pwd)}/scripts/install.sh"
 tmp="$(mktemp -d)"
+tmp="$(cd "$tmp" && pwd -P)"
 server_pid=""
 cleanup() {
   [[ -z "$server_pid" ]] || kill "$server_pid" 2>/dev/null || true

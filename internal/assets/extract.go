@@ -60,7 +60,11 @@ func extractTarGZIP(root string, asset Asset, archive []byte) error {
 	}
 	digest := sha256.New()
 	counter := &countingWriter{writer: digest}
-	tarReader := tar.NewReader(io.TeeReader(gzipReader, counter))
+	payloadReader := io.TeeReader(
+		io.LimitReader(gzipReader, asset.Archive.UncompressedSize+1),
+		counter,
+	)
+	tarReader := tar.NewReader(payloadReader)
 	declared := make(map[string]AssetFile, len(asset.Files))
 	allowedDirectories := assetDirectories(asset.Files)
 	for _, file := range asset.Files {
@@ -114,6 +118,10 @@ func extractTarGZIP(root string, asset Asset, archive []byte) error {
 			_ = gzipReader.Close()
 			return fmt.Errorf("%w: tar entry %q has unsupported type %d", ErrInvalidAssetManifest, name, header.Typeflag)
 		}
+	}
+	if _, err := io.Copy(io.Discard, payloadReader); err != nil {
+		_ = gzipReader.Close()
+		return fmt.Errorf("read tar+gzip asset tail: %w", err)
 	}
 	if err := gzipReader.Close(); err != nil {
 		return fmt.Errorf("close tar+gzip asset archive: %w", err)
