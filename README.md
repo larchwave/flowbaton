@@ -33,13 +33,18 @@ before the device is touched.
 
 ## Install
 
+Install the published `v0.2.0-beta.5` beta:
+
 ```sh
 brew tap larchwave/flowbaton
 brew trust larchwave/flowbaton
-brew install flowbaton
+brew install --cask flowbaton-beta
 ```
 
 `brew trust` is required for third-party casks on current Homebrew.
+The stable cask remains at `v0.1.1` and installs with
+`brew install --cask flowbaton`. Both casks provide the same executable, so
+install only one channel at a time.
 
 <details>
 <summary>Go, archives, and Windows</summary>
@@ -211,27 +216,27 @@ replays.
 | --- | --- | --- | --- |
 | macOS arm64 / amd64 | works | works | in tree, hardening |
 | Linux amd64 | works | unavailable | hardening<sup>1</sup> |
-| Windows amd64 | pre-alpha<sup>2</sup> | unavailable | hardening<sup>1</sup> |
+| Windows amd64 | installer and driver setup passed<sup>2</sup> | unavailable | hardening<sup>1</sup> |
 
 <sup>1</sup> Needs usbmuxd (macOS ships it). The device runner is built once on
 macOS with Xcode; an already-built runner can run from any host.
-<sup>2</sup> Flow parsing and syntax checks work. Android execution has not
-passed the release gates.
+<sup>2</sup> The beta release gate installed the Windows archive and provisioned
+the Android driver. Connected Android execution passed on Linux and was not
+run directly on Windows.
 
 Full detail: [support matrix](docs/support-matrix.md).
 
 ## Status
 
-FlowBaton is pre-alpha. Android devices, emulators, and iOS Simulators work
-today. Physical iOS, explore, and `serve` are in this tree and still
-hardening.
+FlowBaton `v0.2.0-beta.5` is published for the YAML CLI on Android and iOS
+Simulator. Its exact-tag [release pipeline](https://github.com/larchwave/flowbaton/actions/runs/33926562424)
+passed platform execution, signed and notarized packaging, clean-host
+installation, Homebrew installation, provenance, and anonymous public
+retrieval. The [beta release](https://github.com/larchwave/flowbaton/releases/tag/v0.2.0-beta.5)
+is separate from the stable `v0.1.1` channel.
 
-The Homebrew bottle is v0.1.1. Until the next tag, `explore`, the
-`start_device` / `run_flow` / `screenshot` MCP tools, and the physical-iOS
-driver need a source build (`go install` above).
-
-[Beta readiness](docs/beta-readiness.md) tracks candidate fixes, validation,
-and the remaining publication gates. No beta has been published yet.
+Physical iOS, explore, and `serve` are experimental. [Beta readiness](docs/beta-readiness.md)
+records the shipped fixes, validation evidence, and current scope.
 
 Command surface and contracts are versioned. Breaking changes are likely
 before 1.0.

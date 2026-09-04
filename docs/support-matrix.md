@@ -1,18 +1,24 @@
 # Support Matrix
 
-FlowBaton is pre-alpha. This table is the v1 release target, not a published
-support window. A host stays closed until that target's v1 checks pass.
+FlowBaton `v0.2.0-beta.5` is published for the Android and iOS Simulator YAML
+CLI. This table separates beta evidence from the future v1 target; the beta
+does not declare v1 complete.
 
-| Host | Android | iOS Simulator | iOS device | v1 |
+| Host | Android beta | iOS Simulator beta | iOS device | Future v1 |
 | --- | --- | --- | --- | --- |
-| macOS arm64 | v1 target | v1 target | after v1 | closed |
-| macOS amd64 | v1 target | v1 target | after v1 | closed |
-| Linux amd64 | v1 target | unavailable | after v1 | closed |
-| Windows amd64 | v1 target | unavailable | after v1 | closed |
+| macOS arm64 | available | Xcode 26.2 tested | experimental | not declared |
+| macOS amd64 | available | Xcode 26.2 tested | experimental | not declared |
+| Linux amd64 | connected execution passed | unavailable | experimental | not declared |
+| Windows amd64 | installer and driver provisioning passed<sup>1</sup> | unavailable | experimental | not declared |
 
-Today, in this tree and not as a support promise: Android devices and
-emulators run, iOS Simulator runs, Windows Android execution has not passed
-the release gates. The physical-iOS driver is present and still hardening.
+<sup>1</sup> Connected Android execution was not run directly on Windows. The
+connected release gate passed on Linux.
+
+The beta release installed the exact archive and provisioned the production
+driver from an empty home on Linux, Windows, Intel Mac, and Apple silicon Mac.
+Its iOS Simulator packages executed natively on both Mac architectures with
+Xcode 26.2 (build 17C52). The physical-iOS driver is present and still
+hardening.
 
 Physical iOS (iOS 17+) talks over usbmuxd through the embedded go-ios
 transport. Building the device runner needs Xcode and an Apple signing team,
