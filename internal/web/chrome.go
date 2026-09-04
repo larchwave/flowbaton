@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -71,9 +72,47 @@ func DefaultChromeBinary() string {
 // Chrome is a browser this process started and is responsible for stopping.
 type Chrome struct {
 	command *exec.Cmd
+	done    <-chan error
 	// profile is removed on Stop when this launcher created it.
 	profile string
 	BaseURL string
+}
+
+const chromeProcessOutputLimit = 16 * 1024
+
+// chromeProcessOutput retains a bounded prefix of Chrome's startup output.
+// Startup failures are normally printed first, and bounding this keeps a noisy
+// browser from growing the host process without limit while it waits for CDP.
+type chromeProcessOutput struct {
+	contents  []byte
+	truncated bool
+}
+
+func (output *chromeProcessOutput) Write(contents []byte) (int, error) {
+	written := len(contents)
+	remaining := chromeProcessOutputLimit - len(output.contents)
+	if remaining <= 0 {
+		output.truncated = output.truncated || written > 0
+		return written, nil
+	}
+	if len(contents) > remaining {
+		output.contents = append(output.contents, contents[:remaining]...)
+		output.truncated = true
+		return written, nil
+	}
+	output.contents = append(output.contents, contents...)
+	return written, nil
+}
+
+func (output *chromeProcessOutput) String() string {
+	if output == nil {
+		return ""
+	}
+	message := strings.TrimSpace(string(output.contents))
+	if output.truncated {
+		message += "\n[output truncated]"
+	}
+	return message
 }
 
 // LaunchChrome starts the browser and waits for DevTools to answer.
@@ -99,41 +138,58 @@ func LaunchChrome(ctx context.Context, options ChromeOptions) (*Chrome, error) {
 	}
 
 	command := exec.CommandContext(ctx, binary, chromeArguments(options)...)
+	output := &chromeProcessOutput{}
+	command.Stdout, command.Stderr = output, output
+	// A browser subprocess can inherit an output pipe and outlive Chrome. Bound
+	// the pipe drain so one such descendant cannot hang launch or shutdown.
+	command.WaitDelay = 2 * time.Second
 	if err := command.Start(); err != nil {
 		if created != "" {
 			_ = os.RemoveAll(created)
 		}
 		return nil, fmt.Errorf("web chrome: starting %s: %w", binary, err)
 	}
+	done := make(chan error, 1)
+	go func() { done <- command.Wait() }()
 	chrome := &Chrome{
 		command: command,
+		done:    done,
 		profile: created,
 		BaseURL: "http://127.0.0.1:" + strconv.Itoa(options.Port),
 	}
-	if err := waitForDevTools(ctx, chrome.BaseURL, 20*time.Second); err != nil {
+	if err := waitForDevTools(ctx, chrome, 20*time.Second); err != nil {
 		_ = chrome.Stop()
+		if diagnostic := output.String(); diagnostic != "" {
+			return nil, fmt.Errorf("%w; browser output:\n%s", err, diagnostic)
+		}
 		return nil, err
 	}
 	return chrome, nil
 }
 
-func waitForDevTools(ctx context.Context, baseURL string, timeout time.Duration) error {
+func waitForDevTools(ctx context.Context, chrome *Chrome, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: time.Second}
 	var last error
 	for time.Now().Before(deadline) {
-		if _, err := discoverPageEndpoint(ctx, baseURL, client); err == nil {
+		if _, err := discoverPageEndpoint(ctx, chrome.BaseURL, client); err == nil {
 			return nil
 		} else {
 			last = err
 		}
 		select {
+		case processErr := <-chrome.done:
+			chrome.done = nil
+			if processErr == nil {
+				return fmt.Errorf("web chrome: browser process exited before devtools came up")
+			}
+			return fmt.Errorf("web chrome: browser process exited before devtools came up: %w", processErr)
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	return fmt.Errorf("web chrome: devtools did not come up on %s: %w", baseURL, last)
+	return fmt.Errorf("web chrome: devtools did not come up on %s: %w", chrome.BaseURL, last)
 }
 
 // Stop ends the browser and removes a profile this launcher created.
@@ -147,7 +203,10 @@ func (chrome *Chrome) Stop() error {
 	}
 	if chrome.command != nil && chrome.command.Process != nil {
 		_ = chrome.command.Process.Kill()
-		_, _ = chrome.command.Process.Wait()
+	}
+	if chrome.done != nil {
+		<-chrome.done
+		chrome.done = nil
 	}
 	if chrome.profile != "" {
 		_ = os.RemoveAll(chrome.profile)

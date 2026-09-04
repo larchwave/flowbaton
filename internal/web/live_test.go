@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -28,13 +29,7 @@ func TestLiveChromeDrivesARealPage(t *testing.T) {
 	if os.Getenv("FLOWBATON_WEB_LIVE") != "1" {
 		t.Skip("set FLOWBATON_WEB_LIVE=1 to run the live browser proof")
 	}
-	binary := os.Getenv("FLOWBATON_CHROME")
-	if binary == "" {
-		binary = DefaultChromeBinary()
-	}
-	if _, err := os.Stat(binary); err != nil {
-		t.Skipf("no browser at %s", binary)
-	}
+	binary := liveChromeBinary(t)
 
 	page := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "text/html")
@@ -195,10 +190,7 @@ func TestLiveChromeRejectsAnInvalidSelector(t *testing.T) {
 	if os.Getenv("FLOWBATON_WEB_LIVE") != "1" {
 		t.Skip("set FLOWBATON_WEB_LIVE=1 to run the live browser proof")
 	}
-	binary := DefaultChromeBinary()
-	if _, err := os.Stat(binary); err != nil {
-		t.Skipf("no browser at %s", binary)
-	}
+	binary := liveChromeBinary(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -218,6 +210,19 @@ func TestLiveChromeRejectsAnInvalidSelector(t *testing.T) {
 	if err == nil {
 		t.Fatal("an invalid css selector was accepted; it must surface as an error")
 	}
+}
+
+func liveChromeBinary(t *testing.T) string {
+	t.Helper()
+	binary := os.Getenv("FLOWBATON_CHROME")
+	if binary == "" {
+		binary = DefaultChromeBinary()
+	}
+	resolved, err := exec.LookPath(binary)
+	if err != nil {
+		t.Fatalf("FLOWBATON_WEB_LIVE=1 but browser %q is unavailable: %v", binary, err)
+	}
+	return resolved
 }
 
 func freePort(t *testing.T) int {

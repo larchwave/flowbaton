@@ -116,6 +116,13 @@ jobs:
           cache: false
       - name: Test
         run: go test ./...
+      - name: Execute real Chrome tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          chrome="$(command -v google-chrome)"
+          test -x "$chrome"
+          FLOWBATON_WEB_LIVE=1 FLOWBATON_CHROME="$chrome" go test ./internal/web -run '^TestLiveChrome' -count=1
 
   android:
     needs: repository-language

@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Spec 02-device-drivers.md §4 names the flags the browser must be launched
@@ -116,5 +120,87 @@ func TestLaunchingDriverReportsALaunchFailureFromOpen(t *testing.T) {
 	}
 	if err := driver.Open(context.Background()); err == nil {
 		t.Fatal("Open() accepted a browser that never started")
+	}
+}
+
+// Chrome can start successfully at the OS level and then exit before opening
+// its DevTools port. That startup failure is the useful diagnosis; waiting for
+// the port timeout and returning only "connection refused" hides it.
+func TestLaunchChromeReportsAnEarlyProcessExit(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	started := time.Now()
+	_, err := LaunchChrome(ctx, ChromeOptions{
+		Binary:      os.Args[0],
+		Port:        freePort(t),
+		UserDataDir: t.TempDir(),
+		Headless:    true,
+	})
+	if err == nil {
+		t.Fatal("LaunchChrome accepted a browser process that exited immediately")
+	}
+	if elapsed := time.Since(started); elapsed >= 3*time.Second {
+		t.Fatalf("LaunchChrome waited %v for a process that had already exited: %v", elapsed, err)
+	}
+	for _, want := range []string{"browser process exited", "flag provided but not defined"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("LaunchChrome error = %q, want %q", err, want)
+		}
+	}
+}
+
+// A Chrome child can inherit stdout or stderr and survive the browser process.
+// The launcher must not wait indefinitely for that descendant to close a pipe.
+func TestLaunchChromeBoundsInheritedOutputPipes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the inherited-pipe fixture is a POSIX shell script")
+	}
+
+	directory := t.TempDir()
+	script := filepath.Join(directory, "chrome-fixture")
+	childPID := filepath.Join(directory, "child.pid")
+	t.Setenv("FLOWBATON_TEST_CHILD_PID", childPID)
+	if err := os.WriteFile(script, []byte(`#!/bin/sh
+sleep 30 &
+printf '%s\n' "$!" > "$FLOWBATON_TEST_CHILD_PID"
+printf 'chrome startup failed\n' >&2
+exit 9
+`), 0o700); err != nil {
+		t.Fatalf("writing browser fixture: %v", err)
+	}
+	t.Cleanup(func() {
+		contents, err := os.ReadFile(childPID)
+		if err != nil {
+			return
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(contents)))
+		if err != nil {
+			return
+		}
+		if process, err := os.FindProcess(pid); err == nil {
+			_ = process.Kill()
+		}
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	started := time.Now()
+	_, err := LaunchChrome(ctx, ChromeOptions{
+		Binary:      script,
+		Port:        freePort(t),
+		UserDataDir: directory,
+		Headless:    true,
+	})
+	if err == nil {
+		t.Fatal("LaunchChrome accepted a browser process that exited immediately")
+	}
+	if elapsed := time.Since(started); elapsed >= 5*time.Second {
+		t.Fatalf("LaunchChrome waited %v for an inherited output pipe: %v", elapsed, err)
+	}
+	if !strings.Contains(err.Error(), "chrome startup failed") {
+		t.Fatalf("LaunchChrome error = %q, want captured browser output", err)
 	}
 }
