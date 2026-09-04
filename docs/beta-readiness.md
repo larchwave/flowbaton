@@ -19,9 +19,18 @@ experimental status.
 
 ## Validation
 
-On 2026-09-04, commit `fdf6f82` passed GitHub CI on Linux, Windows,
-and macOS, including Android instrumentation and iOS Simulator execution.
-A release candidate must run CI again at its own exact commit.
+On 2026-09-04, commit `e1c23e9` passed the complete
+[GitHub CI run](https://github.com/larchwave/flowbaton/actions/runs/33917307622),
+including Linux, Windows, macOS, race checks, real Chrome, Android
+instrumentation, and iOS Simulator execution.
+
+Signed tag `v0.2.0-beta.2` points to that commit. Its
+[release pipeline](https://github.com/larchwave/flowbaton/actions/runs/33917755178)
+checks the exact tagged source again. The earlier `beta.1` pipeline stopped
+on Chrome startup; no release was published from it. Chrome now reports
+bounded startup diagnostics and early process exits, and its live tests pass
+in ordinary CI and the `beta.2` release job. The earlier failure's cause was
+not established.
 
 Local checks passed: `go test -p 1 ./...`, `go vet ./...`, race tests for
 `internal/android`, `internal/cli`, and `internal/version`, 30 Swift tests,
@@ -45,8 +54,11 @@ notarization, public attestation, or anonymous release delivery.
    for `v*` tags with review by `larchwave`; both currently contain zero secrets.
    Repository administration works through the dedicated `larchwave` Git
    configuration. Local Developer ID identities do not configure CI.
-2. Run candidate CI, create a signed annotated beta tag, and execute
-   `release-publish.yml`. No run of that workflow was present at this audit.
+2. Complete the `beta.2` release pipeline. Candidate CI and the signed tag
+   are verified. Its initial Intel iOS attempt failed before test initialization
+   with an Accessibility startup timeout; the failed jobs were retried on a
+   fresh runner. Android, Apple-silicon iOS, Go/race, and Chrome gates passed.
+   The retry and subsequent packaging gates still need final results.
 3. Pass every native host installer and Homebrew smoke, including Intel and
    Apple silicon; retain signed archives, checksums, SBOM, and provenance.
 4. Pass the workflow's anonymous probe against the published tag, assets,
