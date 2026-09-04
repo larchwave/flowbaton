@@ -35,6 +35,20 @@ A public release requires:
 
 Snapshots are local engineering artifacts and do not satisfy this gate.
 
+## Beta channel
+
+Beta candidates use a prerelease tag such as `v0.2.0-beta.1`. Release tags
+must contain a strict semantic version without build metadata. Prereleases
+pass the same signing, platform, installation, attestation, and anonymous
+retrieval gates as stable releases. They are marked as GitHub prereleases
+and never become the latest stable release.
+
+Prereleases update `Casks/flowbaton-beta.rb`; stable releases update
+`Casks/flowbaton.rb`. Installer smoke and anonymous probes check the selected
+channel. Both casks provide the `flowbaton` executable, so install only one
+channel at a time. A beta does not establish `distributed-v1` or expand the
+support matrix. See [Beta readiness](beta-readiness.md) for current evidence.
+
 ## Enforcement
 
 `.github/workflows/release-publish.yml` is the only publishing workflow. It

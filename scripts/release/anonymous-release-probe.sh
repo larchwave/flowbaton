@@ -9,6 +9,10 @@ governance_manifest="${5:?usage: anonymous-release-probe.sh TAG COMMIT CANDIDATE
 repo=larchwave/flowbaton
 tap_repo=larchwave/homebrew-flowbaton
 version="${tag#v}"
+cask=flowbaton
+if [[ "$version" == *-* ]]; then
+  cask=flowbaton-beta
+fi
 
 for credential in GH_TOKEN GITHUB_TOKEN HOMEBREW_TAP_TOKEN APPLE_NOTARY_PRIVATE_KEY_BASE64 APPLE_DEVELOPER_ID_CERTIFICATE_BASE64; do
   [[ -z "${!credential:-}" ]] || { echo "anonymous probe inherited credential: $credential" >&2; exit 1; }
@@ -20,6 +24,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 mkdir -p "$tmp/download" "$tmp/home"
+scripts/release/render-homebrew-cask.py \
+  --version "$version" --candidate "$candidate" --output "$tmp/expected-cask.rb"
 
 download_public_asset() {
   url="${1:?public asset URL is required}"
@@ -93,10 +99,8 @@ curl -fsSL --max-redirs 0 \
 cmp "$governance_manifest" "$tmp/public-delivery-surfaces.json"
 
 curl -fsSL --max-redirs 0 \
-  "https://raw.githubusercontent.com/${tap_repo}/main/Casks/flowbaton.rb" \
+  "https://raw.githubusercontent.com/${tap_repo}/main/Casks/${cask}.rb" \
   -o "$tmp/published-cask.rb"
-scripts/release/render-homebrew-cask.py \
-  --version "$version" --candidate "$candidate" --output "$tmp/expected-cask.rb"
 cmp "$tmp/expected-cask.rb" "$tmp/published-cask.rb"
 
 echo "anonymous release probe passed for every required governance surface at $tag" >&2

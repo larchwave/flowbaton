@@ -230,6 +230,9 @@ The Homebrew bottle is v0.1.1. Until the next tag, `explore`, the
 `start_device` / `run_flow` / `screenshot` MCP tools, and the physical-iOS
 driver need a source build (`go install` above).
 
+[Beta readiness](docs/beta-readiness.md) tracks candidate fixes, validation,
+and the remaining publication gates. No beta has been published yet.
+
 Command surface and contracts are versioned. Breaking changes are likely
 before 1.0.
 

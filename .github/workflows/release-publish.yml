@@ -44,6 +44,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/release/verify-tag.sh "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$GITHUB_SHA"
+      - name: Validate release version
+        run: scripts/release/render-homebrew-cask.py --version "${GITHUB_REF_NAME#v}" --validate-only
 
   go-contract-policy:
     name: Go, race, contracts, and release policy
@@ -586,6 +588,17 @@ jobs:
         run: |
           TAG="$GITHUB_REF_NAME"
           version="${TAG#v}"
+          if [[ "$version" == *-* ]]; then
+            cask=flowbaton-beta
+            cask_path=Casks/flowbaton-beta.rb
+            prerelease=true
+            latest=false
+          else
+            cask=flowbaton
+            cask_path=Casks/flowbaton.rb
+            prerelease=false
+            latest=true
+          fi
           if gh release view "$TAG" --json tagName >"$RUNNER_TEMP/existing-release.json" 2>"$RUNNER_TEMP/existing-release.err"; then
             echo "release already exists for $TAG" >&2
             exit 1
@@ -637,22 +650,22 @@ jobs:
           }
           trap rollback_release_and_tap EXIT
           release_create_started=1
-          gh release create "$TAG" --verify-tag --draft --title "FlowBaton $TAG" --generate-notes candidate/* provenance/*
+          gh release create "$TAG" --verify-tag --draft --prerelease="$prerelease" --title "FlowBaton $TAG" --generate-notes candidate/* provenance/*
 
           tap="$RUNNER_TEMP/homebrew-flowbaton"
           GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh auth setup-git
           GH_TOKEN="$HOMEBREW_TAP_TOKEN" git clone https://github.com/larchwave/homebrew-flowbaton.git "$tap"
-          scripts/release/render-homebrew-cask.py --version "$version" --candidate candidate --output "$tap/Casks/flowbaton.rb"
+          scripts/release/render-homebrew-cask.py --version "$version" --candidate candidate --output "$tap/$cask_path"
           git -C "$tap" config user.name 'flowbaton-release[bot]'
           git -C "$tap" config user.email '314023723+larchwave@users.noreply.github.com'
-          git -C "$tap" add Casks/flowbaton.rb
+          git -C "$tap" add "$cask_path"
           git -C "$tap" diff --cached --quiet && { echo 'Homebrew cask did not advance' >&2; exit 1; }
-          git -C "$tap" commit -m "flowbaton ${TAG}"
+          git -C "$tap" commit -m "$cask ${TAG}"
           tap_parent="$(git -C "$tap" rev-parse HEAD^)"
           tap_commit="$(git -C "$tap" rev-parse HEAD)"
           tap_push_attempted=1
           GH_TOKEN="$HOMEBREW_TAP_TOKEN" git -C "$tap" push origin HEAD:main
-          gh release edit "$TAG" --draft=false --latest
+          gh release edit "$TAG" --draft=false --prerelease="$prerelease" --latest="$latest"
 
           anonymous_home="$RUNNER_TEMP/anonymous-release-home"
           mkdir -p "$anonymous_home"

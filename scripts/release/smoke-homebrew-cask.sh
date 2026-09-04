@@ -4,17 +4,21 @@ set -euo pipefail
 candidate="${1:?usage: smoke-homebrew-cask.sh CANDIDATE_DIR VERSION}"
 version="${2:?usage: smoke-homebrew-cask.sh CANDIDATE_DIR VERSION}"
 tap_name=flowbaton/smoke
+cask=flowbaton
+if [[ "$version" == *-* ]]; then
+  cask=flowbaton-beta
+fi
 installed=0
 cleanup() {
   if [[ "$installed" == 1 ]]; then
-    brew uninstall --cask flowbaton >/dev/null 2>&1 || true
+    brew uninstall --cask "$cask" >/dev/null 2>&1 || true
   fi
   brew untap "$tap_name" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
-if brew list --cask flowbaton >/dev/null 2>&1; then
-  echo 'Homebrew smoke host already has a flowbaton cask installed' >&2
+if brew list --cask "$cask" >/dev/null 2>&1; then
+  echo "Homebrew smoke host already has a $cask cask installed" >&2
   exit 1
 fi
 brew tap-new "$tap_name"
@@ -24,9 +28,9 @@ scripts/release/render-homebrew-cask.py \
   --version "$version" \
   --candidate "$candidate" \
   --base-url "$base_url" \
-  --output "$tap/Casks/flowbaton.rb"
+  --output "$tap/Casks/$cask.rb"
 
-brew install --cask "$tap_name/flowbaton"
+brew install --cask "$tap_name/$cask"
 installed=1
 binary="$(brew --prefix)/bin/flowbaton"
 actual="$($binary --version)"
