@@ -1760,15 +1760,21 @@ func TestRecorderStopFinalizesOnDeviceBeforePulling(t *testing.T) {
 	// So the interrupt has to reach the device process, and the pull has to come
 	// after it, not after the local child.
 	var calls [][]string
+	sink := filepath.Join(t.TempDir(), "out.mp4")
 	recorder := &adbRecorder{
 		serial:     testSerial,
 		devicePath: "/sdcard/out.mp4",
 		run: func(_ context.Context, args ...string) ([]byte, error) {
 			calls = append(calls, args)
+			if slices.Contains(args, "pull") {
+				if err := os.WriteFile(sink, []byte("video"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
 			return nil, nil
 		},
 	}
-	if err := recorder.stop(context.Background(), "/host/out.mp4"); err != nil {
+	if err := recorder.stop(context.Background(), sink); err != nil {
 		t.Fatalf("stop() error = %v", err)
 	}
 
@@ -1828,6 +1834,53 @@ func TestRecorderStopCleansDeviceAndPartialHostFileWhenPullFails(t *testing.T) {
 	}
 	if !removed {
 		t.Fatalf("device artifact was not removed after pull failure: %v", calls)
+	}
+}
+
+func TestRecorderStopRejectsInvalidHostArtifactAfterSuccessfulPull(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		create func(string) error
+	}{
+		{
+			name: "empty file",
+			create: func(path string) error {
+				return os.WriteFile(path, nil, 0o644)
+			},
+		},
+		{
+			name: "directory",
+			create: func(path string) error {
+				return os.Mkdir(path, 0o755)
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			sink := filepath.Join(t.TempDir(), "out.mp4")
+			recorder := &adbRecorder{
+				serial:     testSerial,
+				devicePath: "/sdcard/out.mp4",
+				run: func(_ context.Context, args ...string) ([]byte, error) {
+					if slices.Contains(args, "pull") {
+						if err := test.create(sink); err != nil {
+							t.Fatal(err)
+						}
+					}
+					return nil, nil
+				},
+			}
+
+			if err := recorder.stop(context.Background(), sink); err == nil {
+				t.Fatal("stop() accepted an invalid host artifact")
+			}
+			if _, err := os.Stat(sink); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("invalid host artifact still exists: %v", err)
+			}
+		})
 	}
 }
 

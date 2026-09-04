@@ -963,6 +963,11 @@ func (r *adbRecorder) adb(ctx context.Context, args ...string) ([]byte, error) {
 // pid screenrecord was started with instead.
 func (r *adbRecorder) stop(ctx context.Context, sinkPath string) error {
 	var stopErrs []error
+	removeHostArtifact := func() {
+		if removeErr := os.Remove(sinkPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			stopErrs = append(stopErrs, fmt.Errorf("removing partial recording %q: %w", sinkPath, removeErr))
+		}
+	}
 	stopContext, cancelStop := context.WithTimeout(ctx, recordingFinalizeTimeout)
 	defer cancelStop()
 	interrupted := true
@@ -990,9 +995,16 @@ func (r *adbRecorder) stop(ctx context.Context, sinkPath string) error {
 	if out, err := r.adb(stopContext, "pull", r.devicePath, sinkPath); err != nil {
 		stopErrs = append(stopErrs, fmt.Errorf(
 			"adb pull: %w: %s", err, strings.TrimSpace(string(out))))
-		if removeErr := os.Remove(sinkPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-			stopErrs = append(stopErrs, fmt.Errorf("removing partial recording %q: %w", sinkPath, removeErr))
-		}
+		removeHostArtifact()
+	} else if info, statErr := os.Lstat(sinkPath); statErr != nil {
+		stopErrs = append(stopErrs, fmt.Errorf("checking pulled recording %q: %w", sinkPath, statErr))
+		removeHostArtifact()
+	} else if !info.Mode().IsRegular() {
+		stopErrs = append(stopErrs, fmt.Errorf("pulled recording %q is not a regular file", sinkPath))
+		removeHostArtifact()
+	} else if info.Size() == 0 {
+		stopErrs = append(stopErrs, fmt.Errorf("pulled recording %q is empty", sinkPath))
+		removeHostArtifact()
 	}
 	if out, err := r.adb(stopContext, "shell", "rm", "-f", r.devicePath); err != nil {
 		stopErrs = append(stopErrs, fmt.Errorf(
