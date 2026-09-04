@@ -63,26 +63,37 @@ func (sink *ArtifactSink) Write(
 	if err != nil {
 		return engine.ArtifactWriteResult{}, err
 	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return engine.ArtifactWriteResult{}, fmt.Errorf("artifact sink: %w", err)
+	}
+	confinedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return engine.ArtifactWriteResult{}, fmt.Errorf("artifact sink: %w", err)
+	}
+	defer func() { _ = confinedRoot.Close() }()
+
 	// MkdirAll on the name's own directory, not just the root: an authored
-	// name may carry a sub-path.
-	if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
+	// name may carry a sub-path. The rooted handle rejects a symlinked parent
+	// that would place the directory outside the artifact tree.
+	if err := confinedRoot.MkdirAll(filepath.Dir(name), 0o755); err != nil {
 		return engine.ArtifactWriteResult{}, fmt.Errorf("artifact sink: %w", err)
 	}
 
 	// O_EXCL rather than a stat-then-create: two screenshots in one flow
 	// suggest the same name, and an overwrite would leave the run reporting
 	// two artifacts while holding one.
-	path := filepath.Join(root, name)
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	artifactName := name
+	file, err := confinedRoot.OpenFile(artifactName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	for attempt := 1; os.IsExist(err) && attempt < 1000; attempt++ {
-		path = filepath.Join(root, disambiguate(name, attempt))
-		file, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		artifactName = disambiguate(name, attempt)
+		file, err = confinedRoot.OpenFile(artifactName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	}
 	if err != nil {
 		return engine.ArtifactWriteResult{}, fmt.Errorf("artifact sink: %w", err)
 	}
 	defer func() { _ = file.Close() }()
 
+	path := filepath.Join(root, artifactName)
 	written, err := file.Write(request.Data)
 	if err != nil {
 		return engine.ArtifactWriteResult{}, fmt.Errorf("artifact sink: writing %s: %w", path, err)

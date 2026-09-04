@@ -408,6 +408,40 @@ func TestArtifactSinkCreatesTheSubdirectoryAnAuthoredNameAsksFor(t *testing.T) {
 	}
 }
 
+func TestArtifactSinkRefusesASymlinkedDirectoryEscape(t *testing.T) {
+	t.Parallel()
+
+	authored := t.TempDir()
+	external := t.TempDir()
+	externalLeaf := filepath.Join(external, "deep.png")
+	writeFile(t, externalLeaf, "keep")
+	if err := os.Symlink(external, filepath.Join(authored, "shots")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	sink := NewArtifactSink(t.TempDir(), authored)
+	if _, err := sink.Write(context.Background(), engine.ArtifactWriteRequest{
+		Kind: "screenshot", SuggestedName: filepath.Join("shots", "deep.png"), Data: []byte("PNG"),
+	}); err == nil {
+		t.Fatal("Write() followed a symlinked directory outside the artifact root")
+	}
+
+	contents, err := os.ReadFile(externalLeaf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "keep" {
+		t.Fatalf("external leaf = %q, want it unchanged", contents)
+	}
+	entries, err := os.ReadDir(external)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("external directory contains %v, want only the original leaf", entries)
+	}
+}
+
 // The run's own captures stay in the run directory because they are
 // bookkeeping rather than authored flow output.
 func TestArtifactSinkKeepsRunCapturesInTheRunDirectory(t *testing.T) {
