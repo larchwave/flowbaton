@@ -25,6 +25,7 @@ public final class AutomationIssues: @unchecked Sendable {
 
   private let lock = NSLock()
   private var pending: [String] = []
+  private var capturing = false
 
   public init() {}
 
@@ -33,6 +34,16 @@ public final class AutomationIssues: @unchecked Sendable {
     lock.lock()
     defer { lock.unlock() }
     pending.append(description)
+  }
+
+  /// Only command failures belong to the wire. Setup, smoke assertions, and
+  /// teardown must retain XCTest's normal failure reporting.
+  public func recordIfCapturing(_ description: String) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    guard capturing else { return false }
+    pending.append(description)
+    return true
   }
 
   /// capture runs one command's work and fails it with anything XCUITest
@@ -45,6 +56,14 @@ public final class AutomationIssues: @unchecked Sendable {
   /// not start working on a second identical attempt.
   public func capture<T>(_ work: () throws -> T) throws -> T {
     _ = drain()
+    lock.lock()
+    capturing = true
+    lock.unlock()
+    defer {
+      lock.lock()
+      capturing = false
+      lock.unlock()
+    }
     let value = try work()
     let raised = drain()
     if !raised.isEmpty {

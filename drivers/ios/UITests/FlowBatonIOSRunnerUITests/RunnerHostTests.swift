@@ -48,18 +48,17 @@ final class RunnerHostTests: XCTestCase {
   /// throwing, so the command that caused it returns normally and answers 200
   /// for work that never happened.
   ///
-  /// The issue is handed to AutomationIssues and NOT passed to super. This
-  /// process is the product, not an assertion: its job is to serve the wire
-  /// and report each command's outcome, and a recorded failure here would end
-  /// the run that the next command needs. Real assertions live in the unit
-  /// tests, which do not run in this bundle. Skips still go to super -- a
-  /// runner that was never asked to serve must report as skipped, not passed.
+  /// Command issues go to the host. Outside a captured command, XCTest must
+  /// still see failures: this bundle also contains the release smoke test,
+  /// and its assertions must be able to fail the release gate.
   override func record(_ issue: XCTIssue) {
     guard issue.type != .thrownError || !(issue.associatedError is XCTSkip) else {
       super.record(issue)
       return
     }
-    AutomationIssues.shared.record(issue.compactDescription)
+    if !AutomationIssues.shared.recordIfCapturing(issue.compactDescription) {
+      super.record(issue)
+    }
   }
 
   func testServeTheWireUntilTheHostIsDone() throws {

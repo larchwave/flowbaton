@@ -11,6 +11,29 @@ import Testing
 /// prediction at all.
 @Suite struct AutomationIssuesTests {
 
+  @Test func issuesOutsideCommandsRemainXCTestFailures() {
+    let issues = AutomationIssues()
+    #expect(!issues.recordIfCapturing("smoke assertion failed"))
+  }
+
+  @Test func commandIssuesAreConsumedAndReturnedToTheHost() {
+    let issues = AutomationIssues()
+    #expect(throws: AutomationError.precondition("gesture failed")) {
+      try issues.capture {
+        #expect(issues.recordIfCapturing("gesture failed"))
+      }
+    }
+    #expect(!issues.recordIfCapturing("later smoke assertion failed"))
+  }
+
+  @Test func thrownCommandsRestoreXCTestFailureReporting() {
+    let issues = AutomationIssues()
+    #expect(throws: AutomationError.precondition("command failed")) {
+      try issues.capture { throw AutomationError.precondition("command failed") }
+    }
+    #expect(!issues.recordIfCapturing("teardown failed"))
+  }
+
   @Test func aRunThatRaisesNothingReturnsItsValue() throws {
     let issues = AutomationIssues()
     #expect(try issues.capture { 7 } == 7)
