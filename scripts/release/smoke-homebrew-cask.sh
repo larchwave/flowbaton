@@ -39,4 +39,4 @@ actual="$($binary --version)"
   exit 1
 }
 codesign --verify --strict --verbose=2 "$binary"
-spctl --assess --type execute --verbose=4 "$binary"
+codesign -vvvv -R='notarized' --check-notarization "$binary"

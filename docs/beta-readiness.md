@@ -49,15 +49,16 @@ notarization, public attestation, or anonymous release delivery.
 
 ## Publication requirements still open
 
-1. Complete a new tagged release pipeline after the packaging fix. The
-   `release-signing` environment now has Developer ID and notarization
-   credentials; `release` has a deploy key scoped to the Homebrew tap.
-   Both environments require `larchwave` review for `v*` tags. Secret
-   configuration is verified, but CI signing still needs a successful run.
-2. The `beta.2` retry passed Intel iOS and all prerequisite jobs. Packaging
-   then stopped because downloaded mobile assets made the checkout dirty.
-   Downloads now use the runner temporary directory, preserving GoReleaser's
-   clean-checkout validation. Previously pushed tags remain unchanged.
+1. Complete signing on a new tagged candidate. All six Apple credentials
+   and the scoped Homebrew deploy key are configured. `beta.3` passed every
+   prerequisite job and built its archives; CI signing then failed because
+   the Developer ID G1 intermediate was unavailable on the clean runner.
+   The signing harness now imports the pinned public Apple intermediate.
+2. Use the notarization check for command-line code. The exact `beta.3`
+   Darwin archive passed local signing and Apple notarization, but `spctl`
+   rejected the bare executable as not an app. Signature verification plus
+   the required `notarized` code requirement and online ticket check replace
+   that app-specific assessment. The corrected path still needs CI proof.
 3. Pass every native host installer and Homebrew smoke, including Intel and
    Apple silicon; retain signed archives, checksums, SBOM, and provenance.
 4. Pass the workflow's anonymous probe against the published tag, assets,

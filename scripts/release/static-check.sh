@@ -40,11 +40,15 @@ if grep -Fq 'for arch in amd64 arm64' "$workflow"; then
   exit 1
 fi
 
+# Match literal shell source rather than expanding its variables.
+# shellcheck disable=SC2016
 for required in \
   'codesign --force --options runtime --timestamp' \
   'xcrun notarytool submit' \
   'xcrun notarytool log' \
-  'spctl --assess --type execute'
+  'developer_id_intermediate_sha256=7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f' \
+  'security import "$developer_id_intermediate"' \
+  "codesign -vvvv -R='notarized' --check-notarization"
 do
   grep -Fq "$required" scripts/release/sign-notarize-darwin.sh || { echo "Darwin signing gate is missing: $required" >&2; exit 1; }
 done
@@ -52,7 +56,7 @@ done
 for required in \
   'brew install --cask' \
   'codesign --verify' \
-  'spctl --assess --type execute'
+  "codesign -vvvv -R='notarized' --check-notarization"
 do
   grep -Fq "$required" scripts/release/smoke-homebrew-cask.sh || { echo "Homebrew smoke is missing: $required" >&2; exit 1; }
 done

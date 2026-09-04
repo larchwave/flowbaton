@@ -359,7 +359,7 @@ jobs:
           APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
           APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
         run: scripts/release/sign-notarize-darwin.sh --check-credentials
-      - name: Sign, notarize, and Gatekeeper-assess the native archive
+      - name: Sign, notarize, and verify the native CLI ticket
         shell: bash
         env:
           APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}

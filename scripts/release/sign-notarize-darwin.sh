@@ -90,14 +90,36 @@ esac
 
 archive="$candidate/flowbaton_${version}_darwin_${host_arch}.tar.gz"
 test -f "$archive"
+developer_id_intermediate=scripts/release/certificates/DeveloperIDCA.cer
+developer_id_intermediate_sha256=7afc9d01a62f03a2de9637936d4afe68090d2de18d03f29c88cfb0b1ba63587f
+printf '%s  %s\n' "$developer_id_intermediate_sha256" "$developer_id_intermediate" | shasum -a 256 --check -
 tmp="$(mktemp -d)"
 keychain="$tmp/release-signing.keychain-db"
-keychain_password="$(openssl rand -hex 24)"
+original_keychains=()
+search_list_changed=false
 cleanup() {
+  status=$?
+  trap - EXIT INT TERM
+  if [[ "$search_list_changed" == true ]] &&
+    ! security list-keychains -d user -s "${original_keychains[@]}" >/dev/null; then
+    echo 'failed to restore the user keychain search list' >&2
+    status=1
+  fi
   security delete-keychain "$keychain" 2>/dev/null || true
   rm -rf "$tmp"
+  exit "$status"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+keychain_password="$(openssl rand -hex 24)"
+original_keychain_list="$(security list-keychains -d user)"
+while IFS= read -r listed_keychain; do
+  listed_keychain="${listed_keychain#*\"}"
+  listed_keychain="${listed_keychain%\"*}"
+  [[ -z "$listed_keychain" ]] || original_keychains+=("$listed_keychain")
+done <<<"$original_keychain_list"
 
 printf '%s' "$APPLE_DEVELOPER_ID_CERTIFICATE_BASE64" | openssl base64 -d -A -out "$tmp/developer-id.p12"
 chmod 600 "$tmp/developer-id.p12"
@@ -122,9 +144,12 @@ fi
 security create-keychain -p "$keychain_password" "$keychain"
 security set-keychain-settings -lut 900 "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
+security list-keychains -d user -s "$keychain" "${original_keychains[@]}" >/dev/null
+search_list_changed=true
+security import "$developer_id_intermediate" -k "$keychain"
 security import "$tmp/developer-id.p12" -k "$keychain" \
   -P "$APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
+security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
 
 tar -xzf "$archive" -C "$tmp"
 root="$tmp/flowbaton_${version}_darwin_${host_arch}"
@@ -153,7 +178,7 @@ xcrun notarytool submit "$notary_payload" \
 submission_id="$(python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); assert data.get("status") == "Accepted", data; print(data["id"])' "$tmp/notary-submit.json")"
 xcrun notarytool log "$submission_id" \
   "${notary_auth_args[@]}" >"$tmp/notary-log.json"
-spctl --assess --type execute --verbose=4 "$binary"
+codesign -vvvv -R='notarized' --check-notarization "$binary"
 
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:?SOURCE_DATE_EPOCH is required for deterministic release archives}"
 python3 scripts/release/repack-release-archive.py --root "$root" --output "$archive"
@@ -161,7 +186,7 @@ verify="$tmp/verify"
 mkdir "$verify"
 tar -xzf "$archive" -C "$verify"
 codesign --verify --strict --verbose=2 "$verify/$(basename "$root")/flowbaton"
-spctl --assess --type execute --verbose=4 "$verify/$(basename "$root")/flowbaton"
+codesign -vvvv -R='notarized' --check-notarization "$verify/$(basename "$root")/flowbaton"
 
 mkdir -p "$receipt_dir"
 cp "$tmp/codesign.txt" "$receipt_dir/codesign-${host_arch}.txt"

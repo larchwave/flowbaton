@@ -23,7 +23,8 @@ A public release requires:
 - green Go, Android, iOS, contract, and policy checks;
 - signed archives and a checksum file;
 - native Developer ID signatures and accepted Apple notarization for every
-  Darwin CLI archive, with Gatekeeper assessment on Intel and Apple silicon;
+  Darwin CLI archive, with notarization ticket verification for the bare CLI
+  on Intel and Apple silicon;
 - an SBOM and build attestation bound to the shipped digests;
 - installation smoke checks on every advertised host, including a real
   `brew install --cask` from the exact signed candidate on both Mac

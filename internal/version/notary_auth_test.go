@@ -140,13 +140,26 @@ func TestDarwinNotaryAppPasswordUsesIdenticalAuthForSubmitAndLog(t *testing.T) {
 	if err := os.Mkdir(fakeBin, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeExecutable(t, fakeBin, "security", "#!/bin/sh\nexit 0\n")
-	writeExecutable(t, fakeBin, "spctl", "#!/bin/sh\nexit 0\n")
-	writeExecutable(t, fakeBin, "ditto", "#!/bin/bash\nset -eu\ntouch \"${!#}\"\n")
-	writeExecutable(t, fakeBin, "codesign", `#!/bin/bash
+	securityCapture := filepath.Join(temp, "security-arguments.txt")
+	writeExecutable(t, fakeBin, "security", `#!/bin/bash
 set -eu
-for argument in "$@"; do
-  if [[ "$argument" == "--display" ]]; then
+if [[ "$1" == "list-keychains" && "$2" == "-d" && "$3" == "user" && "$#" == 3 ]]; then
+  printf '%s\n' '    "/Users/example/Library/Keychains/login.keychain-db"'
+  exit 0
+fi
+printf '%s\n' "$*" >> "$SECURITY_CAPTURE_FILE"
+if [[ "$1" == "set-key-partition-list" ]]; then
+  echo 'sensitive partition-list diagnostics'
+fi
+`)
+	writeExecutable(t, fakeBin, "spctl", "#!/bin/sh\necho 'bare CLI must not use spctl' >&2\nexit 99\n")
+	writeExecutable(t, fakeBin, "ditto", "#!/bin/bash\nset -eu\ntouch \"${!#}\"\n")
+	codesignCapture := filepath.Join(temp, "codesign-arguments.txt")
+	writeExecutable(t, fakeBin, "codesign", `#!/bin/bash
+	set -eu
+	printf '%s\n' "$*" >> "$CODESIGN_CAPTURE_FILE"
+	for argument in "$@"; do
+	  if [[ "$argument" == "--display" ]]; then
     echo 'Authority=Developer ID Application: Example' >&2
   fi
 done
@@ -175,11 +188,17 @@ fi
 		"APPLE_NOTARY_TEAM_ID":                    "TEAM123",
 		"APPLE_NOTARY_PASSWORD":                   "app-specific-password",
 		"CAPTURE_FILE":                            capture,
+		"CODESIGN_CAPTURE_FILE":                   codesignCapture,
 		"PATH":                                    fakeBin + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"SECURITY_CAPTURE_FILE":                   securityCapture,
 		"SOURCE_DATE_EPOCH":                       "1700000000",
 	})
-	if output, err := command.CombinedOutput(); err != nil {
+	output, err := command.CombinedOutput()
+	if err != nil {
 		t.Fatalf("notarization script failed: %v\n%s", err, output)
+	}
+	if strings.Contains(string(output), "sensitive partition-list diagnostics") {
+		t.Fatalf("partition-list output reached release logs: %s", output)
 	}
 
 	contents, err := os.ReadFile(capture)
@@ -203,6 +222,45 @@ fi
 	if !reflect.DeepEqual(logAuth, want) {
 		t.Fatalf("log auth options = %q, want %q", logAuth, want)
 	}
+
+	securityContents, err := os.ReadFile(securityCapture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchListCalls := linesContaining(string(securityContents), "list-keychains -d user -s")
+	if len(searchListCalls) != 2 {
+		t.Fatalf("keychain search-list updates = %q, want add and restore", searchListCalls)
+	}
+	if !strings.Contains(searchListCalls[0], "release-signing.keychain-db") ||
+		!strings.Contains(searchListCalls[0], "/Users/example/Library/Keychains/login.keychain-db") {
+		t.Fatalf("temporary keychain was not added alongside original search list: %q", searchListCalls[0])
+	}
+	if strings.Contains(searchListCalls[1], "release-signing.keychain-db") ||
+		!strings.HasSuffix(searchListCalls[1], "/Users/example/Library/Keychains/login.keychain-db") {
+		t.Fatalf("original keychain search list was not restored: %q", searchListCalls[1])
+	}
+	if !strings.Contains(string(securityContents), "import scripts/release/certificates/DeveloperIDCA.cer") {
+		t.Fatalf("pinned Developer ID intermediate was not imported:\n%s", securityContents)
+	}
+
+	codesignContents, err := os.ReadFile(codesignCapture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticketChecks := linesContaining(string(codesignContents), "-vvvv -R=notarized --check-notarization")
+	if len(ticketChecks) != 2 {
+		t.Fatalf("notarization ticket checks = %q, want signed and repacked binaries", ticketChecks)
+	}
+}
+
+func linesContaining(contents, substring string) []string {
+	var matches []string
+	for _, line := range strings.Split(strings.TrimSpace(contents), "\n") {
+		if strings.Contains(line, substring) {
+			matches = append(matches, line)
+		}
+	}
+	return matches
 }
 
 func writeExecutable(t *testing.T, directory, name, contents string) {
