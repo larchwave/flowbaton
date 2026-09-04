@@ -40,10 +40,11 @@ notarization, public attestation, or anonymous release delivery.
 
 ## Publication requirements still open
 
-1. Configure protected GitHub `release-signing` and `release` environments
-   with dedicated signing/notarization and tap credentials. The repository
-   exposes no environments; the session token cannot inspect secrets.
-   Local Developer ID identities exist, but this does not configure CI.
+1. Populate the `release-signing` and `release` environments with dedicated
+   signing/notarization and tap credentials. Both environments are configured
+   for `v*` tags with review by `larchwave`; both currently contain zero secrets.
+   Repository administration works through the dedicated `larchwave` Git
+   configuration. Local Developer ID identities do not configure CI.
 2. Run candidate CI, create a signed annotated beta tag, and execute
    `release-publish.yml`. No run of that workflow was present at this audit.
 3. Pass every native host installer and Homebrew smoke, including Intel and
