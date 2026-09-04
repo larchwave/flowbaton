@@ -59,10 +59,12 @@ smokes pass on Linux amd64, Windows amd64, macOS amd64, and macOS arm64 and the
 architecture-specific iOS Simulator packages have each executed on their
 matching native release host. Darwin signing runs only in the protected
 `release-signing` environment and fails closed unless the Developer ID
-certificate and App Store Connect notary API key are present. Those credentials
-must be dedicated to release signing; the notary key needs only the App Store
-Connect access required by `notarytool`, and the tap token needs contents access
-only to `larchwave/homebrew-flowbaton`.
+certificate and exactly one complete notarization credential mode are present:
+either an App Store Connect API key, or an Apple ID, team ID, and app-specific
+password. Partial or mixed modes are rejected. Those credentials must be
+dedicated to release signing and need only the access required by `notarytool`.
+The tap deploy key must be a write-enabled key dedicated only to
+`larchwave/homebrew-flowbaton`.
 
 The candidate cask must install successfully through Homebrew on Intel and
 Apple silicon before the tap advances. After the draft becomes public, a fresh

@@ -283,7 +283,7 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: driver-*-${{ github.sha }}
-          path: mobile-assets
+          path: ${{ runner.temp }}/mobile-assets
           merge-multiple: true
       - name: Build non-published CLI archives and SBOMs
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
@@ -298,8 +298,8 @@ jobs:
           version="${tag#v}"
           mkdir candidate
           find dist -maxdepth 1 -type f \( -name 'flowbaton_*.tar.gz' -o -name 'flowbaton_*.zip' -o -name '*.sbom.json' \) -exec cp {} candidate/ \;
-          cp mobile-assets/*.tar.gz candidate/
-          scripts/release/merge-driver-manifest.py --version "$version" --output candidate/driver-manifest.json mobile-assets/*.asset.json
+          cp "$RUNNER_TEMP"/mobile-assets/*.tar.gz candidate/
+          scripts/release/merge-driver-manifest.py --version "$version" --output candidate/driver-manifest.json "$RUNNER_TEMP"/mobile-assets/*.asset.json
           for archive in candidate/*_android-agent_*.tar.gz candidate/*_ios-simulator-runner_*.tar.gz; do
             syft "$archive" -o "spdx-json=${archive}.spdx.json"
           done
@@ -355,17 +355,10 @@ jobs:
           APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
           APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
           APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
-        run: |
-          for name in \
-            APPLE_DEVELOPER_ID_APPLICATION \
-            APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 \
-            APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD \
-            APPLE_NOTARY_KEY_ID \
-            APPLE_NOTARY_ISSUER_ID \
-            APPLE_NOTARY_PRIVATE_KEY_BASE64
-          do
-            test -n "${!name}"
-          done
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+        run: scripts/release/sign-notarize-darwin.sh --check-credentials
       - name: Sign, notarize, and Gatekeeper-assess the native archive
         shell: bash
         env:
@@ -375,6 +368,9 @@ jobs:
           APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
           APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
           APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
         run: |
           SOURCE_DATE_EPOCH="$(git show -s --format=%ct "$GITHUB_SHA")"
           export SOURCE_DATE_EPOCH
@@ -576,15 +572,15 @@ jobs:
           path: provenance
       - name: Require dedicated tap credential
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: test -n "$HOMEBREW_TAP_TOKEN"
+          HOMEBREW_TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
+        run: test -n "$HOMEBREW_TAP_SSH_KEY"
       - name: Recheck candidate digests before publication
         run: cd candidate && sha256sum --check checksums.txt
       - name: Publish, probe anonymously, and retain only on complete public proof
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          HOMEBREW_TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}
         run: |
           TAG="$GITHUB_REF_NAME"
           version="${TAG#v}"
@@ -610,20 +606,30 @@ jobs:
           tap_push_attempted=0
           tap_parent=
           tap_commit=
+          tap_ssh_dir=
+          tap_ssh_key=
+          tap_known_hosts=
           public_proof=0
+          cleanup_tap_ssh() {
+            [[ -z "$tap_ssh_dir" ]] || rm -rf -- "$tap_ssh_dir"
+          }
           rollback_release_and_tap() {
             status=$?
             trap - EXIT
             if [[ "$public_proof" == 1 ]]; then
+              if ! cleanup_tap_ssh; then
+                echo 'failed to remove the temporary Homebrew tap deploy key' >&2
+                exit 70
+              fi
               exit "$status"
             fi
             set +e
             rollback_failed=0
             if [[ "$tap_push_attempted" == 1 ]]; then
-              remote_head="$(GH_TOKEN="$HOMEBREW_TAP_TOKEN" git -C "$tap" ls-remote origin refs/heads/main | awk '{print $1}')"
+              remote_head="$(FLOWBATON_TAP_SSH_KEY_FILE="$tap_ssh_key" FLOWBATON_TAP_KNOWN_HOSTS_FILE="$tap_known_hosts" scripts/release/tap-git-ssh.sh -C "$tap" ls-remote origin refs/heads/main | awk '{print $1}')"
               if [[ "$remote_head" == "$tap_commit" ]]; then
                 if ! git -C "$tap" revert --no-edit "$tap_commit" || \
-                  ! GH_TOKEN="$HOMEBREW_TAP_TOKEN" git -C "$tap" push origin HEAD:main; then
+                  ! FLOWBATON_TAP_SSH_KEY_FILE="$tap_ssh_key" FLOWBATON_TAP_KNOWN_HOSTS_FILE="$tap_known_hosts" scripts/release/tap-git-ssh.sh -C "$tap" push origin HEAD:main; then
                   rollback_failed=1
                 fi
               elif [[ "$remote_head" != "$tap_parent" ]]; then
@@ -641,6 +647,10 @@ jobs:
                 rollback_failed=1
               fi
             fi
+            if ! cleanup_tap_ssh; then
+              echo 'failed to remove the temporary Homebrew tap deploy key' >&2
+              rollback_failed=1
+            fi
             if [[ "$rollback_failed" == 1 ]]; then
               echo 'release or tap rollback failed; owner intervention is required' >&2
               exit 70
@@ -653,8 +663,20 @@ jobs:
           gh release create "$TAG" --verify-tag --draft --prerelease="$prerelease" --title "FlowBaton $TAG" --generate-notes candidate/* provenance/*
 
           tap="$RUNNER_TEMP/homebrew-flowbaton"
-          GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh auth setup-git
-          GH_TOKEN="$HOMEBREW_TAP_TOKEN" git clone https://github.com/larchwave/homebrew-flowbaton.git "$tap"
+          tap_remote=git@github.com:larchwave/homebrew-flowbaton.git
+          tap_ssh_dir="$(mktemp -d "$RUNNER_TEMP/flowbaton-tap-ssh.XXXXXX")"
+          tap_ssh_key="$tap_ssh_dir/deploy-key"
+          tap_known_hosts="$tap_ssh_dir/known_hosts"
+          install -m 600 /dev/null "$tap_ssh_key"
+          printf '%s\n' "$HOMEBREW_TAP_SSH_KEY" >"$tap_ssh_key"
+          unset HOMEBREW_TAP_SSH_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            >"$tap_known_hosts"
+          chmod 600 "$tap_known_hosts"
+          ssh-keygen -y -f "$tap_ssh_key" >/dev/null
+          FLOWBATON_TAP_SSH_KEY_FILE="$tap_ssh_key" FLOWBATON_TAP_KNOWN_HOSTS_FILE="$tap_known_hosts" \
+            scripts/release/tap-git-ssh.sh clone "$tap_remote" "$tap"
           scripts/release/render-homebrew-cask.py --version "$version" --candidate candidate --output "$tap/$cask_path"
           git -C "$tap" config user.name 'flowbaton-release[bot]'
           git -C "$tap" config user.email '314023723+larchwave@users.noreply.github.com'
@@ -664,7 +686,8 @@ jobs:
           tap_parent="$(git -C "$tap" rev-parse HEAD^)"
           tap_commit="$(git -C "$tap" rev-parse HEAD)"
           tap_push_attempted=1
-          GH_TOKEN="$HOMEBREW_TAP_TOKEN" git -C "$tap" push origin HEAD:main
+          FLOWBATON_TAP_SSH_KEY_FILE="$tap_ssh_key" FLOWBATON_TAP_KNOWN_HOSTS_FILE="$tap_known_hosts" \
+            scripts/release/tap-git-ssh.sh -C "$tap" push origin HEAD:main
           gh release edit "$TAG" --draft=false --prerelease="$prerelease" --latest="$latest"
 
           anonymous_home="$RUNNER_TEMP/anonymous-release-home"

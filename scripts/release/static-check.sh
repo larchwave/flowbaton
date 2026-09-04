@@ -20,7 +20,10 @@ for required in \
   'APPLE_NOTARY_PRIVATE_KEY_BASE64' \
   'release-signing' \
   'rollback_release_and_tap' \
-  'HOMEBREW_TAP_TOKEN'
+  'HOMEBREW_TAP_SSH_KEY' \
+  'git@github.com:larchwave/homebrew-flowbaton.git' \
+  'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+  'cleanup_tap_ssh'
 do
   grep -Fq "$required" "$workflow" || { echo "release workflow is missing: $required" >&2; exit 1; }
 done
@@ -66,10 +69,28 @@ do
   grep -Fq -- "$required" "$workflow" scripts/release/anonymous-release-probe.sh || { echo "anonymous public proof is missing: $required" >&2; exit 1; }
 done
 
-if grep -Fq 'x-access-token:' "$workflow"; then
-  echo 'tap credentials must not appear in Git remote URLs' >&2
-  exit 1
-fi
+for forbidden in 'HOMEBREW_TAP_TOKEN' 'x-access-token:' 'gh auth setup-git' 'https://github.com/larchwave/homebrew-flowbaton.git' 'StrictHostKeyChecking=no' 'ssh-keyscan'; do
+  if grep -Fq "$forbidden" "$workflow" scripts/release/tap-git-ssh.sh; then
+    echo "tap publishing contains forbidden credential or SSH behavior: $forbidden" >&2
+    exit 1
+  fi
+done
+
+for required in \
+  'GIT_SSH_COMMAND=' \
+  'IdentitiesOnly=yes' \
+  'UserKnownHostsFile=' \
+  'GlobalKnownHostsFile=/dev/null' \
+  'StrictHostKeyChecking=yes'
+do
+  grep -Fq "$required" scripts/release/tap-git-ssh.sh || { echo "tap SSH transport is missing: $required" >&2; exit 1; }
+done
+
+scripts/release/test-tap-git-ssh.sh
+
+for credential in HOMEBREW_TAP_TOKEN HOMEBREW_TAP_SSH_KEY FLOWBATON_TAP_SSH_KEY_FILE FLOWBATON_TAP_KNOWN_HOSTS_FILE GIT_SSH_COMMAND; do
+  grep -Fq "$credential" scripts/release/anonymous-release-probe.sh || { echo "anonymous probe does not scrub: $credential" >&2; exit 1; }
+done
 
 for installer in scripts/install.sh scripts/install.ps1; do
   grep -Fq 'gh attestation verify' "$installer" || { echo "$installer does not verify GitHub attestations" >&2; exit 1; }

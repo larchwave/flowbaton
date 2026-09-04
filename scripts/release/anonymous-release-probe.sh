@@ -14,7 +14,7 @@ if [[ "$version" == *-* ]]; then
   cask=flowbaton-beta
 fi
 
-for credential in GH_TOKEN GITHUB_TOKEN HOMEBREW_TAP_TOKEN APPLE_NOTARY_PRIVATE_KEY_BASE64 APPLE_DEVELOPER_ID_CERTIFICATE_BASE64; do
+for credential in GH_TOKEN GITHUB_TOKEN HOMEBREW_TAP_TOKEN HOMEBREW_TAP_SSH_KEY FLOWBATON_TAP_SSH_KEY_FILE FLOWBATON_TAP_KNOWN_HOSTS_FILE GIT_SSH_COMMAND APPLE_NOTARY_PRIVATE_KEY_BASE64 APPLE_DEVELOPER_ID_CERTIFICATE_BASE64; do
   [[ -z "${!credential:-}" ]] || { echo "anonymous probe inherited credential: $credential" >&2; exit 1; }
 done
 

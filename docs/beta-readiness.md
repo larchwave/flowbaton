@@ -49,16 +49,15 @@ notarization, public attestation, or anonymous release delivery.
 
 ## Publication requirements still open
 
-1. Populate the `release-signing` and `release` environments with dedicated
-   signing/notarization and tap credentials. Both environments are configured
-   for `v*` tags with review by `larchwave`; both currently contain zero secrets.
-   Repository administration works through the dedicated `larchwave` Git
-   configuration. Local Developer ID identities do not configure CI.
-2. Complete the `beta.2` release pipeline. Candidate CI and the signed tag
-   are verified. Its initial Intel iOS attempt failed before test initialization
-   with an Accessibility startup timeout; the failed jobs were retried on a
-   fresh runner. Android, Apple-silicon iOS, Go/race, and Chrome gates passed.
-   The retry and subsequent packaging gates still need final results.
+1. Complete a new tagged release pipeline after the packaging fix. The
+   `release-signing` environment now has Developer ID and notarization
+   credentials; `release` has a deploy key scoped to the Homebrew tap.
+   Both environments require `larchwave` review for `v*` tags. Secret
+   configuration is verified, but CI signing still needs a successful run.
+2. The `beta.2` retry passed Intel iOS and all prerequisite jobs. Packaging
+   then stopped because downloaded mobile assets made the checkout dirty.
+   Downloads now use the runner temporary directory, preserving GoReleaser's
+   clean-checkout validation. Previously pushed tags remain unchanged.
 3. Pass every native host installer and Homebrew smoke, including Intel and
    Apple silicon; retain signed archives, checksums, SBOM, and provenance.
 4. Pass the workflow's anonymous probe against the published tag, assets,
