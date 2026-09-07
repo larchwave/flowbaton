@@ -27,7 +27,7 @@ func TestModuleIdentity(t *testing.T) {
 
 func TestGovernanceDocuments(t *testing.T) {
 	required := map[string][]string{
-		"README.md":                             {"FlowBaton", "pre-alpha"},
+		"README.md":                             {"FlowBaton", "beta", "experimental"},
 		"LICENSE":                               {"Apache License", "Version 2.0"},
 		"SECURITY.md":                           {"Security Policy", "public"},
 		"CODE_OF_CONDUCT.md":                    {"Code of Conduct", "enforcement"},

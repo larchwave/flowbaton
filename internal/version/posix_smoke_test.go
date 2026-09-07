@@ -9,6 +9,7 @@ import (
 )
 
 func TestPOSIXSmokeCanonicalizesTemporaryHomeRoot(t *testing.T) {
+	requireUnixReleaseShell(t)
 	bash, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("bash unavailable")

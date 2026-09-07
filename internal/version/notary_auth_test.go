@@ -118,6 +118,7 @@ func TestReleaseWorkflowProvidesAppPasswordCredentialsToPreflightAndSigning(t *t
 }
 
 func TestDarwinNotaryAppPasswordUsesIdenticalAuthForSubmitAndLog(t *testing.T) {
+	requireUnixReleaseShell(t)
 	temp := t.TempDir()
 	candidate := filepath.Join(temp, "candidate")
 	root := filepath.Join(temp, "flowbaton_1.2.3_darwin_arm64")
