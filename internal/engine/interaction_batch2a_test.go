@@ -48,6 +48,16 @@ func TestInteractionBatch2APrivateRegistryAndCompileContract(t *testing.T) {
 		if _, err := compileBatch2ADirect(batch2ABareCommand(keyword)); err != nil {
 			t.Fatalf("compile %s bare error = %v", keyword, err)
 		}
+		// Issue #11: the object form is admitted for the universal metadata alone.
+		for _, command := range []model.Command{
+			{Kind: keyword, Form: model.CommandFormObject, Arguments: map[string]any{"optional": true}, Optional: boolPointer(true)},
+			{Kind: keyword, Form: model.CommandFormObject, Arguments: map[string]any{"label": "dismiss"}, Label: stringPointer("dismiss")},
+			{Kind: keyword, Form: model.CommandFormObject, Arguments: map[string]any{}},
+		} {
+			if _, err := compileBatch2ADirect(command); err != nil {
+				t.Fatalf("compile %s with universal metadata %#v error = %v", keyword, command.Arguments, err)
+			}
+		}
 		invalid := []model.Command{
 			{Kind: keyword, Form: model.CommandFormObject, Arguments: "value"},
 			{Kind: keyword, Form: model.CommandFormObject, Arguments: int64(1)},

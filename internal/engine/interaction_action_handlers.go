@@ -64,12 +64,26 @@ func compileBatch2ADirect(command model.Command) (any, error) {
 	default:
 		return nil, NewConfigurationError(fmt.Sprintf("%s is not a direct interaction command", command.Kind), nil)
 	}
-	if err := decodeNoArguments(command); err != nil {
-		return nil, err
+	if len(command.Children) != 0 || command.Condition != nil || len(command.Links) != 0 || command.Selector != nil {
+		return nil, commandDecodeError(command.Kind, "must be a bare command without selector, condition, or children")
 	}
-	if len(command.Children) != 0 || command.Condition != nil || len(command.Links) != 0 ||
-		command.Label != nil || command.Optional != nil || command.Selector != nil {
-		return nil, commandDecodeError(command.Kind, "must be a bare command without metadata, selector, or children")
+	switch command.Form {
+	case model.CommandFormScalar:
+		if command.Arguments != nil {
+			return nil, commandDecodeError(command.Kind, "bare scalar form must not carry arguments")
+		}
+	case model.CommandFormObject:
+		// The object form exists for the universal metadata alone: `optional`
+		// and `label` (issue #11). rejectUnknown admits exactly those two.
+		object, err := decodeObject(command)
+		if err != nil {
+			return nil, err
+		}
+		if err := object.rejectUnknown(); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, commandDecodeError(command.Kind, "must use bare scalar form or an object carrying only label/optional")
 	}
 	return batch2ADirectCompiled{keyword: command.Kind}, nil
 }

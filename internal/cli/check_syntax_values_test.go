@@ -17,10 +17,13 @@ func TestCheckSyntaxRefusesValuesTheEngineWillRefuse(t *testing.T) {
 	base := t.TempDir()
 	checker := NewParserChecker()
 	refused := map[string]string{
-		"negative repeat":        "appId: com.example\n---\n- tapOn:\n    text: Hi\n    repeat: -1\n",
-		"percentage at 100":      "appId: com.example\n---\n- tapOn:\n    point: '100%,50%'\n",
-		"negative absolute":      "appId: com.example\n---\n- tapOn:\n    point: '-1,30'\n",
-		"non integer coordinate": "appId: com.example\n---\n- tapOn:\n    point: 'left,30'\n",
+		"negative repeat":          "appId: com.example\n---\n- tapOn:\n    text: Hi\n    repeat: -1\n",
+		"percentage at 100":        "appId: com.example\n---\n- tapOn:\n    point: '100%,50%'\n",
+		"negative absolute":        "appId: com.example\n---\n- tapOn:\n    point: '-1,30'\n",
+		"non integer coordinate":   "appId: com.example\n---\n- tapOn:\n    point: 'left,30'\n",
+		"swipe trailing comma":     "appId: com.example\n---\n- swipe:\n    start: '50%,'\n    end: '50%,24%'\n",
+		"swipe three coordinates":  "appId: com.example\n---\n- swipe:\n    start: '50%, 80%, 1'\n    end: '50%,24%'\n",
+		"hideKeyboard unknown key": "appId: com.example\n---\n- hideKeyboard:\n    timeout: 5\n",
 	}
 	for name, yaml := range refused {
 		t.Run(name, func(t *testing.T) {
@@ -47,6 +50,10 @@ func TestCheckSyntaxKeepsAcceptingDeferredValues(t *testing.T) {
 		"interpolated text":    "appId: com.example\n---\n- tapOn:\n    text: '${LABEL}'\n",
 		"valid repeat":         "appId: com.example\n---\n- tapOn:\n    text: Hi\n    repeat: 3\n",
 		"percentage below 100": "appId: com.example\n---\n- tapOn:\n    point: '99%,50%'\n",
+		// Issues #10 and #11: shapes real authored flows carry.
+		"spaced swipe points":   "appId: com.example\n---\n- swipe:\n    start: \"50%, 80%\"\n    end: \"50%, 24%\"\n",
+		"optional hideKeyboard": "appId: com.example\n---\n- hideKeyboard:\n    optional: true\n",
+		"labelled back":         "appId: com.example\n---\n- back:\n    label: leave the screen\n",
 	}
 	for name, yaml := range accepted {
 		t.Run(name, func(t *testing.T) {
