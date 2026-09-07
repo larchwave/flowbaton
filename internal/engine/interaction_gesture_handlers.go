@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/model"
@@ -223,10 +222,11 @@ func evaluateInteractionGesture(
 	return evaluated, nil
 }
 
+// parseInteractionGesturePoint reads a gesture point the way tapOn does:
+// whitespace around either coordinate is tolerated, so `"50%, 80%"` is the
+// point `"50%,80%"` (issue #10). A coordinate that is not an integer once
+// trimmed, a missing or extra coordinate, and a trailing comma stay errors.
 func parseInteractionGesturePoint(keyword model.CommandKeyword, source string) (tapPointPlan, error) {
-	if strings.IndexFunc(source, unicode.IsSpace) >= 0 {
-		return tapPointPlan{}, NewConfigurationError(fmt.Sprintf("command %s point must not contain whitespace", keyword), nil)
-	}
 	point, err := parseTapPoint(source)
 	if err != nil {
 		return tapPointPlan{}, NewConfigurationError(fmt.Sprintf("command %s point is invalid", keyword), err)

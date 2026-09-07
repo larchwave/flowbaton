@@ -54,16 +54,11 @@ func TestInteractionBatch1APrivateRegistryAndStaticContract(t *testing.T) {
 		batch1ACommand(model.CommandDoubleTapOn, "", "", nil, nil, nil, nil),
 		batch1ACommand(model.CommandDoubleTapOn, "", "20%,30", nil, nil, nil, nil),
 		batch1ACommand(model.CommandDoubleTapOn, "", "100%,0%", nil, nil, nil, nil),
-		batch1ACommand(model.CommandDoubleTapOn, "", "20, 30", nil, nil, nil, nil),
-		batch1ACommand(model.CommandDoubleTapOn, "", " 20,30", nil, nil, nil, nil),
-		batch1ACommand(model.CommandDoubleTapOn, "", "20,30 ", nil, nil, nil, nil),
 		batch1ACommand(model.CommandDoubleTapOn, "", "20,30", nil, nil, intPointerForTap(-1), nil),
 		batch1ACommand(model.CommandDoubleTapOn, "", "20,30", nil, nil, intPointerForTap(30001), nil),
 		batch1ACommand(model.CommandDoubleTapOn, "", "20,30", nil, nil, nil, intPointerForTap(-1)),
 		batch1ACommand(model.CommandDoubleTapOn, "", "20,30", nil, nil, nil, intPointerForTap(30001)),
 		batch1ACommand(model.CommandLongPressOn, "", "20,30", nil, nil, intPointerForTap(1), nil),
-		batch1ACommand(model.CommandLongPressOn, "", "50%, 36%", nil, nil, nil, nil),
-		batch1ACommand(model.CommandLongPressOn, "", "50% ,36%", nil, nil, nil, nil),
 		batch1ACommand(model.CommandLongPressOn, "", "20,30", nil, nil, nil, intPointerForTap(-1)),
 	}
 	invalid = append(invalid,
@@ -99,6 +94,11 @@ func TestInteractionBatch1ATargetGrammarLateEvaluationAndStability(t *testing.T)
 		},
 		{
 			name: "percentage screen point", command: batch1ACommand(model.CommandDoubleTapOn, "", "50%,36%", nil, nil, nil, intPointerForTap(0)),
+			driver: batch1APointDriver(400, 884), wantPoint: device.Point{X: 200, Y: 318},
+		},
+		{
+			// Issue #10: whitespace around a coordinate does not change the point.
+			name: "spaced percentage point", command: batch1ACommand(model.CommandLongPressOn, "", " 50% , 36% ", nil, nil, nil, intPointerForTap(0)),
 			driver: batch1APointDriver(400, 884), wantPoint: device.Point{X: 200, Y: 318},
 		},
 		{
@@ -162,16 +162,6 @@ func TestInteractionBatch1ALateInvalidAndPointBoundsFailBeforePhysicalAction(t *
 			name:         "late malformed point",
 			command:      batch1ACommand(model.CommandDoubleTapOn, "", "${POINT}", nil, nil, nil, intPointerForTap(0)),
 			replacements: map[string]string{"POINT": "20%,30"},
-		},
-		{
-			name:         "late double tap whitespace",
-			command:      batch1ACommand(model.CommandDoubleTapOn, "", "${POINT}", nil, nil, nil, intPointerForTap(0)),
-			replacements: map[string]string{"POINT": "20, 30"},
-		},
-		{
-			name:         "late long press whitespace",
-			command:      batch1ACommand(model.CommandLongPressOn, "", "${POINT}", nil, nil, nil, intPointerForTap(0)),
-			replacements: map[string]string{"POINT": " 20,30"},
 		},
 		{
 			name:    "absolute x at upper bound",
