@@ -8,6 +8,12 @@
 #     expire after 7 days and per-team bundle ids must be unique).
 #   - export FLOWBATON_IOS_TEAM=<your team id> before running.
 #   - The phone connected over USB, unlocked, and trusted.
+#
+# By default xcodebuild may ask the Apple Developer portal to create or update
+# profiles, App IDs and certificates. Set FLOWBATON_IOS_LOCAL_SIGNING=1 to sign
+# with the assets already installed in Xcode and never touch the portal; a
+# missing profile then fails the build with xcodebuild's own message instead
+# of being created (issue #22).
 set -euo pipefail
 
 if [[ -z "${FLOWBATON_IOS_TEAM:-}" ]]; then
@@ -20,13 +26,20 @@ derived="${FLOWBATON_IOS_DERIVED_DATA:-$HOME/.flowbaton/ios-driver}"
 
 xcodegen generate --spec "$repo/drivers/ios/project.yml" --project "$repo/drivers/ios"
 
+signing=()
+if [[ -n "${FLOWBATON_IOS_LOCAL_SIGNING:-}" ]]; then
+  echo "local signing only: building from the installed profiles and certificates, not asking the portal" >&2
+else
+  signing=(-allowProvisioningUpdates)
+fi
+
 xcodebuild -quiet \
   -project "$repo/drivers/ios/FlowBatonIOSRunner.xcodeproj" \
   -scheme FlowBatonIOSRunnerUITests \
   -configuration Debug \
   -destination 'generic/platform=iOS' \
   -derivedDataPath "$derived" \
-  -allowProvisioningUpdates \
+  ${signing[@]+"${signing[@]}"} \
   COMPILER_INDEX_STORE_ENABLE=NO \
   build-for-testing
 

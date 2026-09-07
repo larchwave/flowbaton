@@ -110,6 +110,11 @@ scripts/build-ios-device-runner.sh
 flowbaton test -p ios --device <device-udid> path/to/flow.yaml
 ```
 
+The build lets Xcode create or update profiles in the developer portal.
+`FLOWBATON_IOS_LOCAL_SIGNING=1 scripts/build-ios-device-runner.sh` signs with
+the profiles and certificates already installed and never touches the portal;
+a missing profile fails the build instead.
+
 `flowbaton list-devices -p ios` lists attached hardware next to Simulators.
 `-p ios` picks the driver from the UDID.
 

@@ -501,6 +501,42 @@ func TestHistoryPolicyWorkflowsFetchCompleteHistory(t *testing.T) {
 	}
 }
 
+// The device runner build asks the Apple portal to create or update profiles
+// by default. FLOWBATON_IOS_LOCAL_SIGNING opts out of that so an already
+// provisioned phone builds from the installed assets or fails on the missing
+// one (issue #22). The flag must stay in the default path and leave the
+// opt-out path.
+func TestIOSDeviceRunnerBuildCanSkipProvisioningUpdates(t *testing.T) {
+	script := readFile(t, "scripts/build-ios-device-runner.sh")
+	for _, required := range []string{
+		`FLOWBATON_IOS_LOCAL_SIGNING`,
+		`-allowProvisioningUpdates`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("iOS device runner build is missing %q", required)
+		}
+	}
+	if strings.Count(script, `-allowProvisioningUpdates`) != 1 {
+		t.Errorf("iOS device runner build names -allowProvisioningUpdates %d times, want once inside the default branch", strings.Count(script, `-allowProvisioningUpdates`))
+	}
+	// The flag lives only in the array the default branch fills; the opt-out
+	// branch leaves the array empty, and the expansion must survive an empty
+	// array under set -u on the macOS /bin/bash 3.2.
+	for _, required := range []string{
+		`if [[ -n "${FLOWBATON_IOS_LOCAL_SIGNING:-}" ]]; then`,
+		`signing=(-allowProvisioningUpdates)`,
+		`${signing[@]+"${signing[@]}"}`,
+	} {
+		if !strings.Contains(script, required) {
+			t.Errorf("iOS device runner build is missing the guarded flag shape %q", required)
+		}
+	}
+	readme := readFile(t, "README.md")
+	if !strings.Contains(readme, "FLOWBATON_IOS_LOCAL_SIGNING") {
+		t.Error("README does not document FLOWBATON_IOS_LOCAL_SIGNING beside the device runner build")
+	}
+}
+
 func TestAndroidConnectedRunnerBoundsEmulatorStartup(t *testing.T) {
 	script := readFile(t, "scripts/ci/android-connected.sh")
 	for _, required := range []string{
