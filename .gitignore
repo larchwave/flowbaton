@@ -19,6 +19,7 @@ drivers/android/**/build/
 drivers/ios/.build/
 drivers/ios/DerivedData/
 drivers/ios/FlowBatonIOSRunner.xcodeproj/
+drivers/ios/UITests/SettleFixture/Info.plist
 *.xcresult
 
 # OMX runtime state; planning artifacts remain reviewable.

@@ -22,26 +22,71 @@ struct SettleFixtureScreen: View {
   @State private var continued = false
 
   var body: some View {
-    VStack(spacing: 32) {
-      Text("Settle fixture")
-        .font(.title)
-        .accessibilityIdentifier("fixture.title")
-      DecorativeWaveform()
-        .frame(height: 160)
-        .accessibilityHidden(true)
-      if continued {
-        Text("Continued")
-          .font(.headline)
-          .accessibilityIdentifier("fixture.continued")
+    if continued {
+      ScrollFixturePage()
+    } else {
+      VStack(spacing: 32) {
+        Text("Settle fixture")
+          .font(.title)
+          .accessibilityIdentifier("fixture.title")
+        DecorativeWaveform()
+          .frame(height: 160)
+          .accessibilityHidden(true)
+        Spacer()
+        Button("Continue") {
+          continued = true
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("fixture.continue")
       }
-      Spacer()
-      Button("Continue") {
-        continued = true
-      }
-      .buttonStyle(.borderedProminent)
-      .accessibilityIdentifier("fixture.continue")
+      .padding(20)
     }
-    .padding(20)
+  }
+}
+
+/// The page behind Continue reproduces issue #12 as the reporter saw it: a
+/// card in a ScrollView with a plain text Link, rendered at the largest
+/// accessibility text size, sitting where a downward scroll drag starts (the
+/// middle of the screen plus a quarter of its height). A marker further down
+/// only a real scroll brings on screen. The link points back at this app
+/// (scheme `settlefixture`, declared in project.yml), so an activation shows
+/// up in the hierarchy as `fixture.linkActivated` instead of as another app
+/// in the foreground.
+struct ScrollFixturePage: View {
+  @State private var linkActivated = false
+
+  var body: some View {
+    GeometryReader { geometry in
+      ScrollView {
+        VStack(alignment: .leading, spacing: 24) {
+          Text("Continued")
+            .font(.headline)
+            .accessibilityIdentifier("fixture.continued")
+          if linkActivated {
+            Text("Link activated")
+              .accessibilityIdentifier("fixture.linkActivated")
+          }
+          Color.clear.frame(height: geometry.size.height * 0.4)
+          VStack(alignment: .leading, spacing: 16) {
+            Text("Subscription")
+              .font(.headline)
+            if let destination = URL(string: "settlefixture://link") {
+              Link("Manage the account", destination: destination)
+                .accessibilityIdentifier("fixture.link")
+            }
+          }
+          .padding(20)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+          Color.clear.frame(height: geometry.size.height)
+          Text("End of the page")
+            .accessibilityIdentifier("fixture.end")
+        }
+        .padding(20)
+      }
+    }
+    .dynamicTypeSize(.accessibility5)
+    .onOpenURL { _ in linkActivated = true }
   }
 }
 

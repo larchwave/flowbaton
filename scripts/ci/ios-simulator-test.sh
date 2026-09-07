@@ -52,4 +52,5 @@ TEST_RUNNER_FLOWBATON_SETTLE_FIXTURE_INSTALLED=1 xcodebuild -quiet \
   -destination "platform=iOS Simulator,id=${udid}" \
   -derivedDataPath "$derived" \
   test-without-building \
-  -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testAHiddenAnimationDoesNotHideAStableHierarchy
+  -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testAHiddenAnimationDoesNotHideAStableHierarchy \
+  -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testAScrollDragDoesNotActivateTheLinkBeneathIt

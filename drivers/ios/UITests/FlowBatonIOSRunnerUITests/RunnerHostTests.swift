@@ -166,16 +166,81 @@ final class RunnerHostTests: XCTestCase {
       Self.element("fixture.continue", in: first), "the Continue button is not in the hierarchy")
     XCTAssertTrue(button.enabled, "the Continue button is not enabled")
 
-    try automation.touch(
-      x: button.frame.x + button.frame.width / 2,
-      y: button.frame.y + button.frame.height / 2,
-      duration: nil)
-    var continued = false
-    for _ in 0..<20 where !continued {
-      continued = try Self.element("fixture.continued", in: Self.appTree(automation)) != nil
-      if !continued { Thread.sleep(forTimeInterval: 0.25) }
+    try Self.tap(button, automation)
+    XCTAssertNotNil(
+      try Self.waitFor("fixture.continued", automation),
+      "tapping Continue did not reveal the confirmation")
+  }
+
+  /// testAScrollDragDoesNotActivateTheLinkBeneathIt pins issue #12 on the
+  /// device: a drag shaped like the host's ScrollVertical, half a second long
+  /// and starting on the fixture's Link, must scroll the page and leave the
+  /// link alone. The fixture's link points back at the fixture, so an
+  /// activation is a hierarchy fact (`fixture.linkActivated`), not another app
+  /// in front.
+  func testAScrollDragDoesNotActivateTheLinkBeneathIt() throws {
+    guard ProcessInfo.processInfo.environment[Self.settleFixtureVariable] == "1" else {
+      throw XCTSkip("set \(Self.settleFixtureVariable)=1 once the settle fixture is installed")
     }
-    XCTAssertTrue(continued, "tapping Continue did not reveal the confirmation")
+    let automation = XCUITestAutomation()
+    try automation.launchApp(bundleID: Self.settleFixtureID)
+    defer { try? automation.terminateApp(appID: Self.settleFixtureID) }
+    let button = try XCTUnwrap(
+      try Self.waitFor("fixture.continue", automation),
+      "the Continue button is not in the hierarchy")
+    try Self.tap(button, automation)
+    let link = try XCTUnwrap(
+      try Self.waitFor("fixture.link", automation), "the link is not in the hierarchy")
+    let marker = try XCTUnwrap(
+      Self.element("fixture.end", in: try Self.appTree(automation)),
+      "the page's end marker is not in the hierarchy")
+    let info = try automation.deviceInfo()
+    XCTAssertGreaterThanOrEqual(
+      marker.frame.y, info.heightPoints, "the end marker must start below the screen")
+
+    // The host's ScrollVertical: a drag half the screen tall through the
+    // start point, here the link itself.
+    let startX = link.frame.x + link.frame.width / 2
+    let startY = link.frame.y + link.frame.height / 2
+    try automation.swipeV2(
+      startX: startX, startY: startY,
+      endX: startX, endY: startY - info.heightPoints / 2,
+      duration: 0.5, appIDs: [])
+
+    var tree = try Self.appTree(automation)
+    for _ in 0..<20 {
+      let scrolled = Self.element("fixture.end", in: tree)
+      if let scrolled, scrolled.frame.y < info.heightPoints { break }
+      Thread.sleep(forTimeInterval: 0.25)
+      tree = try Self.appTree(automation)
+    }
+    XCTAssertNil(
+      Self.element("fixture.linkActivated", in: tree), "the drag activated the link under it")
+    let scrolled = try XCTUnwrap(Self.element("fixture.end", in: tree))
+    XCTAssertLessThan(scrolled.frame.y, info.heightPoints, "the drag did not scroll the page")
+    XCTAssertEqual(
+      try automation.runningApp(appIDs: [Self.settleFixtureID]), Self.settleFixtureID,
+      "the fixture left the foreground")
+  }
+
+  private static func tap(_ element: WireAXElement, _ automation: XCUITestAutomation) throws {
+    try automation.touch(
+      x: element.frame.x + element.frame.width / 2,
+      y: element.frame.y + element.frame.height / 2,
+      duration: nil)
+  }
+
+  /// waitFor polls the fixture's tree for an identifier for up to five seconds.
+  private static func waitFor(_ identifier: String, _ automation: XCUITestAutomation) throws
+    -> WireAXElement?
+  {
+    for _ in 0..<20 {
+      if let found = element(identifier, in: try appTree(automation)) {
+        return found
+      }
+      Thread.sleep(forTimeInterval: 0.25)
+    }
+    return nil
   }
 
   /// appTree is the fixture's own subtree: the served root also carries the

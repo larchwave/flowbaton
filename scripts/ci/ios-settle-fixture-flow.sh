@@ -7,7 +7,8 @@
 # runner into; the fixture app is expected beside it in <runner-derived>-fixture
 # and is installed again here so this script also runs on its own. The flow is
 # the reporter's shape from issue #7: launch, assert the button, tap it, assert
-# the result, all under a decorative animation the hierarchy never shows.
+# the result, all under a decorative animation the hierarchy never shows; then
+# issue #12's: scroll a page whose drag start sits on a plain SwiftUI Link.
 set -euo pipefail
 
 flowbaton="${1:?flowbaton binary}"

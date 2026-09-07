@@ -1,5 +1,5 @@
 appId: dev.larchwave.flowbaton.settlefixture
-name: Settle fixture launch, assert and tap under decorative animation
+name: Settle fixture launch, tap under decorative animation, scroll over a link
 ---
 - launchApp
 - assertVisible:
@@ -8,3 +8,9 @@ name: Settle fixture launch, assert and tap under decorative animation
     id: fixture.continue
 - assertVisible:
     id: fixture.continued
+- scrollUntilVisible:
+    element:
+      id: fixture.end
+    direction: DOWN
+- assertNotVisible:
+    id: fixture.linkActivated

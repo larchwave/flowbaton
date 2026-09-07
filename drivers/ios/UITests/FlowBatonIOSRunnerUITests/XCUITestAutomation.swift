@@ -85,9 +85,20 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     // drag, and pinning it to one app's coordinate space would move the gesture
     // whenever that app is not full-screen.
     _ = appIDs
+    // `duration` on the wire is how long the drag takes. XCUITest's
+    // press(forDuration:thenDragTo:) spends that time HOLDING at the start
+    // point before it moves, and half a second of hold over a SwiftUI Link
+    // activated the link instead of scrolling the page beneath it (issue #12).
+    // So the hold stays at zero and the duration becomes the drag's velocity.
+    let distance = hypot(endX - startX, endY - startY)
+    let velocity: XCUIGestureVelocity =
+      duration > 0 && distance > 0
+      ? XCUIGestureVelocity(rawValue: CGFloat(distance / duration)) : .default
     try onMain {
       Self.coordinate(x: startX, y: startY)
-        .press(forDuration: max(duration, 0), thenDragTo: Self.coordinate(x: endX, y: endY))
+        .press(
+          forDuration: 0, thenDragTo: Self.coordinate(x: endX, y: endY),
+          withVelocity: velocity, thenHoldForDuration: 0)
     }
   }
 
