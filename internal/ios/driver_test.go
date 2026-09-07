@@ -263,6 +263,49 @@ func TestPressKeyTargetsTheRememberedForegroundApplication(t *testing.T) {
 	}
 }
 
+// pressKey HOME is the runner's /pressButton route, not /pressKey: the
+// keyboard route needs a focused field and knows nothing about the device's
+// home button (issue #21). After it the launched app is in the background, so
+// the driver forgets it: a filter-less hierarchy read then gets the home
+// screen instead of a "not in the foreground" refusal.
+func TestPressKeyHomeGoesThroughThePressButtonRouteAndForgetsTheApp(t *testing.T) {
+	t.Parallel()
+
+	var paths []string
+	var body map[string]any
+	driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+		paths = append(paths, request.URL.Path)
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Errorf("decode %s request: %v", request.URL.Path, err)
+		}
+		writeJSON(t, writer, map[string]any{})
+	})
+	driver.rememberLaunch("com.example.a")
+	if err := driver.PressKey(
+		context.Background(), device.PressKeyRequest{Code: device.KeyCode("HOME"), AppIDs: []string{"com.example.a"}}); err != nil {
+		t.Fatalf("PressKey(HOME) error = %v", err)
+	}
+	if !reflect.DeepEqual(paths, []string{"/pressButton"}) || body["button"] != "home" {
+		t.Fatalf("HOME reached %v with body %#v, want one /pressButton with button home", paths, body)
+	}
+	if got := driver.defaultAppIDs(nil); len(got) != 0 {
+		t.Fatalf("after HOME the driver still names %v as the foreground app", got)
+	}
+}
+
+func TestPressKeyLockIsStillRefusedOnIOS(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+		t.Errorf("LOCK reached the runner at %s", request.URL.Path)
+		writeJSON(t, writer, map[string]any{})
+	})
+	err := driver.PressKey(context.Background(), device.PressKeyRequest{Code: device.KeyCode("LOCK")})
+	if !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("PressKey(LOCK) = %v, want ErrUnsupported", err)
+	}
+}
+
 func TestContentDescriptorConvertsTheAccessibilityTree(t *testing.T) {
 	t.Parallel()
 

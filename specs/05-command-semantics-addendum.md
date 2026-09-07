@@ -63,3 +63,12 @@ own diagnostics and cancellation behavior.
 The command-manifest tests send the smallest and largest accepted authored shape
 for every command through parse, prepare, evaluate, and execute. Any intentional
 gap must be named in the test and must fail if the gap becomes stale.
+
+## 9. Keys
+
+`pressKey: HOME` sends the foreground application to the background without
+terminating it; its state survives. On iOS the runner presses the device's home
+button, so the flow's application is no longer in front afterwards: a following
+`launchApp` with `stopApp: false` resumes it, and commands that read its
+hierarchy before that are refused as "not in the foreground". `LOCK`, `POWER`
+and the volume keys stay Android-only; preflight refuses them on iOS.

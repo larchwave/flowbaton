@@ -92,7 +92,7 @@ func iosSimulatorDocument() Document {
 		model.CommandSetAirplaneMode:    true,
 		model.CommandToggleAirplaneMode: true,
 	})
-	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB")
+	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB", "HOME")
 	return Document{Platform: PlatformIOSSimulator, features: features}
 }
 
@@ -123,7 +123,7 @@ func iosPhysicalDocument() Document {
 		model.CommandClearKeychain: true,
 		model.CommandAddMedia:      true,
 	})
-	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB")
+	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB", "HOME")
 	return Document{Platform: PlatformIOSPhysical, features: features}
 }
 
