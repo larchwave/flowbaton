@@ -909,19 +909,21 @@ func (driver *Driver) WaitUntilScreenIsStatic(
 	return driver.client.IsScreenStatic(ctx)
 }
 
-// WaitForAppToSettle returns nil when settling cannot be confirmed. Callers
-// must not interpret nil as settled confirmation.
+// WaitForAppToSettle hands the engine one hierarchy sample; the engine decides
+// settling from two consecutive equal samples (internal/engine/settle.go).
+//
+// It deliberately does NOT ask /isScreenStatic first. That probe diffs two
+// screenshots, so a decorative animation that accessibility never sees kept
+// answering "moving", the hierarchy was never sampled, and launchApp failed
+// after ten attempts on a screen with a stable, tappable button (issue #7). A
+// target that really moves shows up as differing bounds between samples, and
+// a capture the runner cannot make is an error, so nothing fail-closed is
+// lost. Pixel motion stays the signal of WaitUntilScreenIsStatic, behind
+// waitForAnimationToEnd.
 func (driver *Driver) WaitForAppToSettle(
 	ctx context.Context,
 	request device.SettleRequest,
 ) (*device.ViewHierarchy, error) {
-	static, err := driver.client.IsScreenStatic(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !static {
-		return nil, nil
-	}
 	var appIDs []string
 	if request.AppID != "" {
 		appIDs = []string{request.AppID}

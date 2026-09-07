@@ -130,6 +130,75 @@ final class RunnerHostTests: XCTestCase {
     XCTAssertGreaterThan(shot.count, 0, "an empty screenshot")
   }
 
+  /// The settle fixture (UITests/SettleFixture) keeps redrawing a decoration
+  /// that accessibility never sees while its Continue button stands still.
+  static let settleFixtureID = "dev.larchwave.flowbaton.settlefixture"
+
+  /// Set by scripts/ci/ios-simulator-test.sh after it installs the fixture.
+  /// XCUITest records a missing app as a failure rather than throwing, so the
+  /// test cannot probe for the app itself and skips unless told it is there.
+  static let settleFixtureVariable = "FLOWBATON_SETTLE_FIXTURE_INSTALLED"
+
+  /// testAHiddenAnimationDoesNotHideAStableHierarchy pins the device facts
+  /// behind issue #7: the screen probe keeps reporting motion, the hierarchy
+  /// the host settles on does not change, and the button it exposes is
+  /// tappable. A settle gated on the screen probe would never sample here.
+  func testAHiddenAnimationDoesNotHideAStableHierarchy() throws {
+    guard ProcessInfo.processInfo.environment[Self.settleFixtureVariable] == "1" else {
+      throw XCTSkip("set \(Self.settleFixtureVariable)=1 once the settle fixture is installed")
+    }
+    let automation = XCUITestAutomation()
+    try automation.launchApp(bundleID: Self.settleFixtureID)
+    defer { try? automation.terminateApp(appID: Self.settleFixtureID) }
+
+    var sawMotion = false
+    for _ in 0..<10 where !sawMotion {
+      sawMotion = try !automation.isScreenStatic()
+    }
+    XCTAssertTrue(
+      sawMotion,
+      "the fixture never moved a pixel, so it no longer reproduces the animated screen")
+
+    let first = try Self.appTree(automation)
+    let second = try Self.appTree(automation)
+    XCTAssertEqual(first, second, "two consecutive hierarchy samples differ on a still screen")
+    let button = try XCTUnwrap(
+      Self.element("fixture.continue", in: first), "the Continue button is not in the hierarchy")
+    XCTAssertTrue(button.enabled, "the Continue button is not enabled")
+
+    try automation.touch(
+      x: button.frame.x + button.frame.width / 2,
+      y: button.frame.y + button.frame.height / 2,
+      duration: nil)
+    var continued = false
+    for _ in 0..<20 where !continued {
+      continued = try Self.element("fixture.continued", in: Self.appTree(automation)) != nil
+      if !continued { Thread.sleep(forTimeInterval: 0.25) }
+    }
+    XCTAssertTrue(continued, "tapping Continue did not reveal the confirmation")
+  }
+
+  /// appTree is the fixture's own subtree: the served root also carries the
+  /// status bar, whose clock may tick between two samples.
+  private static func appTree(_ automation: XCUITestAutomation) throws -> WireAXElement {
+    let payload = try automation.viewHierarchy(
+      appIDs: [settleFixtureID], excludeKeyboardElements: false)
+    let decoded = try JSONDecoder().decode(WireHierarchy.self, from: payload)
+    return try XCTUnwrap(decoded.axElement.children?.first, "the served root has no app child")
+  }
+
+  private static func element(_ identifier: String, in root: WireAXElement) -> WireAXElement? {
+    if root.identifier == identifier {
+      return root
+    }
+    for child in root.children ?? [] {
+      if let found = element(identifier, in: child) {
+        return found
+      }
+    }
+    return nil
+  }
+
   private static func lifetime(_ environment: [String: String]) -> TimeInterval {
     guard let raw = environment[lifetimeVariable], let value = TimeInterval(raw), value > 0 else {
       return defaultLifetime

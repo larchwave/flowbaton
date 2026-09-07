@@ -1641,3 +1641,86 @@ func TestEveryKeyTheHostSendsIsInTheContractEnum(t *testing.T) {
 		t.Fatal("the contract allows a key it should not, so the check above cannot fail")
 	}
 }
+
+// Settling is the engine's decision (internal/engine/settle.go wants two
+// consecutive equal hierarchy samples). The driver's only job is to hand it a sample.
+// Gating that sample on a pixel diff starved the engine on any screen
+// with a decorative animation: the accessibility tree was stable, nothing was
+// ever sampled, and launchApp failed after ten attempts (issue #7).
+
+func TestWaitForAppToSettleSamplesTheHierarchyWhileThePixelsMove(t *testing.T) {
+	t.Parallel()
+
+	var staticProbes atomic.Int32
+	driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/isScreenStatic":
+			staticProbes.Add(1)
+			writeJSON(t, writer, map[string]bool{"isScreenStatic": false})
+		case "/viewHierarchy":
+			writeJSON(t, writer, settleFixtureHierarchy())
+		default:
+			t.Errorf("unexpected request %s", request.URL.Path)
+		}
+	})
+
+	hierarchy, err := driver.WaitForAppToSettle(context.Background(),
+		device.SettleRequest{AppID: "com.example.animated"})
+	if err != nil {
+		t.Fatalf("WaitForAppToSettle() error = %v", err)
+	}
+	if hierarchy == nil {
+		t.Fatal("WaitForAppToSettle() = nil while the pixels move; the engine needs the hierarchy sample to settle on")
+	}
+	if got := hierarchy.Root.Attributes["id"]; got != "fixture.continue" {
+		t.Fatalf("root id = %q, want the sampled tree", got)
+	}
+	if got := staticProbes.Load(); got != 0 {
+		t.Fatalf("/isScreenStatic requests = %d, want none: pixel motion is waitForAnimationToEnd's signal, not settle's", got)
+	}
+}
+
+func TestWaitForAppToSettleStaysFailClosed(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a hierarchy the runner cannot capture is an error, not a sample", func(t *testing.T) {
+		t.Parallel()
+		driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusInternalServerError)
+			writeJSON(t, writer, map[string]any{"errorMessage": "the accessibility hierarchy could not be captured", "errorCode": "internal"})
+		})
+		hierarchy, err := driver.WaitForAppToSettle(context.Background(), device.SettleRequest{AppID: "com.example.app"})
+		if err == nil {
+			t.Fatal("WaitForAppToSettle() succeeded on a failed capture")
+		}
+		if hierarchy != nil {
+			t.Fatalf("hierarchy = %#v, want nil alongside the error", hierarchy)
+		}
+	})
+
+	t.Run("cancellation wins over the sample", func(t *testing.T) {
+		t.Parallel()
+		driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
+			writeJSON(t, writer, settleFixtureHierarchy())
+		})
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := driver.WaitForAppToSettle(ctx, device.SettleRequest{AppID: "com.example.app"}); !errors.Is(err, context.Canceled) {
+			t.Fatalf("WaitForAppToSettle() error = %v, want context.Canceled", err)
+		}
+	})
+}
+
+// settleFixtureHierarchy is the smallest tree the driver decodes: one enabled
+// button that stays put while something invisible to accessibility animates.
+func settleFixtureHierarchy() map[string]any {
+	return map[string]any{
+		"axElement": map[string]any{
+			"identifier": "fixture.continue", "label": "Continue", "elementType": 9, "enabled": true,
+			"horizontalSizeClass": 0, "verticalSizeClass": 0, "selected": false,
+			"hasFocus": false, "windowContextID": 0, "displayID": 0,
+			"frame": map[string]any{"X": 20, "Y": 741, "Width": 362, "Height": 52},
+		},
+		"depth": 1,
+	}
+}

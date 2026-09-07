@@ -3,19 +3,8 @@ set -euo pipefail
 
 project="${1:-drivers/ios/FlowBatonIOSRunner.xcodeproj}"
 derived="${2:-${RUNNER_TEMP:-/tmp}/flowbaton-ios-test}"
-udid="$(xcrun simctl list devices available -j | python3 -c '
-import json,sys
-data=json.load(sys.stdin)
-for runtime in sorted(data["devices"], reverse=True):
-    for device in data["devices"][runtime]:
-        if device.get("isAvailable") and "iPhone" in device.get("name", ""):
-            print(device["udid"])
-            raise SystemExit
-raise SystemExit("no available iPhone Simulator")
-')"
-
-xcrun simctl boot "$udid" 2>/dev/null || true
-xcrun simctl bootstatus "$udid" -b
+here="$(cd "$(dirname "$0")" && pwd)"
+udid="$("$here/ios-simulator-boot.sh")"
 xcodebuild -quiet \
   -project "$project" \
   -scheme FlowBatonIOSRunnerUITests \
@@ -38,3 +27,29 @@ xcodebuild -quiet \
   -derivedDataPath "$derived" \
   test-without-building \
   -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testTheAutomationCanSeeTheDevice
+
+# The settle fixture (drivers/ios/UITests/SettleFixture) is a test subject with
+# its own scheme and its own derived directory: the release packager archives
+# the runner's whole Products directory, so the fixture must never land there.
+fixture_derived="${derived}-fixture"
+xcodebuild -quiet \
+  -project "$project" \
+  -scheme FlowBatonSettleFixture \
+  -configuration Debug \
+  -destination "platform=iOS Simulator,id=${udid}" \
+  -derivedDataPath "$fixture_derived" \
+  CODE_SIGNING_ALLOWED=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build
+fixture_app="$(find "$fixture_derived/Build/Products" -maxdepth 2 -name 'FlowBatonSettleFixture.app' -type d -print -quit)"
+test -n "$fixture_app"
+xcrun simctl install "$udid" "$fixture_app"
+
+# TEST_RUNNER_ variables reach the test process; the test skips without it
+# because XCUITest cannot probe for an installed app without failing.
+TEST_RUNNER_FLOWBATON_SETTLE_FIXTURE_INSTALLED=1 xcodebuild -quiet \
+  -xctestrun "$xctestrun" \
+  -destination "platform=iOS Simulator,id=${udid}" \
+  -derivedDataPath "$derived" \
+  test-without-building \
+  -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testAHiddenAnimationDoesNotHideAStableHierarchy

@@ -1,0 +1,10 @@
+appId: dev.larchwave.flowbaton.settlefixture
+name: Settle fixture launch, assert and tap under decorative animation
+---
+- launchApp
+- assertVisible:
+    id: fixture.continue
+- tapOn:
+    id: fixture.continue
+- assertVisible:
+    id: fixture.continued

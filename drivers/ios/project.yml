@@ -54,6 +54,26 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.larchwave.flowbaton.driver.uitests
         SKIP_INSTALL: true
 
+  # The settle fixture is a test subject, not a driver: a screen with a
+  # continuously redrawn decoration hidden from accessibility and a stationary
+  # enabled button (issue #7). It has its own scheme on purpose. The release
+  # packager archives the runner scheme's whole Products directory, so
+  # building the fixture there would ship it.
+  FlowBatonSettleFixture:
+    type: application
+    platform: iOS
+    sources:
+      - path: UITests/SettleFixture
+        excludes:
+          - "*.yaml"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.larchwave.flowbaton.settlefixture
+        SUPPORTED_PLATFORMS: iphonesimulator
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SKIP_INSTALL: true
+
 schemes:
   FlowBatonIOSRunner:
     build:
@@ -72,3 +92,8 @@ schemes:
     test:
       targets:
         - FlowBatonIOSRunnerUITests
+
+  FlowBatonSettleFixture:
+    build:
+      targets:
+        FlowBatonSettleFixture: all

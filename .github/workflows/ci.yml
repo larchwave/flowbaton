@@ -231,3 +231,24 @@ jobs:
           scripts/ci/ios-simulator-test.sh
           drivers/ios/FlowBatonIOSRunner.xcodeproj
           "$RUNNER_TEMP/flowbaton-ios-execution"
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: false
+          cache: false
+      - name: Build the host
+        run: go build -o "$RUNNER_TEMP/flowbaton" ./cmd/flowbaton
+      - name: Run the settle fixture flow through the host
+        run: >-
+          scripts/ci/ios-settle-fixture-flow.sh
+          "$RUNNER_TEMP/flowbaton"
+          "$RUNNER_TEMP/flowbaton-ios-execution"
+          "$RUNNER_TEMP/flowbaton-ios-settle-flow"
+      - name: Keep the flow artifacts of a failed run
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-settle-fixture-flow
+          path: ${{ runner.temp }}/flowbaton-ios-settle-flow
+          if-no-files-found: ignore
