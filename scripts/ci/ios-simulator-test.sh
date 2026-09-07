@@ -53,4 +53,5 @@ TEST_RUNNER_FLOWBATON_SETTLE_FIXTURE_INSTALLED=1 xcodebuild -quiet \
   -derivedDataPath "$derived" \
   test-without-building \
   -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testAHiddenAnimationDoesNotHideAStableHierarchy \
-  -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testAScrollDragDoesNotActivateTheLinkBeneathIt
+  -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testAScrollDragDoesNotActivateTheLinkBeneathIt \
+  -only-testing:FlowBatonIOSRunnerUITests/RunnerHostTests/testALandscapeRotationRotatesThePointsAndTheTaps

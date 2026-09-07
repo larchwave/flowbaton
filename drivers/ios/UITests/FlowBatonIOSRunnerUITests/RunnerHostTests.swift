@@ -34,7 +34,7 @@ final class RunnerHostTests: XCTestCase {
     // A newly created Simulator reports XCUIDevice orientation as unknown until
     // the test runner establishes one. The serving test is the production
     // process, so initialize the real device before either route can run.
-    try XCUITestAutomation().setOrientation("PORTRAIT")
+    try XCUITestAutomation().setOrientation("portrait")
     // WITHOUT this the runner dies on the first device-level failure. XCUITest
     // records a gesture it could not synthesize as an XCTIssue, and by default a
     // issue tears the test down — which here means the server goes
@@ -221,6 +221,59 @@ final class RunnerHostTests: XCTestCase {
     XCTAssertEqual(
       try automation.runningApp(appIDs: [Self.settleFixtureID]), Self.settleFixtureID,
       "the fixture left the foreground")
+  }
+
+  /// testALandscapeRotationRotatesThePointsAndTheTaps pins issue #18 on the
+  /// device: the wire's `landscapeLeft` is accepted as spelled, deviceInfo
+  /// reports the rotated point grid the hierarchy is already using, and a tap
+  /// at a hierarchy centre still lands after the rotation.
+  func testALandscapeRotationRotatesThePointsAndTheTaps() throws {
+    guard ProcessInfo.processInfo.environment[Self.settleFixtureVariable] == "1" else {
+      throw XCTSkip("set \(Self.settleFixtureVariable)=1 once the settle fixture is installed")
+    }
+    let automation = XCUITestAutomation()
+    try automation.launchApp(bundleID: Self.settleFixtureID)
+    defer { try? automation.terminateApp(appID: Self.settleFixtureID) }
+    defer { try? automation.setOrientation("portrait") }
+    let portrait = try automation.deviceInfo()
+    XCTAssertGreaterThan(portrait.heightPoints, portrait.widthPoints, "the test starts in portrait")
+
+    try automation.setOrientation("landscapeLeft")
+    let landscape = try Self.waitForLandscape(automation)
+    XCTAssertEqual(landscape.orientation, "landscape-left")
+    XCTAssertEqual(
+      landscape.widthPoints, portrait.heightPoints,
+      "the point grid did not rotate with the screen")
+    XCTAssertEqual(
+      landscape.heightPoints, portrait.widthPoints,
+      "the point grid did not rotate with the screen")
+    XCTAssertEqual(
+      landscape.widthPixels / landscape.widthPoints, portrait.widthPixels / portrait.widthPoints,
+      accuracy: 0.01, "pixels and points disagree about the scale after the rotation")
+
+    let button = try XCTUnwrap(
+      try Self.waitFor("fixture.continue", automation),
+      "the Continue button is not in the hierarchy after the rotation")
+    XCTAssertLessThanOrEqual(
+      button.frame.x + button.frame.width, landscape.widthPoints,
+      "the hierarchy and deviceInfo use different grids")
+    try Self.tap(button, automation)
+    XCTAssertNotNil(
+      try Self.waitFor("fixture.continued", automation),
+      "tapping Continue after the rotation did not reveal the confirmation")
+  }
+
+  /// waitForLandscape polls deviceInfo for up to five seconds while the
+  /// rotation animates, and returns the last reading either way.
+  private static func waitForLandscape(_ automation: XCUITestAutomation) throws
+    -> DeviceInfoPayload
+  {
+    var info = try automation.deviceInfo()
+    for _ in 0..<20 where info.widthPoints <= info.heightPoints {
+      Thread.sleep(forTimeInterval: 0.25)
+      info = try automation.deviceInfo()
+    }
+    return info
   }
 
   private static func tap(_ element: WireAXElement, _ automation: XCUITestAutomation) throws {

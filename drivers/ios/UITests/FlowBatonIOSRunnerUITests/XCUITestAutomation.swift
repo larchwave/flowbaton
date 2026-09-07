@@ -250,25 +250,26 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   }
 
   func deviceInfo() throws -> DeviceInfoPayload {
-    // Points from the springboard's frame, pixels from a screenshot's own scale.
+    // Points and pixels both come from one screenshot: its size is the screen
+    // in points as currently rotated, its scale turns that into pixels.
     // specs/02-device-drivers.md:28 has iOS reporting points as the grid unit and
-    // pixels separately, and the host scales crops between them. Each value is
-    // read from its native coordinate space.
+    // pixels separately, and the host scales crops between them. The
+    // springboard's frame is not used because it stays portrait after a
+    // rotation while the hierarchy and the screenshot have turned (issue #18).
     try onMain {
       let screenshot = XCUIScreen.main.screenshot().image
-      let points = XCUIApplication(bundleIdentifier: Self.springboardID).frame
+      let points = screenshot.size
       return DeviceInfoPayload(
         widthPoints: points.width,
         heightPoints: points.height,
-        widthPixels: screenshot.size.width * screenshot.scale,
-        heightPixels: screenshot.size.height * screenshot.scale,
-        orientation: Self.wireOrientation(
-          XCUIDevice.shared.orientation, screenPoints: points.size))
+        widthPixels: points.width * screenshot.scale,
+        heightPixels: points.height * screenshot.scale,
+        orientation: Self.wireOrientation(XCUIDevice.shared.orientation, screenPoints: points))
     }
   }
 
   func setOrientation(_ orientation: String) throws {
-    guard let value = Self.orientations[orientation.uppercased()] else {
+    guard let value = Self.orientations[orientation] else {
       throw AutomationError.precondition("unsupported orientation \(orientation)")
     }
     try onMain { XCUIDevice.shared.orientation = value }
@@ -494,11 +495,14 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     .escape: .escape,
   ]
 
+  // The exact SetOrientationRequest enum from contracts/v0/ios-http.json.
+  // Keyed on other spellings, this table refused every landscape request the
+  // host sent, against the runner's own contract (issue #18).
   private static let orientations: [String: UIDeviceOrientation] = [
-    "PORTRAIT": .portrait,
-    "LANDSCAPE_LEFT": .landscapeLeft,
-    "LANDSCAPE_RIGHT": .landscapeRight,
-    "UPSIDE_DOWN": .portraitUpsideDown,
+    "portrait": .portrait,
+    "landscapeLeft": .landscapeLeft,
+    "landscapeRight": .landscapeRight,
+    "upsideDown": .portraitUpsideDown,
   ]
 
   private static func wireOrientation(
