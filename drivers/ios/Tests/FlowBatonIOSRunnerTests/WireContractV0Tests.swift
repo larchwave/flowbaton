@@ -3,11 +3,11 @@ import XCTest
 @testable import FlowBatonIOSRunner
 
 final class WireContractV0Tests: XCTestCase {
-  func testFreezesAllEighteenRouteDeclarations() {
+  func testFreezesAllNineteenRouteDeclarations() {
     XCTAssertEqual(IOSWireContractV0.contractVersion, "v0")
     XCTAssertEqual(
       IOSWireContractV0.descriptorSHA256,
-      "c95bf28462061c5f92e6f239eac85da3f23e756103ca9c2dddf3c48fec2e2f80")
+      "94282016812854ee408d5c2be4fa1df2a1d709ea21272cf5ad6b6973aa6c5c53")
     XCTAssertEqual(IOSWireContractV0.bindHost, "127.0.0.1")
     XCTAssertEqual(IOSWireContractV0.defaultPort, 22_087)
     XCTAssertEqual(
@@ -32,6 +32,7 @@ final class WireContractV0Tests: XCTestCase {
         route("keyboard", "GET", "json_body", "KeyboardRequest", "KeyboardResponse"),
         route("launchApp", "POST", "json_body", "LaunchAppRequest", "EmptyResponse"),
         route("terminateApp", "POST", "json_body", "TerminateAppRequest", "EmptyResponse"),
+        route("hittable", "GET", "json_body", "HittableRequest", "HittableResponse"),
       ])
   }
 
@@ -145,6 +146,15 @@ final class WireContractV0Tests: XCTestCase {
           fields: [field("bundleId", "string")]),
         schema(
           "TerminateAppRequest", "object", required: ["appId"], fields: [field("appId", "string")]),
+        schema(
+          "HittableRequest", "object", required: ["appId", "frame"],
+          fields: [
+            field("appId", "string"), field("frame", "ref:Frame"), field("identifier", "string"),
+            field("label", "string"),
+          ]),
+        schema(
+          "HittableResponse", "object", required: ["hittable", "matches"],
+          fields: [field("hittable", "boolean"), field("matches", "integer")]),
         schema(
           "ErrorResponse", "object", required: ["code", "errorMessage"],
           fields: [

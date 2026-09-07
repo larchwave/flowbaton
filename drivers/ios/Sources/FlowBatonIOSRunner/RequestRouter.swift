@@ -145,6 +145,13 @@ public struct RequestRouter: Sendable {
       try automation.terminateApp(appID: decoded.appId)
       return Self.empty()
 
+    case "hittable":
+      let decoded: HittableRequest = try Self.decode(request)
+      return try Self.encode(
+        automation.hittable(
+          appID: decoded.appId, frame: decoded.frame, identifier: decoded.identifier,
+          label: decoded.label))
+
     default:
       // Unreachable while the coverage test passes; kept so a route added to
       // the contract fails loudly here rather than silently returning 200.
@@ -272,3 +279,9 @@ struct ViewHierarchyRequest: Codable {
 struct KeyboardRequest: Codable { let appIds: [String] }
 struct LaunchAppRequest: Codable { let bundleId: String }
 struct TerminateAppRequest: Codable { let appId: String }
+struct HittableRequest: Codable {
+  let appId: String
+  let frame: WireFrame
+  let identifier: String?
+  let label: String?
+}

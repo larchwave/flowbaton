@@ -96,8 +96,8 @@ func TestIOSHTTPV0RoutesMatchGoAndMachineReadableContracts(t *testing.T) {
 		wantJSON, _ := json.MarshalIndent(want, "", "  ")
 		t.Fatalf("Go iOS route contract drifted\n--- got ---\n%s\n--- want ---\n%s", gotJSON, wantJSON)
 	}
-	if len(document.Routes) != 18 {
-		t.Fatalf("route count = %d, want exactly 18", len(document.Routes))
+	if len(document.Routes) != 19 {
+		t.Fatalf("route count = %d, want exactly 19", len(document.Routes))
 	}
 
 	seenNames := make(map[string]bool, len(document.Routes))
@@ -221,6 +221,7 @@ func expectedIOSRoutes() []device.IOSRouteV0 {
 		iosRoute("keyboard", "GET", "json_body", "KeyboardRequest", "KeyboardResponse"),
 		iosRoute("launchApp", "POST", "json_body", "LaunchAppRequest", "EmptyResponse"),
 		iosRoute("terminateApp", "POST", "json_body", "TerminateAppRequest", "EmptyResponse"),
+		iosRoute("hittable", "GET", "json_body", "HittableRequest", "HittableResponse"),
 	}
 }
 
@@ -288,6 +289,10 @@ func expectedIOSShapes() map[string]completeExpectedShape {
 		"KeyboardResponse":      object([]string{"isKeyboardVisible"}, map[string]string{"isKeyboardVisible": "boolean"}),
 		"LaunchAppRequest":      object([]string{"bundleId"}, map[string]string{"bundleId": "string"}),
 		"TerminateAppRequest":   object([]string{"appId"}, map[string]string{"appId": "string"}),
+		"HittableRequest": object([]string{"appId", "frame"}, map[string]string{
+			"appId": "string", "frame": "ref:Frame", "identifier": "string", "label": "string",
+		}),
+		"HittableResponse": object([]string{"hittable", "matches"}, map[string]string{"hittable": "boolean", "matches": "integer"}),
 		"ErrorResponse": object([]string{"code", "errorMessage"}, map[string]string{
 			"code": "string:enum=internal|precondition|timeout", "errorMessage": "string",
 		}),

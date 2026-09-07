@@ -35,6 +35,9 @@ type scrollUntilVisibleCourse struct {
 	lastDirection device.Direction
 	lastAmount    float64
 	passes        int
+	// covered counts observations where the target met the geometric
+	// threshold and the driver said it would not receive a touch.
+	covered int
 }
 
 func newScrollUntilVisibleCourse(direction device.Direction, speed float64, viewport device.Bounds) *scrollUntilVisibleCourse {

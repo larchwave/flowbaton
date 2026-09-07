@@ -385,6 +385,52 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     }
   }
 
+  // MARK: - Hit testing
+
+  /// hittable is the one place the runner resolves an element itself, and it
+  /// resolves the host's element, not its own: the query is narrowed by the
+  /// identifier or label the host observed and then to the element whose
+  /// frame renders as the host's bounds do, so the answer is about the same
+  /// node the host is looking at. Anything but one match is reported as such
+  /// and the host falls back to geometry. A field under an opaque footer is
+  /// fully inside the screen and not hittable; bounds alone said it was
+  /// visible (issue #14).
+  func hittable(appID: String, frame: WireFrame, identifier: String?, label: String?) throws
+    -> HittablePayload
+  {
+    try onMain {
+      let app = XCUIApplication(bundleIdentifier: appID)
+      guard app.state == .runningForeground else {
+        throw AutomationError.precondition("\(appID) is not in the foreground")
+      }
+      var query = app.descendants(matching: .any)
+      if let identifier, !identifier.isEmpty {
+        query = query.matching(identifier: identifier)
+      } else if let label, !label.isEmpty {
+        query = query.matching(NSPredicate(format: "label == %@", label))
+      }
+      // Frames come from each element's snapshot, the same source as the
+      // hierarchy the host read. Inside an iPhone-compatibility window on an
+      // iPad an element's `frame` property is in another grid than its
+      // snapshot's, and no element matched.
+      let matches = query.allElementsBoundByIndex.filter {
+        Self.rendersAs(frame: (try? $0.snapshot().frame) ?? $0.frame, wire: frame)
+      }
+      return HittablePayload(
+        hittable: matches.count == 1 && matches[0].isHittable, matches: matches.count)
+    }
+  }
+
+  /// rendersAs mirrors the host's bounds rendering: each edge is floored at
+  /// single precision on both sides first, so the frame the host sends back
+  /// matches the element it came from and no other.
+  static func rendersAs(frame: CGRect, wire: WireFrame) -> Bool {
+    func floored(_ value: Double) -> Int { Int(floor(Double(Float(value)))) }
+    return floored(frame.minX) == floored(wire.x) && floored(frame.minY) == floored(wire.y)
+      && floored(frame.maxX) == floored(wire.x + wire.width)
+      && floored(frame.maxY) == floored(wire.y + wire.height)
+  }
+
   // MARK: - Helpers
 
   /// onMain runs XCUITest work where XCUITest expects to be run.

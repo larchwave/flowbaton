@@ -9,7 +9,7 @@
     "product_decisions": [
       {
         "id": "ios-http-methods",
-        "statement": "FlowBaton v0 uses GET runningApp, GET screenshot, GET isScreenStatic, GET deviceInfo, GET status, and GET keyboard; it uses POST for mutations and POST viewHierarchy because that route carries a JSON request."
+        "statement": "FlowBaton v0 uses GET runningApp, GET screenshot, GET isScreenStatic, GET deviceInfo, GET status, GET keyboard, and GET hittable; it uses POST for mutations and POST viewHierarchy because that route carries a JSON request."
       },
       {
         "id": "permissions-value-schema",
@@ -40,7 +40,8 @@
     {"name":"status","method":"GET","path":"/status","request_location":"none","request_schema":"NoBody","response_schema":"StatusResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
     {"name":"keyboard","method":"GET","path":"/keyboard","request_location":"json_body","request_schema":"KeyboardRequest","response_schema":"KeyboardResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
     {"name":"launchApp","method":"POST","path":"/launchApp","request_location":"json_body","request_schema":"LaunchAppRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
-    {"name":"terminateApp","method":"POST","path":"/terminateApp","request_location":"json_body","request_schema":"TerminateAppRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]}
+    {"name":"terminateApp","method":"POST","path":"/terminateApp","request_location":"json_body","request_schema":"TerminateAppRequest","response_schema":"EmptyResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]},
+    {"name":"hittable","method":"GET","path":"/hittable","request_location":"json_body","request_schema":"HittableRequest","response_schema":"HittableResponse","success_status":200,"error_schema":"ErrorResponse","error_statuses":[400,408,500]}
   ],
   "schemas": {
     "NoBody": {"kind":"none"},
@@ -123,6 +124,8 @@
     "StatusResponse": {"kind":"object","required":["status"],"fields":{"status":{"type":"string","enum":["ok"]},"runner":{"type":"string"}}},
     "KeyboardRequest": {"kind":"object","required":["appIds"],"fields":{"appIds":{"type":"array","items":"string"}}},
     "KeyboardResponse": {"kind":"object","required":["isKeyboardVisible"],"fields":{"isKeyboardVisible":{"type":"boolean"}}},
+    "HittableRequest": {"kind":"object","required":["appId","frame"],"fields":{"appId":{"type":"string"},"frame":{"ref":"Frame"},"identifier":{"type":"string"},"label":{"type":"string"}}},
+    "HittableResponse": {"kind":"object","required":["hittable","matches"],"fields":{"hittable":{"type":"boolean"},"matches":{"type":"integer"}}},
     "LaunchAppRequest": {"kind":"object","required":["bundleId"],"fields":{"bundleId":{"type":"string"}}},
     "TerminateAppRequest": {"kind":"object","required":["appId"],"fields":{"appId":{"type":"string"}}},
     "ErrorResponse": {

@@ -12,7 +12,7 @@ import XCTest
 final class RequestRouterTests: XCTestCase {
 
   func testEveryDeclaredRouteIsServed() throws {
-    // Not a restatement of the eighteen routes — this READS them. A route
+    // Not a restatement of the nineteen routes — this READS them. A route
     // added to the contract without a handler reds here.
     let automation = RecordingAutomation()
     let router = RequestRouter(automation: automation)
@@ -253,6 +253,26 @@ final class RequestRouterTests: XCTestCase {
 
   /// The smallest body each route will decode. The coverage test cares about
   /// reachability, not about the values.
+  func testHittablePassesTheFrameAndNamesThroughAndAnswersTheContractShape() throws {
+    let automation = RecordingAutomation()
+    automation.hittable = HittablePayload(hittable: true, matches: 1)
+    let response = RequestRouter(automation: automation).route(
+      request(
+        "GET", "/hittable",
+        body: #"{"appId":"com.example.a","frame":{"X":10,"Y":20,"Width":30,"Height":40},"#
+          + #""identifier":"field"}"#))
+    XCTAssertEqual(response.statusCode, 200)
+    XCTAssertEqual(
+      try JSONDecoder().decode(HittablePayload.self, from: response.body),
+      HittablePayload(hittable: true, matches: 1))
+    XCTAssertEqual(automation.hitTests.count, 1)
+    XCTAssertEqual(automation.hitTests.first?.appID, "com.example.a")
+    XCTAssertEqual(
+      automation.hitTests.first?.frame, WireFrame(x: 10, y: 20, width: 30, height: 40))
+    XCTAssertEqual(automation.hitTests.first?.identifier, "field")
+    XCTAssertNil(automation.hitTests.first?.label)
+  }
+
   private static func minimalBody(for route: String) -> Data {
     let bodies: [String: String] = [
       "runningApp": #"{"appIds":[]}"#,
@@ -266,6 +286,7 @@ final class RequestRouterTests: XCTestCase {
       "setOrientation": #"{"orientation":"portrait"}"#,
       "setPermissions": #"{"permissions":{}}"#,
       "viewHierarchy": #"{"appIds":[],"excludeKeyboardElements":false}"#,
+      "hittable": #"{"appId":"com.example.a","frame":{"X":0,"Y":0,"Width":1,"Height":1}}"#,
       "keyboard": #"{"appIds":[]}"#,
       "launchApp": #"{"bundleId":"com.example.a"}"#,
       "terminateApp": #"{"appId":"com.example.a"}"#,
@@ -368,4 +389,15 @@ final class RecordingAutomation: DeviceAutomation, @unchecked Sendable {
 
   func launchApp(bundleID: String) throws { try check() }
   func terminateApp(appID: String) throws { try check() }
+
+  var hitTests: [(appID: String, frame: WireFrame, identifier: String?, label: String?)] = []
+  var hittable = HittablePayload(hittable: false, matches: 2)
+
+  func hittable(appID: String, frame: WireFrame, identifier: String?, label: String?) throws
+    -> HittablePayload
+  {
+    try check()
+    hitTests.append((appID: appID, frame: frame, identifier: identifier, label: label))
+    return hittable
+  }
 }

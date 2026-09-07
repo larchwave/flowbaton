@@ -395,7 +395,11 @@ func executeScrollUntilVisible(
 		if observeErr != nil {
 			return effect, observeErr
 		}
-		if scrollUntilVisibleThresholdSatisfied(element, viewport, threshold) {
+		accepted, err := scrollUntilVisibleAccepted(ctx, state, plan.appID, element, viewport, threshold, course)
+		if err != nil {
+			return effect, err
+		}
+		if accepted {
 			if !plan.centerElement {
 				return effect, nil
 			}
@@ -464,6 +468,8 @@ func executeScrollUntilVisible(
 func scrollUntilVisibleTimeoutMessage(course *scrollUntilVisibleCourse) string {
 	message := "scrollUntilVisible target did not reach the required visibility before timeout"
 	switch {
+	case course.covered > 0:
+		return message + " (the target is on screen but not hittable: another view covers it)"
 	case course.passes == 1:
 		return message + " (the target passed through the viewport once)"
 	case course.passes > 1:
@@ -538,6 +544,42 @@ func scrollUntilVisibleThresholdSatisfied(
 ) bool {
 	return element != nil && element.HasBounds && hierarchy.Area(element.Bounds) > 0 &&
 		hierarchy.VisiblePercentage(element.Bounds, viewport) >= threshold
+}
+
+// scrollUntilVisibleAccepted is the geometric threshold plus, on a driver
+// that can hit-test, the platform's word that the target would receive a
+// touch. Bounds inside the viewport said a text field under an opaque footer
+// was fully visible; the tap went into the footer and the flow died on
+// inputText (issue #14). A covered target counts as not yet visible, so the
+// course steps on as it does for any target on screen but not accepted.
+func scrollUntilVisibleAccepted(
+	ctx context.Context,
+	state *executionState,
+	appID string,
+	element *hierarchy.Element,
+	viewport device.Bounds,
+	threshold float64,
+	course *scrollUntilVisibleCourse,
+) (bool, error) {
+	if !scrollUntilVisibleThresholdSatisfied(element, viewport, threshold) {
+		return false, nil
+	}
+	tester, ok := state.dependencies.Driver.(device.HitTester)
+	if !ok {
+		return true, nil
+	}
+	result, err := tester.Hittable(ctx, device.HittableRequest{AppID: appID, Node: element.Node, Bounds: element.Bounds})
+	if err != nil {
+		if cancellation := ctx.Err(); cancellation != nil {
+			return false, cancellation
+		}
+		return false, err
+	}
+	if result.Decided && !result.Hittable {
+		course.covered++
+		return false, nil
+	}
+	return true, nil
 }
 
 // scrollUntilVisibleCenterRequest is the scroll that brings the centre of

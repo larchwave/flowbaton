@@ -1510,3 +1510,36 @@ func monitorIOSCrashArtifacts(
 		}
 	}
 }
+
+// hittableTypes are the XCUIElementTypes a flow scrolls to in order to touch
+// or type into: button=9, slider=33, switch=40, toggle=41, link=44,
+// textField=49, secureTextField=50, searchField=51, textView=52. Only these
+// are hit-tested; a label or an image under an overlay is still visible in
+// every sense a flow cares about.
+var hittableTypes = map[int]bool{9: true, 33: true, 40: true, 41: true, 44: true, 49: true, 50: true, 51: true, 52: true}
+
+// Hittable implements device.HitTester. Bounds say an element is on screen;
+// they do not say what is drawn over it. A text field under an opaque footer
+// was reported fully visible, tapped through the footer, and the flow died on
+// inputText (issue #14). The runner finds the observed element by identifier
+// or label and frame and asks XCTest whether it is hittable. Anything but
+// exactly one match is undecided, and geometry stands.
+func (driver *Driver) Hittable(ctx context.Context, request device.HittableRequest) (device.HittableResult, error) {
+	elementType, err := strconv.Atoi(request.Node.Attributes["elementType"])
+	if err != nil || !hittableTypes[elementType] {
+		return device.HittableResult{}, nil
+	}
+	response, err := driver.client.Hittable(ctx, HittableRequest{
+		AppID: request.AppID,
+		Frame: Frame{
+			X: float64(request.Bounds.X), Y: float64(request.Bounds.Y),
+			Width: float64(request.Bounds.Width), Height: float64(request.Bounds.Height),
+		},
+		Identifier: request.Node.Attributes["id"],
+		Label:      request.Node.Attributes["accessibilityText"],
+	})
+	if err != nil {
+		return device.HittableResult{}, err
+	}
+	return device.HittableResult{Decided: response.Matches == 1, Hittable: response.Hittable}, nil
+}

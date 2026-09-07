@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -222,6 +223,28 @@ func routeCases() []routeCase {
 			wantMethod: http.MethodPost,
 			wantPath:   "/terminateApp",
 			wantBody:   map[string]any{"appId": "com.example.a"},
+		},
+		{
+			name: "hittable",
+			call: func(ctx context.Context, client *Client) error {
+				response, err := client.Hittable(ctx, HittableRequest{
+					AppID: "com.example.a", Frame: Frame{X: 1, Y: 2, Width: 3, Height: 4}, Identifier: "field",
+				})
+				if err != nil {
+					return err
+				}
+				if !response.Hittable || response.Matches != 1 {
+					return fmt.Errorf("hittable response = %#v, want one hittable match", response)
+				}
+				return nil
+			},
+			wantMethod: http.MethodGet,
+			wantPath:   "/hittable",
+			wantBody: map[string]any{
+				"appId": "com.example.a", "frame": map[string]any{"X": 1.0, "Y": 2.0, "Width": 3.0, "Height": 4.0},
+				"identifier": "field",
+			},
+			respondWith: `{"hittable":true,"matches":1}`,
 		},
 	}
 }

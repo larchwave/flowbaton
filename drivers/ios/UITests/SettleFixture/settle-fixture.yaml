@@ -1,5 +1,5 @@
 appId: dev.larchwave.flowbaton.settlefixture
-name: Settle fixture launch, alert action, tap under decorative animation, scroll over a link, centre the end, reach a tall card
+name: Settle fixture launch, alert action, field under a footer, tap under decorative animation, scroll over a link, centre the end, reach a tall card
 ---
 - launchApp
 - assertVisible:
@@ -11,6 +11,22 @@ name: Settle fixture launch, alert action, tap under decorative animation, scrol
 - tapOn: End without saving
 - assertVisible:
     id: fixture.alert.ended
+# A text field under the form's opaque footer: its bounds are inside the
+# screen from the start, and only a hit test says it cannot be touched yet
+# (issue #14).
+- tapOn:
+    id: fixture.form.show
+- scrollUntilVisible:
+    element:
+      id: fixture.footer.field
+    direction: DOWN
+    visibilityPercentage: 100
+- tapOn:
+    id: fixture.footer.field
+- inputText: Test
+- assertVisible: Test
+- tapOn:
+    id: fixture.form.close
 - tapOn:
     id: fixture.continue
 - assertVisible:

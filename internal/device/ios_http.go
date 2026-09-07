@@ -33,6 +33,7 @@ var iosRoutesV0 = []IOSRouteV0{
 	newIOSRouteV0("keyboard", "GET", "json_body", "KeyboardRequest", "KeyboardResponse"),
 	newIOSRouteV0("launchApp", "POST", "json_body", "LaunchAppRequest", "EmptyResponse"),
 	newIOSRouteV0("terminateApp", "POST", "json_body", "TerminateAppRequest", "EmptyResponse"),
+	newIOSRouteV0("hittable", "GET", "json_body", "HittableRequest", "HittableResponse"),
 }
 
 // IOSRoutesContractV0 returns a deep copy so callers cannot mutate the frozen

@@ -318,3 +318,29 @@ func (client *Client) TerminateApp(ctx context.Context, appID string) error {
 	_, err := client.do(ctx, http.MethodPost, "/terminateApp", "", request, nil)
 	return err
 }
+
+// HittableRequest names an element the host resolved from the hierarchy: the
+// application its frame belongs to, the frame itself, and the identifier or
+// label the runner narrows its search by.
+type HittableRequest struct {
+	AppID      string `json:"appId"`
+	Frame      Frame  `json:"frame"`
+	Identifier string `json:"identifier,omitempty"`
+	Label      string `json:"label,omitempty"`
+}
+
+// HittableResponse is the runner's answer: how many elements matched the
+// request, and whether the one match would receive a touch.
+type HittableResponse struct {
+	Hittable bool `json:"hittable"`
+	Matches  int  `json:"matches"`
+}
+
+// Hittable asks the runner whether the named element is hittable.
+func (client *Client) Hittable(ctx context.Context, request HittableRequest) (HittableResponse, error) {
+	var response HittableResponse
+	if _, err := client.do(ctx, http.MethodGet, "/hittable", "", request, &response); err != nil {
+		return HittableResponse{}, err
+	}
+	return response, nil
+}

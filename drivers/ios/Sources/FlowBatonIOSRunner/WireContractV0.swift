@@ -84,7 +84,7 @@ public enum IOSWireContractV0 {
   public static let schemaVersion = 1
   public static let contractVersion = "v0"
   public static let descriptorSHA256 =
-    "c95bf28462061c5f92e6f239eac85da3f23e756103ca9c2dddf3c48fec2e2f80"
+    "94282016812854ee408d5c2be4fa1df2a1d709ea21272cf5ad6b6973aa6c5c53"
   public static let semanticManifest = [
     "descriptor|1|v0",
     "transport|http|127.0.0.1|22087",
@@ -160,6 +160,10 @@ public enum IOSWireContractV0 {
     "route-error-status|terminateApp|0|400",
     "route-error-status|terminateApp|1|408",
     "route-error-status|terminateApp|2|500",
+    "route|18|hittable|GET|/hittable|json_body|HittableRequest|HittableResponse|200|ErrorResponse",
+    "route-error-status|hittable|0|400",
+    "route-error-status|hittable|1|408",
+    "route-error-status|hittable|2|500",
     "schema|AXElement|object",
     "schema-required|AXElement|0|identifier",
     "schema-required|AXElement|1|frame",
@@ -218,6 +222,18 @@ public enum IOSWireContractV0 {
     "schema-field|Frame|Width|number",
     "schema-field|Frame|X|number",
     "schema-field|Frame|Y|number",
+    "schema|HittableRequest|object",
+    "schema-required|HittableRequest|0|appId",
+    "schema-required|HittableRequest|1|frame",
+    "schema-field|HittableRequest|appId|string",
+    "schema-field|HittableRequest|frame|ref:Frame",
+    "schema-field|HittableRequest|identifier|string",
+    "schema-field|HittableRequest|label|string",
+    "schema|HittableResponse|object",
+    "schema-required|HittableResponse|0|hittable",
+    "schema-required|HittableResponse|1|matches",
+    "schema-field|HittableResponse|hittable|boolean",
+    "schema-field|HittableResponse|matches|integer",
     "schema|InputTextRequest|object",
     "schema-required|InputTextRequest|0|text",
     "schema-required|InputTextRequest|1|appIds",
@@ -339,6 +355,7 @@ public enum IOSWireContractV0 {
     route("keyboard", "GET", "json_body", "KeyboardRequest", "KeyboardResponse"),
     route("launchApp", "POST", "json_body", "LaunchAppRequest", "EmptyResponse"),
     route("terminateApp", "POST", "json_body", "TerminateAppRequest", "EmptyResponse"),
+    route("hittable", "GET", "json_body", "HittableRequest", "HittableResponse"),
   ]
 
   public static let schemas: [IOSSchemaV0] = [
@@ -442,6 +459,15 @@ public enum IOSWireContractV0 {
       "LaunchAppRequest", "object", required: ["bundleId"], fields: [field("bundleId", "string")]),
     schema(
       "TerminateAppRequest", "object", required: ["appId"], fields: [field("appId", "string")]),
+    schema(
+      "HittableRequest", "object", required: ["appId", "frame"],
+      fields: [
+        field("appId", "string"), field("frame", "ref:Frame"), field("identifier", "string"),
+        field("label", "string"),
+      ]),
+    schema(
+      "HittableResponse", "object", required: ["hittable", "matches"],
+      fields: [field("hittable", "boolean"), field("matches", "integer")]),
     schema(
       "ErrorResponse", "object", required: ["code", "errorMessage"],
       fields: [

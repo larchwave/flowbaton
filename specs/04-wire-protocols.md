@@ -30,6 +30,20 @@ Requests and responses use JSON except screenshot bytes. A structured error body
 wins over the HTTP status fallback. Invalid input maps to a precondition error,
 request expiry maps to a timeout, and runner failures map to an internal error.
 
+Gesture routes (`touch`, `swipe`, `swipeV2`) may name the application whose
+coordinate space the points are in. The host names it for points it derived
+from that application's hierarchy and leaves it out for authored screen points.
+The runner anchors the gesture on the named application when it is in the
+foreground and answers a precondition error when it is not.
+
+`hittable` asks whether the element the host resolved, named by its frame and
+identifier or label inside an application, would receive a touch. The runner
+reports how many elements matched; the host treats anything but exactly one
+match as undecided and falls back to geometry. The host asks only while a
+`scrollUntilVisible` target of an interactive type has reached its geometric
+visibility, so a target under an opaque view keeps the scroll going instead of
+completing the command.
+
 ## 4. Readiness and shutdown
 
 Managed hosts wait for an explicit readiness response before device commands.

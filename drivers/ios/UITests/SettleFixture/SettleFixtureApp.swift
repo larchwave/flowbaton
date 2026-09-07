@@ -22,9 +22,12 @@ struct SettleFixtureScreen: View {
   @State private var continued = false
   @State private var confirmingEnd = false
   @State private var ended = false
+  @State private var showingForm = false
 
   var body: some View {
-    if continued {
+    if showingForm {
+      FooterFormPage { showingForm = false }
+    } else if continued {
       ScrollFixturePage()
     } else {
       VStack(spacing: 32) {
@@ -51,6 +54,10 @@ struct SettleFixtureScreen: View {
           }
           Button("Keep going", role: .cancel) {}
         }
+        Button("Open form") {
+          showingForm = true
+        }
+        .accessibilityIdentifier("fixture.form.show")
         Button("Continue") {
           continued = true
         }
@@ -129,6 +136,57 @@ struct ScrollFixturePage: View {
   static let cardBody =
     "Every post, clip and note goes out on the schedule you set once, and the numbers "
     + "come back in one place."
+}
+
+/// The form behind Open form reproduces issue #14: a text field inside a
+/// ScrollView at the largest accessibility text size, sitting where the
+/// screen's bottom safe-area inset holds an opaque footer with a Continue
+/// button. The field's frame is inside the screen from the first frame, and
+/// the footer is drawn over it, so bounds call it fully visible while a tap
+/// at its centre lands on the footer. Close sits in the header, clear of the
+/// keyboard, so a flow can leave the form after typing.
+struct FooterFormPage: View {
+  let onClose: () -> Void
+  @State private var note = ""
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack {
+        Text("Your details")
+          .font(.headline)
+          .accessibilityIdentifier("fixture.form")
+        Spacer()
+        Button("Close", action: onClose)
+          .accessibilityIdentifier("fixture.form.close")
+      }
+      .padding(20)
+      ScrollView {
+        VStack(alignment: .leading, spacing: 24) {
+          Text("Tell us a little about the session before you continue.")
+          Color.clear.frame(height: Self.fieldOffset)
+          TextField("Add a note", text: $note)
+            .textFieldStyle(.roundedBorder)
+            .accessibilityIdentifier("fixture.footer.field")
+          Text("Notes stay on this device and are never sent anywhere.")
+          Color.clear.frame(height: 600)
+        }
+        .padding(20)
+      }
+      .safeAreaInset(edge: .bottom) {
+        Button("Continue") {}
+          .buttonStyle(.borderedProminent)
+          .frame(maxWidth: .infinity)
+          .padding(20)
+          .background(Color(uiColor: .systemBackground))
+          .accessibilityIdentifier("fixture.form.footer")
+      }
+    }
+    .dynamicTypeSize(.accessibility5)
+  }
+
+  /// Puts the field's frame in the band the footer covers on an iPhone 17 Pro
+  /// screen (874 points tall) at accessibility5.
+  static let fieldOffset: CGFloat = 215
 }
 
 /// A sine wave whose phase follows the wall clock, so every frame differs from

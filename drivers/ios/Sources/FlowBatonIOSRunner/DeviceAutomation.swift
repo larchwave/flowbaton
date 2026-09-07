@@ -6,7 +6,7 @@ import Foundation
 /// is what lets the router — the part that decides what a request means — be
 /// tested with `swift test` on a Mac, without a simulator or a test host.
 ///
-/// The method set is the eighteen routes of the frozen contract and nothing
+/// The method set is the nineteen routes of the frozen contract and nothing
 /// else. A method here that no route reaches would be code no wire can call.
 public protocol DeviceAutomation: Sendable {
   func runningApp(appIDs: [String]) throws -> String
@@ -33,6 +33,24 @@ public protocol DeviceAutomation: Sendable {
   func isKeyboardVisible(appIDs: [String]) throws -> Bool
   func launchApp(bundleID: String) throws
   func terminateApp(appID: String) throws
+  /// Whether the element the host resolved -- named by frame and identifier
+  /// or label inside appID -- would receive a touch. See HittablePayload.
+  func hittable(appID: String, frame: WireFrame, identifier: String?, label: String?) throws
+    -> HittablePayload
+}
+
+/// The answer to the contract's hittable route: how many elements of the app
+/// matched the request, and whether the one match is hittable. `matches`
+/// other than one means the runner could not tell which element the host
+/// meant, and `hittable` is then false without saying anything.
+public struct HittablePayload: Codable, Equatable, Sendable {
+  public let hittable: Bool
+  public let matches: Int
+
+  public init(hittable: Bool, matches: Int) {
+    self.hittable = hittable
+    self.matches = matches
+  }
 }
 
 /// The screen geometry the contract's deviceInfo route returns.

@@ -90,6 +90,15 @@
       {"name":"CharactersToErase","go_type":"uint32","json_name":"characters_to_erase","omit_empty":false},
       {"name":"AppIDs","go_type":"[]string","json_name":"app_ids","omit_empty":true}
     ]},
+    {"name":"HittableRequest","fields":[
+      {"name":"AppID","go_type":"string","json_name":"app_id","omit_empty":false},
+      {"name":"Node","go_type":"TreeNode","json_name":"node","omit_empty":false},
+      {"name":"Bounds","go_type":"Bounds","json_name":"bounds","omit_empty":false}
+    ]},
+    {"name":"HittableResult","fields":[
+      {"name":"Decided","go_type":"bool","json_name":"decided","omit_empty":false},
+      {"name":"Hittable","go_type":"bool","json_name":"hittable","omit_empty":false}
+    ]},
     {"name":"InputTextRequest","fields":[
       {"name":"Text","go_type":"string","json_name":"text","omit_empty":false},
       {"name":"AppIDs","go_type":"[]string","json_name":"app_ids","omit_empty":true}

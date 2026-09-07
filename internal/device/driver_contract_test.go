@@ -96,8 +96,8 @@ func TestDriverV0IsInterfaceAndDTOsContainNoBehaviorFields(t *testing.T) {
 
 func TestIOSRoutesContractV0ReturnsDefensiveCopies(t *testing.T) {
 	first := IOSRoutesContractV0()
-	if got := len(first); got != 18 {
-		t.Fatalf("iOS route count = %d, want 18", got)
+	if got := len(first); got != 19 {
+		t.Fatalf("iOS route count = %d, want 19", got)
 	}
 	first[0].Name = "mutated"
 	first[0].ErrorStatuses[0] = 999
@@ -171,6 +171,8 @@ func driverV0DTOs() []reflect.Type {
 		reflect.TypeOf(DeviceInfo{}),
 		reflect.TypeOf(DeviceLogRequest{}),
 		reflect.TypeOf(EraseTextRequest{}),
+		reflect.TypeOf(HittableRequest{}),
+		reflect.TypeOf(HittableResult{}),
 		reflect.TypeOf(InputTextRequest{}),
 		reflect.TypeOf(KeyboardRequest{}),
 		reflect.TypeOf(LaunchAppRequest{}),

@@ -42,7 +42,7 @@
       "language": "go",
       "path": "internal/device/driver.go",
       "coverage": "contract-complete",
-      "sha256": "8ace0be7760898b95a0a5bd5f1306a243cc98542c0f1cc2d9b0fff06bbbdf99e"
+      "sha256": "69dfb92e5e06b6af2384fe58b98f2476a682279febe8014cbde5cd60d29d9601"
     },
     {
       "id": "driver-json-descriptor",
@@ -50,7 +50,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/driver.json",
       "coverage": "contract-complete",
-      "sha256": "4501f9f776d0fc6aaa980d8719470a77772b7f681a13df179f0613ec9a562e3e"
+      "sha256": "6167842c2587aeaf325553dd803151b89204dee6607b40b47c54a8af2eb03c95"
     },
     {
       "id": "ast-json-snapshot",
@@ -122,7 +122,7 @@
       "language": "go",
       "path": "internal/device/ios_http.go",
       "coverage": "contract-complete",
-      "sha256": "2440cbd543b3eec0d676815f32109eb128900071d394980dcbf768d25c432730"
+      "sha256": "2a5e0725ee095a38a4fcea4a91826f43351f7bf97cc04ad62f39a77275214280"
     },
     {
       "id": "ios-json-descriptor",
@@ -130,7 +130,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/ios-http.json",
       "coverage": "contract-complete",
-      "sha256": "c95bf28462061c5f92e6f239eac85da3f23e756103ca9c2dddf3c48fec2e2f80"
+      "sha256": "94282016812854ee408d5c2be4fa1df2a1d709ea21272cf5ad6b6973aa6c5c53"
     },
     {
       "id": "ios-swift-declarations",
@@ -138,7 +138,7 @@
       "language": "swift",
       "path": "drivers/ios/Sources/FlowBatonIOSRunner/WireContractV0.swift",
       "coverage": "contract-complete",
-      "sha256": "e9822fc2dd8b29302fb489465aede7e07cc28179cc7062ca506f2c6b40a45827"
+      "sha256": "fcca490ee848dae4cb5b022fc644bbac004f2c59185c9880c303f103dd71c5ee"
     },
     {
       "id": "ios-g001-runtime",

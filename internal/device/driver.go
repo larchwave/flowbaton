@@ -114,6 +114,30 @@ type OrientationReader interface {
 	CurrentOrientation(context.Context) (Orientation, error)
 }
 
+// HitTester is an optional extension for drivers that can ask the platform
+// whether an element the host already resolved would receive a touch. A
+// geometrically visible element can sit under an opaque footer or overlay;
+// bounds alone cannot tell. Drivers without it, and results with Decided
+// false, leave visibility to geometry.
+type HitTester interface {
+	Hittable(context.Context, HittableRequest) (HittableResult, error)
+}
+
+// HittableRequest names the element by the node the host observed and the
+// application its bounds belong to.
+type HittableRequest struct {
+	AppID  string   `json:"app_id"`
+	Node   TreeNode `json:"node"`
+	Bounds Bounds   `json:"bounds"`
+}
+
+// HittableResult is Decided when the platform found exactly the observed
+// element and answered for it; Hittable is meaningful only then.
+type HittableResult struct {
+	Decided  bool `json:"decided"`
+	Hittable bool `json:"hittable"`
+}
+
 type Point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
