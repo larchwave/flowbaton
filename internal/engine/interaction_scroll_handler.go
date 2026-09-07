@@ -388,6 +388,7 @@ func executeScrollUntilVisible(
 	}
 	viewport := device.Bounds{X: 0, Y: 0, Width: info.WidthGrid, Height: info.HeightGrid}
 	threshold := float64(plan.visibilityPercentage) / 100
+	course := newScrollUntilVisibleCourse(plan.direction, float64(plan.speed)/100, viewport)
 
 	for observation := 1; observation <= scrollUntilVisibleMaximumObservations; observation++ {
 		element, observeErr := observeScrollUntilVisible(ctx, lookup, plan.selector)
@@ -425,15 +426,12 @@ func executeScrollUntilVisible(
 
 		now := state.dependencies.Clock.Now()
 		if !now.Before(deadline) {
-			return effect, NewAssertionError("scrollUntilVisible target did not reach the required visibility before timeout", nil)
+			return effect, NewAssertionError(scrollUntilVisibleTimeoutMessage(course), nil)
 		}
 		if observation >= scrollUntilVisibleMaximumObservations {
 			return effect, NewAssertionError("scrollUntilVisible exhausted the 1201-observation guard", nil)
 		}
-		request := device.ScrollVerticalRequest{
-			Direction: plan.direction,
-			Amount:    float64(plan.speed) / 100,
-		}
+		request := course.next(element)
 		if err := executeOwnedScrollUntilVisibleScroll(ctx, state, lookup, request); err != nil {
 			return effect, err
 		}
@@ -459,6 +457,21 @@ func executeScrollUntilVisible(
 		}
 	}
 	return effect, NewAssertionError("scrollUntilVisible exhausted the 1201-observation guard", nil)
+}
+
+// scrollUntilVisibleTimeoutMessage names what the loop saw, so a flow author
+// can tell a target that never appeared from one the scroll kept overshooting.
+func scrollUntilVisibleTimeoutMessage(course *scrollUntilVisibleCourse) string {
+	message := "scrollUntilVisible target did not reach the required visibility before timeout"
+	switch {
+	case course.passes == 1:
+		return message + " (the target passed through the viewport once)"
+	case course.passes > 1:
+		return fmt.Sprintf("%s (the target passed through the viewport %d times)", message, course.passes)
+	case course.seen:
+		return message + " (the target was on screen but never at the requested visibility)"
+	}
+	return message
 }
 
 func scrollUntilVisibleExecutionPlan(

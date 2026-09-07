@@ -81,6 +81,24 @@ struct ScrollFixturePage: View {
           Color.clear.frame(height: geometry.size.height)
           Text("End of the page")
             .accessibilityIdentifier("fixture.end")
+          // Three option cards, each shorter than the screen and taller than
+          // half of it, so a scroll step of the default size can carry the
+          // second one across the screen between two observations (issue #16).
+          ForEach(Array(Self.cardTitles.enumerated()), id: \.offset) { index, title in
+            Button {
+            } label: {
+              VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                  .font(.headline)
+                Text(Self.cardBody)
+              }
+              .padding(20)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("fixture.card.\(index + 1)")
+          }
         }
         .padding(20)
       }
@@ -88,6 +106,11 @@ struct ScrollFixturePage: View {
     .dynamicTypeSize(.accessibility5)
     .onOpenURL { _ in linkActivated = true }
   }
+
+  static let cardTitles = ["Grow audience", "Launch a product", "Publish faster"]
+  static let cardBody =
+    "Every post, clip and note goes out on the schedule you set once, and the numbers "
+    + "come back in one place."
 }
 
 /// A sine wave whose phase follows the wall clock, so every frame differs from

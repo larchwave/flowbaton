@@ -1,5 +1,5 @@
 appId: dev.larchwave.flowbaton.settlefixture
-name: Settle fixture launch, tap under decorative animation, scroll over a link, centre the end
+name: Settle fixture launch, tap under decorative animation, scroll over a link, centre the end, reach a tall card
 ---
 - launchApp
 - assertVisible:
@@ -19,3 +19,12 @@ name: Settle fixture launch, tap under decorative animation, scroll over a link,
     id: fixture.end
 - assertNotVisible:
     id: fixture.linkActivated
+# Three tall cards follow the end marker. A fixed step of the default size
+# carried the second one past the screen and kept going (issue #16).
+- scrollUntilVisible:
+    element:
+      id: fixture.card.2
+    direction: DOWN
+    visibilityPercentage: 100
+- assertVisible:
+    id: fixture.card.2
