@@ -67,6 +67,11 @@ type TestOptions struct {
 	attachedDevices func(ctx context.Context, platform string) ([]string, error)
 }
 
+// ErrHelpRequested is what ParseTestOptions returns for `--help` or `-h`: not
+// a UsageError, because asking for the option list is not a mistake and must
+// not exit 2 (issue #20). The runner prints the help and exits 0.
+var ErrHelpRequested = errors.New("help requested")
+
 // UsageError marks a command line that could not be understood. It is the only
 // thing that exits 2; everything else exits 1.
 type UsageError struct {
@@ -137,6 +142,8 @@ func ParseTestOptions(args []string) (TestOptions, error) {
 			continue
 		}
 		switch argument {
+		case "--help", "-h":
+			return TestOptions{}, ErrHelpRequested
 		case "--reinstall-driver":
 			options.ReinstallDriver = true
 			continue
@@ -192,6 +199,10 @@ func ParseTestOptions(args []string) (TestOptions, error) {
 func nextValue(args []string, index int) (string, int, error) {
 	if index+1 >= len(args) {
 		return "", 0, usageErrorf("option %q requires a value", args[index])
+	}
+	// `-p --help` is a question about -p, not a platform named --help.
+	if value := args[index+1]; value == "--help" || value == "-h" {
+		return "", 0, ErrHelpRequested
 	}
 	return args[index+1], 1, nil
 }

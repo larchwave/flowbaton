@@ -16,11 +16,16 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 )
+
+// RecordUsage is the one-line usage for the subcommand; the options are the
+// ones `test` takes.
+const RecordUsage = "usage: flowbaton record [--local] [options] FLOW [OUTPUT]\n"
 
 // RecordRunner records one flow. The session hook is the same one TestRunner
 // takes, so a test drives it without a device.
@@ -32,6 +37,10 @@ func (runner RecordRunner) Run(
 	ctx context.Context, args []string, stdout, stderr io.Writer,
 ) int {
 	options, err := parseRecordArgs(args)
+	if errors.Is(err, ErrHelpRequested) {
+		_, _ = io.WriteString(stdout, RecordUsage+testOptionsHelp)
+		return ExitOK
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "record: %v\n", err)
 		return ExitInvalid

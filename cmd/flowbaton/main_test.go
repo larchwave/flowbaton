@@ -50,13 +50,32 @@ func TestRunVersionWritesOnlyStableVersionLine(t *testing.T) {
 	}
 }
 
+// `flowbaton --help` is a question, not a mistake: the inventory goes to
+// stdout and the process exits 0, so a script can read it (issue #20).
+func TestRunHelpWritesUsageToStdoutAndExitsOK(t *testing.T) {
+	for _, flag := range []string{"--help", "-h"} {
+		t.Run(flag, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if got, want := run([]string{flag}, bytes.NewReader(nil), &stdout, &stderr), 0; got != want {
+				t.Fatalf("run exit = %d, want %d", got, want)
+			}
+			if got, want := stdout.String(), topLevelUsage; got != want {
+				t.Fatalf("stdout = %q, want %q", got, want)
+			}
+			if got := stderr.String(); got != "" {
+				t.Fatalf("stderr = %q, want empty", got)
+			}
+		})
+	}
+}
+
 func TestRunRejectsUnsupportedArgumentShapesWithDeterministicUsage(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
 	}{
 		{name: "no arguments", args: nil},
-		{name: "wrong flag", args: []string{"--help"}},
+		{name: "wrong flag", args: []string{"--bogus"}},
 		{name: "extra version argument", args: []string{"--version", "unexpected"}},
 	}
 

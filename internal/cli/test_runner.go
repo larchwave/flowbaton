@@ -20,6 +20,38 @@ import (
 // TestUsage is the one-line usage for the subcommand.
 const TestUsage = "usage: flowbaton test [options] FILE|DIR...\n"
 
+// testOptionsHelp lists every option ParseTestOptions accepts, with the value
+// each takes and its default. A test parses each flag named here and checks
+// each flag the parser knows is named here, so the two cannot drift apart.
+const testOptionsHelp = `
+Options:
+  -p, --platform ios|android|web   Platform to run on
+      --device, --udid ID[,ID]     Device UDID or adb serial; a comma list shards across devices
+      --config PATH                Workspace config (executionOrder, tags)
+  -e, --env KEY=VALUE              Flow variable; repeatable
+      --include-tags LIST          Only flows tagged with one of the comma list
+      --exclude-tags LIST          Skip flows tagged with one of the comma list
+      --format FORMAT              Report format: JUNIT, HTML, HTML-DETAILED or NOOP (default NOOP)
+      --output PATH                Report file for --format
+      --test-suite-name NAME       Suite name in the report
+      --test-output-dir DIR        Where commands.json, screenshots and artifacts go
+      --debug-output DIR           Debug output directory
+      --flatten-debug-output       Write debug output without per-flow subdirectories
+  -c, --continuous                 Re-run when a flow file changes
+      --headless                   Web: run the browser headless
+      --screen-size WxH            Web: headless browser size, e.g. 1920x1080
+      --api-url URL                AI provider base URL (FLOWBATON_AI_BASE_URL) for AI-backed commands
+      --api-key KEY                AI provider API key (OPENAI_API_KEY / ANTHROPIC_API_KEY)
+      --reinstall-driver           Reinstall the device driver before the run (default)
+      --no-reinstall-driver        Keep the driver already on the device
+      --shard-split N              Split the flows across N devices
+      --shard-all N                Run every flow on each of N devices
+  -h, --help                       Print this help and exit 0
+`
+
+// TestHelp is what `flowbaton test --help` prints.
+const TestHelp = TestUsage + testOptionsHelp
+
 // TestRunner discovers flows, preflights them, splits them into shards, and
 // runs each shard on its own device.
 //
@@ -68,6 +100,10 @@ func (runner TestRunner) Run(
 	stderr io.Writer,
 ) int {
 	options, err := ParseTestOptions(args)
+	if errors.Is(err, ErrHelpRequested) {
+		_, _ = io.WriteString(stdout, TestHelp)
+		return ExitOK
+	}
 	if err != nil {
 		return reportTestError(stderr, err, true)
 	}

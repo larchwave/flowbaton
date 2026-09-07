@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -339,5 +342,65 @@ func TestParserHandlesEveryPinnedTestFlag(t *testing.T) {
 	sort.Strings(unhandled)
 	if len(unhandled) != 0 {
 		t.Fatalf("pinned test flags the parser rejects as unknown: %v", unhandled)
+	}
+}
+
+// Before issue #20 `flowbaton test --help` was read as an option that needs a value
+// and exited 2. It is a question: the option list goes to stdout, exit 0, and
+// no driver starts. Every flag the parser accepts must appear in the help, and
+// every flag the help names must be accepted, so the two cannot drift apart.
+func TestHelpListsEveryOptionTheParserAcceptsAndExitsOK(t *testing.T) {
+	t.Parallel()
+
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"--help", "one.yaml"}, {"-p", "ios", "--help"}, {"-p", "--help"}, {"--output", "-h"}} {
+		var stdout, stderr bytes.Buffer
+		if got := (TestRunner{}).Run(context.Background(), args, &stdout, &stderr); got != ExitOK {
+			t.Fatalf("test %v exit = %d, want %d; stderr %q", args, got, ExitOK, stderr.String())
+		}
+		if stderr.Len() != 0 {
+			t.Fatalf("test %v wrote to stderr: %q", args, stderr.String())
+		}
+		if !strings.HasPrefix(stdout.String(), TestUsage) {
+			t.Fatalf("test %v help = %q, want it to open with the usage line", args, stdout.String())
+		}
+	}
+
+	var help bytes.Buffer
+	(TestRunner{}).Run(context.Background(), []string{"--help"}, &help, io.Discard)
+	for flag, sample := range map[string][]string{
+		"--config": {"cfg.yaml"}, "--format": {"JUNIT"}, "--test-suite-name": {"s"},
+		"--output": {"r.xml"}, "--debug-output": {"d"}, "--test-output-dir": {"d"},
+		"--flatten-debug-output": nil, "--continuous": nil, "-c": nil, "--headless": nil,
+		"--reinstall-driver": nil, "--no-reinstall-driver": nil,
+		"--screen-size": {"1920x1080"}, "--api-url": {"https://example.invalid"}, "--api-key": {"k"},
+		"--platform": {"ios"}, "-p": {"ios"}, "--device": {"UDID-1"}, "--udid": {"UDID-1"},
+		"-e": {"K=v"}, "--env": {"K=v"}, "--include-tags": {"a"}, "--exclude-tags": {"a"},
+		"--shard-split": {"2"}, "--shard-all": {"2"},
+	} {
+		if _, err := ParseTestOptions(append(append([]string{flag}, sample...), "one.yaml")); err != nil {
+			t.Errorf("the parser refuses %s: %v", flag, err)
+		}
+		if !strings.Contains(help.String(), flag) {
+			t.Errorf("help does not list %s", flag)
+		}
+	}
+
+	// The negative control: a wrong flag is still a mistake, exit 2 on stderr.
+	var stdout, stderr bytes.Buffer
+	if got := (TestRunner{}).Run(context.Background(), []string{"--bogus", "one.yaml"}, &stdout, &stderr); got != ExitInvalid {
+		t.Fatalf("test --bogus exit = %d, want %d", got, ExitInvalid)
+	}
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "--bogus") {
+		t.Fatalf("test --bogus stdout %q stderr %q, want the error on stderr only", stdout.String(), stderr.String())
+	}
+
+	// record shares the parser and answers the same question with its own shape.
+	stdout.Reset()
+	stderr.Reset()
+	if got := (RecordRunner{}).Run(context.Background(), []string{"--help"}, &stdout, &stderr); got != ExitOK {
+		t.Fatalf("record --help exit = %d, want %d; stderr %q", got, ExitOK, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "record") || !strings.Contains(stdout.String(), "--format") || stderr.Len() != 0 {
+		t.Fatalf("record --help stdout %q stderr %q", stdout.String(), stderr.String())
 	}
 }

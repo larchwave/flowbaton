@@ -57,6 +57,13 @@ func runWithCheckerContext(
 		fmt.Fprintln(stdout, version.Line())
 		return flowcli.ExitOK
 	}
+	// A question, not a mistake: the inventory goes to stdout and exits 0
+	// (issue #20). Anything else that is not a command still falls through to
+	// the usage on stderr with exit 2 below.
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		_, _ = io.WriteString(stdout, topLevelUsage)
+		return flowcli.ExitOK
+	}
 	if len(args) > 0 && args[0] == "check-syntax" {
 		return (flowcli.CheckSyntaxRunner{Checker: checker, Getwd: getwd}).Run(
 			ctx,

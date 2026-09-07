@@ -19,6 +19,9 @@ The `flowbaton` executable dispatches these user commands:
 - `auth keygen|cert-map [options]`
 - `generate-completion [bash|zsh]`
 
+`flowbaton --help` prints the command inventory, and `test --help` and
+`record --help` print their options with values and defaults; both go to
+standard output and exit with status 0 without starting a driver.
 Unknown commands and malformed options exit with status 2. A well-formed command
 that fails during discovery, setup, execution, or reporting exits with status 1.
 `driver-setup` selects iOS when the platform option is omitted.
