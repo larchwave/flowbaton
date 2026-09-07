@@ -16,7 +16,7 @@ func TestInteractionBatch3ActualRootLifecycleResultAndReportProjection(t *testin
 	t.Parallel()
 
 	flowResult, events, config, requests := engine.ExecuteBatch3RootForReportTest(t)
-	if len(requests) != 1 || requests[0].Direction != "UP" || requests[0].Amount != 0.4 ||
+	if len(requests) != 1 || requests[0].Direction != "DOWN" || requests[0].Amount != 0.4 ||
 		requests[0].ElementPoint == nil || *requests[0].ElementPoint != (device.Point{X: 50, Y: 90}) {
 		t.Fatalf("centering requests = %#v", requests)
 	}

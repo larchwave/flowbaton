@@ -314,10 +314,10 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 		{name: "omitted", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}},
 		{name: "false", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: false},
 		{name: "zero amount", bounds: device.Bounds{Y: 40, Width: 100, Height: 20}, center: true},
-		{name: "below midpoint maps up", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 0.4, ElementPoint: &device.Point{X: 50, Y: 90}}},
-		{name: "above midpoint maps down", bounds: device.Bounds{Y: -20, Width: 100, Height: 40}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.5, ElementPoint: &device.Point{X: 50, Y: 0}}},
-		{name: "half-pixel center remains exact", bounds: device.Bounds{X: 1, Y: 75, Width: 99, Height: 31}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 0.405, ElementPoint: &device.Point{X: 50.5, Y: 90.5}}},
-		{name: "amount capped", bounds: device.Bounds{Width: 100, Height: 1000}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 1, ElementPoint: &device.Point{X: 50, Y: 500}}},
+		{name: "below midpoint maps down", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.4, ElementPoint: &device.Point{X: 50, Y: 90}}},
+		{name: "above midpoint maps up", bounds: device.Bounds{Y: -20, Width: 100, Height: 40}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 0.5, ElementPoint: &device.Point{X: 50, Y: 0}}},
+		{name: "half-pixel center remains exact", bounds: device.Bounds{X: 1, Y: 75, Width: 99, Height: 31}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.405, ElementPoint: &device.Point{X: 50.5, Y: 90.5}}},
+		{name: "amount capped", bounds: device.Bounds{Width: 100, Height: 1000}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 1, ElementPoint: &device.Point{X: 50, Y: 500}}},
 	}
 	for _, test := range tests {
 		test := test
@@ -326,7 +326,8 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 			if test.name != "omitted" {
 				fields["centerElement"] = test.center
 			}
-			driver := batch3Driver(batch3Info(100, 100), []device.TreeNode{batch3Tree("Ready", test.bounds)}, []error{nil}, nil)
+			// The second tree is what the centring scroll is checked against.
+			driver := batch3Driver(batch3Info(100, 100), []device.TreeNode{batch3Tree("Ready", test.bounds), batch3Tree("Ready", test.bounds)}, []error{nil}, nil)
 			_, _, err := executeBatch3ForTest(context.Background(), batch3Command("Ready", fields), nil, driver, newBatch3Clock(time.Unix(300, 0), true))
 			if err != nil {
 				t.Fatalf("centering execute error = %v", err)
@@ -341,8 +342,8 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 			if len(requests) != 1 || !reflect.DeepEqual(requests[0], *test.want) {
 				t.Fatalf("centering requests = %#v, want %#v", requests, *test.want)
 			}
-			if countBatch3Method(driver.Actions(), enginetest.MethodContentDescriptor) != 1 {
-				t.Fatalf("successful centering re-observed hierarchy: %#v", driver.Actions())
+			if countBatch3Method(driver.Actions(), enginetest.MethodContentDescriptor) != 2 {
+				t.Fatalf("centering did not check the target after its scroll: %#v", driver.Actions())
 			}
 		})
 	}
@@ -350,6 +351,7 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 	driver := batch3Driver(batch3Info(100, 100), []device.TreeNode{
 		batch3Tree("Other", device.Bounds{Width: 100, Height: 100}),
 		batch3Tree("Ready", device.Bounds{Y: 80, Width: 100, Height: 20}),
+		batch3Tree("Ready", device.Bounds{Y: 40, Width: 100, Height: 20}),
 	}, []error{nil, nil}, nil)
 	_, _, err := executeBatch3ForTest(context.Background(), batch3Command("Ready", map[string]any{
 		"visibilityPercentage": int64(10), "centerElement": true,
@@ -359,8 +361,30 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 	}
 	requests := batch3ScrollRequests(driver.Actions())
 	if len(requests) != 2 || requests[0].Direction != "DOWN" || requests[0].Amount != 0.4 || requests[0].ElementPoint != nil ||
-		requests[1].Direction != "UP" || requests[1].Amount != 0.4 || requests[1].ElementPoint == nil || *requests[1].ElementPoint != (device.Point{X: 50, Y: 90}) {
+		requests[1].Direction != "DOWN" || requests[1].Amount != 0.4 || requests[1].ElementPoint == nil || *requests[1].ElementPoint != (device.Point{X: 50, Y: 90}) {
 		t.Fatalf("delayed ordinary/final requests = %#v", requests)
+	}
+}
+
+// TestInteractionBatch3CenteringThatLosesTheTargetFails pins issue #13's
+// other half: a centring scroll that carries the target out of the required
+// visibility is a failure, not a completed command.
+func TestInteractionBatch3CenteringThatLosesTheTargetFails(t *testing.T) {
+	t.Parallel()
+
+	driver := batch3Driver(batch3Info(100, 100), []device.TreeNode{
+		batch3Tree("Ready", device.Bounds{Y: 80, Width: 100, Height: 20}),
+		batch3Tree("Other", device.Bounds{Width: 100, Height: 100}),
+	}, []error{nil}, nil)
+	_, _, err := executeBatch3ForTest(context.Background(), batch3Command("Ready", map[string]any{
+		"visibilityPercentage": int64(10), "centerElement": true,
+	}), nil, driver, newBatch3Clock(time.Unix(320, 0), true))
+	var assertion *AssertionError
+	if !errors.As(err, &assertion) || !strings.Contains(err.Error(), "centerElement") {
+		t.Fatalf("centering that lost the target: error = %T %v", err, err)
+	}
+	if requests := batch3ScrollRequests(driver.Actions()); len(requests) != 1 || requests[0].Direction != "DOWN" {
+		t.Fatalf("centering requests = %#v", requests)
 	}
 }
 
@@ -531,11 +555,12 @@ func TestInteractionBatch3ExplicitSettleOwnershipClampingAndErrors(t *testing.T)
 	t.Run("final centering owns one settle", func(t *testing.T) {
 		driver := batch3Driver(batch3Info(100, 100), []device.TreeNode{
 			batch3Tree("Ready", device.Bounds{Y: 80, Width: 100, Height: 20}),
+			batch3Tree("Ready", device.Bounds{Y: 40, Width: 100, Height: 20}),
 		}, []error{nil}, []enginetest.Result[*device.ViewHierarchy]{{Value: nil}})
 		_, _, err := executeBatch3ForTest(context.Background(), batch3Command("Ready", map[string]any{
 			"visibilityPercentage": int64(10), "centerElement": true, "waitToSettleTimeoutMs": int64(0),
 		}), nil, driver, newBatch3Clock(time.Unix(530, 0), true))
-		if err != nil || len(batch3ScrollRequests(driver.Actions())) != 1 || len(batch3SettleRequests(driver.Actions())) != 1 || countBatch3Method(driver.Actions(), enginetest.MethodContentDescriptor) != 1 {
+		if err != nil || len(batch3ScrollRequests(driver.Actions())) != 1 || len(batch3SettleRequests(driver.Actions())) != 1 || countBatch3Method(driver.Actions(), enginetest.MethodContentDescriptor) != 2 {
 			t.Fatalf("centering settle error = %v actions %#v", err, driver.Actions())
 		}
 	})
@@ -819,6 +844,7 @@ func TestInteractionBatch3CompiledOwnershipRepeatedAndConcurrentExecution(t *tes
 	t.Run("centering request owns the exact element point", func(t *testing.T) {
 		base := batch3Driver(batch3Info(100, 100), []device.TreeNode{
 			batch3Tree("Ready", device.Bounds{X: 1, Y: 75, Width: 99, Height: 31}),
+			batch3Tree("Ready", device.Bounds{X: 1, Y: 35, Width: 99, Height: 31}),
 		}, []error{nil}, nil)
 		driver := &batch3MutatingDriver{Driver: base}
 		_, _, err := executeBatch3ForTest(
@@ -829,7 +855,7 @@ func TestInteractionBatch3CompiledOwnershipRepeatedAndConcurrentExecution(t *tes
 			newBatch3Clock(time.Unix(823, 0), true),
 		)
 		requests := driver.Snapshot()
-		if err != nil || len(requests) != 1 || requests[0].Direction != "UP" || requests[0].Amount != 0.405 ||
+		if err != nil || len(requests) != 1 || requests[0].Direction != "DOWN" || requests[0].Amount != 0.405 ||
 			requests[0].ElementPoint == nil || *requests[0].ElementPoint != (device.Point{X: 50.5, Y: 90.5}) {
 			t.Fatalf("owned centering request error = %v requests %#v", err, requests)
 		}

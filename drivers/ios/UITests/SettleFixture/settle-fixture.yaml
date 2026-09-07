@@ -1,5 +1,5 @@
 appId: dev.larchwave.flowbaton.settlefixture
-name: Settle fixture launch, tap under decorative animation, scroll over a link
+name: Settle fixture launch, tap under decorative animation, scroll over a link, centre the end
 ---
 - launchApp
 - assertVisible:
@@ -8,9 +8,14 @@ name: Settle fixture launch, tap under decorative animation, scroll over a link
     id: fixture.continue
 - assertVisible:
     id: fixture.continued
+# The end marker comes into view at the bottom edge; centring it must keep
+# it on screen rather than push it back off (issue #13).
 - scrollUntilVisible:
     element:
       id: fixture.end
     direction: DOWN
+    centerElement: true
+- assertVisible:
+    id: fixture.end
 - assertNotVisible:
     id: fixture.linkActivated

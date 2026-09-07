@@ -410,6 +410,16 @@ func executeScrollUntilVisible(
 					return effect, err
 				}
 			}
+			// The centring scroll is checked, not trusted: a step in the wrong
+			// direction or too far carried the target off the screen and the
+			// command still reported success (issue #13).
+			centered, observeErr := observeScrollUntilVisible(ctx, lookup, plan.selector)
+			if observeErr != nil {
+				return effect, observeErr
+			}
+			if !scrollUntilVisibleThresholdSatisfied(centered, viewport, threshold) {
+				return effect, NewAssertionError("scrollUntilVisible centerElement moved the target out of the required visibility", nil)
+			}
 			return effect, ctx.Err()
 		}
 
@@ -524,9 +534,11 @@ func scrollUntilVisibleCenterRequest(bounds, viewport device.Bounds) (device.Scr
 	if delta == 0 {
 		return device.ScrollVerticalRequest{}, false
 	}
-	direction := device.Direction("UP")
+	// A target below the midpoint needs the content to move up, and every
+	// driver spells that DOWN: the direction that reveals what lies below.
+	direction := device.Direction("DOWN")
 	if delta < 0 {
-		direction = "DOWN"
+		direction = "UP"
 	}
 	amount := math.Min(1, math.Abs(delta)/float64(viewport.Height))
 	if amount == 0 {

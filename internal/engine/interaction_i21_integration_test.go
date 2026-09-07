@@ -587,7 +587,7 @@ func TestInteractionI21ScrollSearchExactTrace(t *testing.T) {
 	delayed := device.TreeNode{Attributes: map[string]string{"bounds": "[0,0][400,884]"}, Children: []device.TreeNode{{Attributes: map[string]string{"text": "Delayed Target", "bounds": "[0,100][400,300]"}}}}
 	driver.Enqueue(enginetest.DriverScript{
 		DeviceInfo:        []enginetest.Result[device.DeviceInfo]{{Value: info}},
-		ContentDescriptor: []enginetest.Result[device.TreeNode]{{Value: immediate}, {Value: missing}, {Value: delayed}},
+		ContentDescriptor: []enginetest.Result[device.TreeNode]{{Value: immediate}, {Value: missing}, {Value: delayed}, {Value: delayed}},
 	})
 	clock := newBatch3Clock(time.Unix(2_000, 0).UTC(), true)
 	result, runErr := executeCompiledRootForRun(context.Background(), Dependencies{
@@ -598,7 +598,7 @@ func TestInteractionI21ScrollSearchExactTrace(t *testing.T) {
 	}
 	requests := batch3ScrollRequests(driver.Actions())
 	if len(requests) != 2 || requests[0].Direction != "DOWN" || requests[0].Amount != 0.6 || requests[0].ElementPoint != nil ||
-		requests[1].Direction != "DOWN" || requests[1].ElementPoint == nil || *requests[1].ElementPoint != (device.Point{X: 200, Y: 200}) {
+		requests[1].Direction != "UP" || requests[1].ElementPoint == nil || *requests[1].ElementPoint != (device.Point{X: 200, Y: 200}) {
 		t.Fatalf("scroll-search requests = %#v", requests)
 	}
 	wantCenterAmount := float64(242) / float64(884)

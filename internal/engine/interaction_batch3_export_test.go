@@ -30,6 +30,7 @@ func ExecuteBatch3RootForReportTest(t testing.TB) (FlowResult, []Event, model.Co
 
 	driver := batch3Driver(batch3Info(100, 100), []device.TreeNode{
 		batch3Tree("Ready", device.Bounds{Y: 80, Width: 100, Height: 20}),
+		batch3Tree("Ready", device.Bounds{Y: 40, Width: 100, Height: 20}),
 	}, []error{nil}, nil)
 	events := make([]Event, 0, 4)
 	dependencies := Dependencies{
