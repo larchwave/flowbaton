@@ -37,7 +37,7 @@ func TestScrollUntilVisibleCourseSearchesThenConverges(t *testing.T) {
 		{name: "inside the viewport but refused takes the covered step", element: courseElement(device.Bounds{Y: 40, Width: 100, Height: 20}), want: device.ScrollVerticalRequest{Direction: "DOWN", Amount: scrollUntilVisibleCoveredStep}},
 	}
 	for _, step := range steps {
-		if got := course.next(step.element); got != step.want {
+		if got := course.next(step.element); !reflect.DeepEqual(got, step.want) {
 			t.Fatalf("%s: request = %#v, want %#v", step.name, got, step.want)
 		}
 	}
@@ -50,16 +50,16 @@ func TestScrollUntilVisibleCourseHorizontalAxis(t *testing.T) {
 	t.Parallel()
 	viewport := device.Bounds{Width: 200, Height: 100}
 	course := newScrollUntilVisibleCourse("RIGHT", 0.5, viewport)
-	if got, want := course.next(nil), (device.ScrollVerticalRequest{Direction: "RIGHT", Amount: 0.5}); got != want {
+	if got, want := course.next(nil), (device.ScrollVerticalRequest{Direction: "RIGHT", Amount: 0.5}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("search = %#v, want %#v", got, want)
 	}
-	if got, want := course.next(courseElement(device.Bounds{X: 180, Width: 60, Height: 20})), (device.ScrollVerticalRequest{Direction: "RIGHT", Amount: 0.2}); got != want {
+	if got, want := course.next(courseElement(device.Bounds{X: 180, Width: 60, Height: 20})), (device.ScrollVerticalRequest{Direction: "RIGHT", Amount: 0.2}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("overhang right = %#v, want %#v", got, want)
 	}
-	if got, want := course.next(courseElement(device.Bounds{X: -50, Width: 60, Height: 20})), (device.ScrollVerticalRequest{Direction: "LEFT", Amount: 0.25}); got != want {
+	if got, want := course.next(courseElement(device.Bounds{X: -50, Width: 60, Height: 20})), (device.ScrollVerticalRequest{Direction: "LEFT", Amount: 0.25}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("overhang left = %#v, want %#v", got, want)
 	}
-	if got, want := course.next(nil), (device.ScrollVerticalRequest{Direction: "RIGHT", Amount: 0.125}); got != want {
+	if got, want := course.next(nil), (device.ScrollVerticalRequest{Direction: "RIGHT", Amount: 0.125}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("passed = %#v, want %#v", got, want)
 	}
 }

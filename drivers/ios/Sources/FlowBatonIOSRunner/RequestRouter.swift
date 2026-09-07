@@ -75,7 +75,8 @@ public struct RequestRouter: Sendable {
 
     case "touch":
       let decoded: TouchRequest = try Self.decode(request)
-      try automation.touch(x: decoded.x, y: decoded.y, duration: decoded.duration)
+      try automation.touch(
+        x: decoded.x, y: decoded.y, duration: decoded.duration, appID: decoded.appId)
       return Self.empty()
 
     case "screenshot":
@@ -251,6 +252,7 @@ struct TouchRequest: Codable {
   let x: Double
   let y: Double
   let duration: Double?
+  let appId: String?
 }
 struct PressKeyRequest: Codable {
   let key: String

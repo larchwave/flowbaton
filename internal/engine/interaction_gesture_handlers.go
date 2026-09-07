@@ -260,7 +260,7 @@ func executeDoubleTapOn(ctx context.Context, state *executionState, evaluated ev
 	if err != nil {
 		return effect, err
 	}
-	requests := ownedDoubleTapRequests(point)
+	requests := ownedDoubleTapRequests(point, elementAppID(plan.appID, plan.target.targetMode))
 	if err := executeGestureTap(ctx, state, lookup, requests[0]); err != nil {
 		return effect, err
 	}
@@ -292,7 +292,7 @@ func executeLongPressOn(ctx context.Context, state *executionState, evaluated ev
 	if err := ctx.Err(); err != nil {
 		return effect, err
 	}
-	request := ownedLongPressRequest(point)
+	request := ownedLongPressRequest(point, elementAppID(plan.appID, plan.target.targetMode))
 	if err := state.dependencies.Driver.LongPress(ctx, request); err != nil {
 		if cancellation := ctx.Err(); cancellation != nil {
 			return effect, cancellation
@@ -398,14 +398,14 @@ func resolveInteractionGestureTarget(
 	}
 }
 
-func ownedDoubleTapRequests(point device.Point) [2]device.TapRequest {
+func ownedDoubleTapRequests(point device.Point, appID string) [2]device.TapRequest {
 	owned := device.Point{X: point.X, Y: point.Y}
-	return [2]device.TapRequest{{Point: owned}, {Point: owned}}
+	return [2]device.TapRequest{{Point: owned, AppID: appID}, {Point: owned, AppID: appID}}
 }
 
-func ownedLongPressRequest(point device.Point) device.LongPressRequest {
+func ownedLongPressRequest(point device.Point, appID string) device.LongPressRequest {
 	return device.LongPressRequest{
-		Point: device.Point{X: point.X, Y: point.Y}, DurationMillis: longPressDurationMillis,
+		Point: device.Point{X: point.X, Y: point.Y}, DurationMillis: longPressDurationMillis, AppID: appID,
 	}
 }
 

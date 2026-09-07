@@ -261,7 +261,7 @@ func expectedIOSShapes() map[string]completeExpectedShape {
 			"startX": "number", "startY": "number", "endX": "number", "endY": "number", "duration": "number", "appIds": "array:string",
 		}),
 		"InputTextRequest":     object([]string{"text", "appIds"}, map[string]string{"text": "string", "appIds": "array:string"}),
-		"TouchRequest":         object([]string{"x", "y"}, map[string]string{"x": "number", "y": "number", "duration": "number"}),
+		"TouchRequest":         object([]string{"x", "y"}, map[string]string{"x": "number", "y": "number", "duration": "number", "appId": "string"}),
 		"ScreenshotQuery":      object(nil, map[string]string{"compressed": "boolean"}),
 		"ScreenStaticResponse": object([]string{"isScreenStatic"}, map[string]string{"isScreenStatic": "boolean"}),
 		"PressKeyRequest": object([]string{"key", "appIds"}, map[string]string{

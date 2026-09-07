@@ -81,6 +81,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.larchwave.flowbaton.settlefixture
         SUPPORTED_PLATFORMS: iphonesimulator
+        # iPhone only, so that on an iPad simulator it runs inside the
+        # iPhone-compatibility window (issue #15).
+        TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: false
         SKIP_INSTALL: true
 

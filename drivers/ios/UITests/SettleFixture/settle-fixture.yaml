@@ -1,9 +1,16 @@
 appId: dev.larchwave.flowbaton.settlefixture
-name: Settle fixture launch, tap under decorative animation, scroll over a link, centre the end, reach a tall card
+name: Settle fixture launch, alert action, tap under decorative animation, scroll over a link, centre the end, reach a tall card
 ---
 - launchApp
 - assertVisible:
     id: fixture.continue
+# An app-owned alert: the destructive button must run its action (issue #17).
+- tapOn:
+    id: fixture.alert.show
+- assertVisible: End without saving
+- tapOn: End without saving
+- assertVisible:
+    id: fixture.alert.ended
 - tapOn:
     id: fixture.continue
 - assertVisible:

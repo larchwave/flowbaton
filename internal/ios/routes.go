@@ -78,6 +78,9 @@ type TouchRequest struct {
 	X        float64  `json:"x"`
 	Y        float64  `json:"y"`
 	Duration *float64 `json:"duration,omitempty"`
+	// AppID anchors the point in that application's coordinate space; empty
+	// leaves it in screen space.
+	AppID string `json:"appId,omitempty"`
 }
 
 // DeviceInfo is the runner's screen geometry, in points and pixels.

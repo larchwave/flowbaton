@@ -366,7 +366,7 @@ func resolveSwipeRequest(ctx context.Context, lookup *ElementLookup, plan swipeE
 		if err != nil {
 			return device.SwipeRequest{}, err
 		}
-		return ownedSwipeElementRequest(center, plan.direction, plan.durationMillis), nil
+		return ownedSwipeElementRequest(center, plan.direction, plan.durationMillis, plan.appID), nil
 	default:
 		return device.SwipeRequest{}, NewConfigurationError("swipe evaluated mode is invalid", nil)
 	}
@@ -382,9 +382,9 @@ func ownedSwipePointRequest(start, end device.Point, duration int64) device.Swip
 	return device.SwipeRequest{Start: &ownedStart, End: &ownedEnd, DurationMillis: duration}
 }
 
-func ownedSwipeElementRequest(point device.Point, direction device.Direction, duration int64) device.SwipeRequest {
+func ownedSwipeElementRequest(point device.Point, direction device.Direction, duration int64, appID string) device.SwipeRequest {
 	ownedPoint := device.Point{X: point.X, Y: point.Y}
-	return device.SwipeRequest{Direction: direction, ElementPoint: &ownedPoint, DurationMillis: duration}
+	return device.SwipeRequest{Direction: direction, ElementPoint: &ownedPoint, DurationMillis: duration, AppIDs: []string{appID}}
 }
 
 func waitForSwipeSettle(ctx context.Context, lookup *ElementLookup, plan swipeEvaluated) error {

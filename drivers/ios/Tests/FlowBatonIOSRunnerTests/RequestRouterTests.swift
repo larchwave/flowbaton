@@ -93,6 +93,20 @@ final class RequestRouterTests: XCTestCase {
     XCTAssertEqual(automation.touches[1].duration, 3)
   }
 
+  func testTouchCarriesAnOptionalApplicationID() throws {
+    // appId is optional: a screen-space tap has none, an element-derived tap
+    // names the app whose hierarchy the point came from.
+    let automation = RecordingAutomation()
+    let router = RequestRouter(automation: automation)
+
+    _ = router.route(request("POST", "/touch", body: #"{"x":3,"y":4}"#))
+    XCTAssertNil(automation.touches[0].appID)
+
+    _ = router.route(
+      request("POST", "/touch", body: #"{"x":3,"y":4,"appId":"com.example.app"}"#))
+    XCTAssertEqual(automation.touches[1].appID, "com.example.app")
+  }
+
   func testPressKeyCarriesTheActiveApplicationIDs() throws {
     let automation = RecordingAutomation()
     let response = RequestRouter(automation: automation).route(
@@ -264,7 +278,7 @@ final class RequestRouterTests: XCTestCase {
 final class RecordingAutomation: DeviceAutomation, @unchecked Sendable {
   var failure: AutomationError?
   var hierarchy = Data(#"{"axElement":{},"depth":0}"#.utf8)
-  var touches: [(x: Double, y: Double, duration: Double?)] = []
+  var touches: [(x: Double, y: Double, duration: Double?, appID: String?)] = []
   var swipes: [(endY: Double, duration: Double)] = []
   var inputs: [(text: String, appIDs: [String])] = []
   var permissions: [[String: String]] = []
@@ -299,9 +313,9 @@ final class RecordingAutomation: DeviceAutomation, @unchecked Sendable {
     inputs.append((text: text, appIDs: appIDs))
   }
 
-  func touch(x: Double, y: Double, duration: Double?) throws {
+  func touch(x: Double, y: Double, duration: Double?, appID: String?) throws {
     try check()
-    touches.append((x: x, y: y, duration: duration))
+    touches.append((x: x, y: y, duration: duration, appID: appID))
   }
 
   func screenshot(compressed: Bool) throws -> Data {

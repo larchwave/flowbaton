@@ -59,9 +59,11 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
 
   // MARK: - Touch
 
-  func touch(x: Double, y: Double, duration: Double?) throws {
+  func touch(x: Double, y: Double, duration: Double?, appID: String?) throws {
     try onMain {
-      let target = Self.coordinate(x: x, y: y)
+      let anchor = try Self.anchor(appIDs: appID.map { [$0] } ?? [])
+      let mapping = Self.screenMapping(of: anchor)
+      let target = Self.coordinate(x: x, y: y, in: anchor, mapping: mapping)
       guard let duration else {
         target.tap()
         return
@@ -81,10 +83,10 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
   func swipeV2(
     startX: Double, startY: Double, endX: Double, endY: Double, duration: Double, appIDs: [String]
   ) throws {
-    // appIDs is deliberately unused for the gesture: a swipe is a screen-space
-    // drag, and pinning it to one app's coordinate space would move the gesture
-    // whenever that app is not full-screen.
-    _ = appIDs
+    // Without appIDs a swipe is a screen-space drag. With them the host is
+    // saying the points came from that app's hierarchy (an element-anchored
+    // scroll or swipe), so the drag is anchored in the app's own space — see
+    // anchor(appIDs:).
     // `duration` on the wire is how long the drag takes. XCUITest's
     // press(forDuration:thenDragTo:) spends that time HOLDING at the start
     // point before it moves, and half a second of hold over a SwiftUI Link
@@ -95,9 +97,12 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
       duration > 0 && distance > 0
       ? XCUIGestureVelocity(rawValue: CGFloat(distance / duration)) : .default
     try onMain {
-      Self.coordinate(x: startX, y: startY)
+      let anchor = try Self.anchor(appIDs: appIDs)
+      let mapping = Self.screenMapping(of: anchor)
+      Self.coordinate(x: startX, y: startY, in: anchor, mapping: mapping)
         .press(
-          forDuration: 0, thenDragTo: Self.coordinate(x: endX, y: endY),
+          forDuration: 0,
+          thenDragTo: Self.coordinate(x: endX, y: endY, in: anchor, mapping: mapping),
           withVelocity: velocity, thenHoldForDuration: 0)
     }
   }
@@ -431,8 +436,6 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     throw AutomationError.precondition(ForegroundMiss.message(states))
   }
 
-  /// coordinate turns the contract's absolute points into an XCUICoordinate,
-  /// anchored on the springboard so the space matches what deviceInfo reports.
   /// statusBarSnapshots takes the springboard's status bars and nothing else.
   ///
   /// Only status bars are included. Snapshotting the whole springboard would
@@ -476,11 +479,63 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     app == XCUIApplication(bundleIdentifier: springboardID)
   }
 
+  /// anchor is the application whose coordinate space a gesture's points are
+  /// in.
+  ///
+  /// Without appIDs that is the springboard, whose space is the screen
+  /// deviceInfo reports, so an authored screen point lands where the author
+  /// measured it. With appIDs it is the first of them in front: a point the
+  /// host took from an app's hierarchy is in that app's own space, which is
+  /// not the screen's inside an iPhone-compatibility window on iPad (issue
+  /// #15), and a touch anchored elsewhere while that app shows its own alert
+  /// is handled by XCTest as an interruption and lands under the alert (issue
+  /// #17). A named app that is not in front is refused rather than tapped
+  /// through whatever is: that would report success for the wrong app.
   @MainActor
-  static func coordinate(x: Double, y: Double) -> XCUICoordinate {
-    XCUIApplication(bundleIdentifier: springboardID)
+  static func anchor(appIDs: [String]) throws -> XCUIApplication {
+    if appIDs.isEmpty {
+      return XCUIApplication(bundleIdentifier: springboardID)
+    }
+    return try foregroundApp(among: appIDs)
+  }
+
+  /// screenMapping is the map from the anchor's coordinate space onto the
+  /// screen XCTest synthesises events on.
+  ///
+  /// It is the identity for the springboard and for an app that fills the
+  /// screen. An iPhone-only app on an iPad runs inside a compatibility
+  /// window: its hierarchy, and XCTest's own anchor for it, stay in the app's
+  /// 390x844-style grid, while the window is drawn scaled to fit the screen
+  /// and centred on it. Anchoring alone left a tap at the grid point, off the
+  /// window (issue #15), so the point is scaled and shifted the way the
+  /// window is. The screen size comes from a screenshot, the one reading
+  /// that turns with the device (see deviceInfo).
+  @MainActor
+  static func screenMapping(of anchor: XCUIApplication) -> CGAffineTransform {
+    let app = anchor.frame
+    guard !isSpringboard(anchor), app.origin == .zero, app.width > 0, app.height > 0 else {
+      return .identity
+    }
+    let screen = XCUIScreen.main.screenshot().image.size
+    guard app.size != screen else { return .identity }
+    let scale = min(screen.width / app.width, screen.height / app.height)
+    return CGAffineTransform(
+      translationX: (screen.width - app.width * scale) / 2,
+      y: (screen.height - app.height * scale) / 2
+    ).scaledBy(x: scale, y: scale)
+  }
+
+  /// coordinate turns the contract's absolute points into an XCUICoordinate in
+  /// the anchor's coordinate space, mapped onto the screen.
+  @MainActor
+  static func coordinate(
+    x: Double, y: Double, in anchor: XCUIApplication, mapping: CGAffineTransform
+  ) -> XCUICoordinate {
+    let point = CGPoint(x: x, y: y).applying(mapping)
+    return
+      anchor
       .coordinate(withNormalizedOffset: .zero)
-      .withOffset(CGVector(dx: x, dy: y))
+      .withOffset(CGVector(dx: point.x, dy: point.y))
   }
 
   // Keyed on the contract vocabulary rather than on spellings: a string

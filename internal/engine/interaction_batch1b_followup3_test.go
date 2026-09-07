@@ -165,7 +165,7 @@ func TestInteractionBatch1BActualRootPreparationOwnsFromSelectorAndConfig(t *tes
 	if runErr != nil {
 		t.Fatalf("executeCompiledRootForRun() error = %v", runErr)
 	}
-	want := swipeElementRequest(device.Point{X: 30, Y: 50}, "RIGHT", 777)
+	want := swipeElementRequest(device.Point{X: 30, Y: 50}, "RIGHT", 777, "com.example.owned")
 	if got := swipeRequests(driver.Actions()); !reflect.DeepEqual(got, []device.SwipeRequest{want}) {
 		t.Fatalf("owned selector request = %#v, want %#v", got, want)
 	}

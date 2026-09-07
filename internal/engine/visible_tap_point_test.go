@@ -32,7 +32,7 @@ func TestTapOnAimsInsideTheScreenForARowPastTheBottomEdge(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 	// The visible strip is y 857..884, so the tap belongs at its middle.
-	want := []device.TapRequest{{Point: device.Point{X: 201, Y: 870.5}}}
+	want := []device.TapRequest{{Point: device.Point{X: 201, Y: 870.5}, AppID: "com.example.tap-batch2"}}
 	if got := tapRequests(driver.Actions()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tap points = %#v, want %#v", got, want)
 	}
@@ -54,7 +54,7 @@ func TestTapOnKeepsTheGeometricCenterForAFullyVisibleElement(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	want := []device.TapRequest{{Point: device.Point{X: 20, Y: 30}}}
+	want := []device.TapRequest{{Point: device.Point{X: 20, Y: 30}, AppID: "com.example.tap-batch2"}}
 	if got := tapRequests(driver.Actions()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tap points = %#v, want %#v", got, want)
 	}
@@ -104,7 +104,7 @@ func TestTapOnKeepsAnAuthoredPointOnAVisibleElement(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	want := []device.TapRequest{{Point: device.Point{X: 20, Y: 30}}}
+	want := []device.TapRequest{{Point: device.Point{X: 20, Y: 30}, AppID: "com.example.tap-batch2"}}
 	if got := tapRequests(driver.Actions()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tap points = %#v, want %#v", got, want)
 	}

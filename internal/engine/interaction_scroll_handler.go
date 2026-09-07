@@ -399,7 +399,7 @@ func executeScrollUntilVisible(
 			if !plan.centerElement {
 				return effect, nil
 			}
-			request, needed := scrollUntilVisibleCenterRequest(element.Bounds, viewport)
+			request, needed := scrollUntilVisibleCenterRequest(element.Bounds, viewport, plan.appID)
 			if !needed {
 				return effect, nil
 			}
@@ -540,7 +540,10 @@ func scrollUntilVisibleThresholdSatisfied(
 		hierarchy.VisiblePercentage(element.Bounds, viewport) >= threshold
 }
 
-func scrollUntilVisibleCenterRequest(bounds, viewport device.Bounds) (device.ScrollVerticalRequest, bool) {
+// scrollUntilVisibleCenterRequest is the scroll that brings the centre of
+// bounds to the middle of the viewport. It starts on the element, so it names
+// the application the element's bounds came from.
+func scrollUntilVisibleCenterRequest(bounds, viewport device.Bounds, appID string) (device.ScrollVerticalRequest, bool) {
 	center := hierarchy.Center(bounds)
 	viewportMidpointY := float64(viewport.Y) + float64(viewport.Height)/2
 	delta := center.Y - viewportMidpointY
@@ -557,7 +560,7 @@ func scrollUntilVisibleCenterRequest(bounds, viewport device.Bounds) (device.Scr
 	if amount == 0 {
 		return device.ScrollVerticalRequest{}, false
 	}
-	return device.ScrollVerticalRequest{Direction: direction, Amount: amount, ElementPoint: &center}, true
+	return device.ScrollVerticalRequest{Direction: direction, Amount: amount, ElementPoint: &center, AppIDs: []string{appID}}, true
 }
 
 func executeOwnedScrollUntilVisibleScroll(

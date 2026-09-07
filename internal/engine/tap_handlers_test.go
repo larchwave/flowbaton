@@ -299,7 +299,7 @@ func TestTapBatch2SelectorRelativeAndStability(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || !reflect.DeepEqual(tapRequests(driver.Actions()), []device.TapRequest{{Point: test.wantPoint}}) {
+			if err != nil || !reflect.DeepEqual(tapRequests(driver.Actions()), repeatedSelectorTapRequests(test.wantPoint, 1)) {
 				t.Fatalf("Execute() = error %v taps %#v, want %+v", err, tapRequests(driver.Actions()), test.wantPoint)
 			}
 		})
@@ -603,6 +603,17 @@ func settleRequests(actions []enginetest.Action) []device.SettleRequest {
 	return requests
 }
 
+// repeatedSelectorTapRequests is what a selector-derived tap sends: the point
+// and the flow's app id, so the driver can anchor the tap in the app's space.
+func repeatedSelectorTapRequests(point device.Point, count int) []device.TapRequest {
+	requests := make([]device.TapRequest, count)
+	for index := range requests {
+		requests[index] = device.TapRequest{Point: point, AppID: "com.example.tap-batch2"}
+	}
+	return requests
+}
+
+// repeatedTapRequests is what an authored screen point sends: no app id.
 func repeatedTapRequests(point device.Point, count int) []device.TapRequest {
 	requests := make([]device.TapRequest, count)
 	for index := range requests {

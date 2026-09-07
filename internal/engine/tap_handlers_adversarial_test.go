@@ -107,7 +107,7 @@ func TestTapBatch2StabilityExactTracesAndSingleResolutionPerBatch(t *testing.T) 
 		if got := countTapDriverMethod(driver.Actions(), enginetest.MethodContentDescriptor); got != 4 {
 			t.Fatalf("descriptor calls = %d, want one lookup plus one three-poll stability resolution", got)
 		}
-		if got, want := tapRequests(driver.Actions()), repeatedTapRequests(device.Point{X: 40, Y: 30}, 3); !reflect.DeepEqual(got, want) {
+		if got, want := tapRequests(driver.Actions()), repeatedSelectorTapRequests(device.Point{X: 40, Y: 30}, 3); !reflect.DeepEqual(got, want) {
 			t.Fatalf("repeat taps = %#v, want one resolved stable point %#v", got, want)
 		}
 	})
@@ -138,7 +138,7 @@ func TestTapBatch2StabilityExactTracesAndSingleResolutionPerBatch(t *testing.T) 
 		if got := countTapDriverMethod(driver.Actions(), enginetest.MethodContentDescriptor); got != 31 {
 			t.Fatalf("descriptor calls = %d, want lookup plus 30 polls", got)
 		}
-		if got, want := tapRequests(driver.Actions()), []device.TapRequest{{Point: device.Point{X: 40, Y: 30}}}; !reflect.DeepEqual(got, want) {
+		if got, want := tapRequests(driver.Actions()), repeatedSelectorTapRequests(device.Point{X: 40, Y: 30}, 1); !reflect.DeepEqual(got, want) {
 			t.Fatalf("last-known tap = %#v, want %#v", got, want)
 		}
 	})

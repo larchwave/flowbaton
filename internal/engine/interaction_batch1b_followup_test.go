@@ -101,7 +101,7 @@ func TestInteractionBatch1BFromTimingStabilityAndFailures(t *testing.T) {
 		if err != nil {
 			t.Fatalf("appearing target error = %v", err)
 		}
-		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 40, Y: 55}, "RIGHT", 400))
+		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 40, Y: 55}, "RIGHT", 400, "com.example.batch1a"))
 	})
 
 	t.Run("interaction adjusted required deadline", func(t *testing.T) {
@@ -129,7 +129,7 @@ func TestInteractionBatch1BFromTimingStabilityAndFailures(t *testing.T) {
 		if err != nil {
 			t.Fatalf("moving target error = %v", err)
 		}
-		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 120, Y: 230}, "RIGHT", 400))
+		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 120, Y: 230}, "RIGHT", 400, "com.example.batch1a"))
 	})
 
 	t.Run("ambiguous refresh retains latest refreshable bounds", func(t *testing.T) {
@@ -143,7 +143,7 @@ func TestInteractionBatch1BFromTimingStabilityAndFailures(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ambiguous refresh error = %v", err)
 		}
-		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 60, Y: 70}, "RIGHT", 400))
+		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 60, Y: 70}, "RIGHT", 400, "com.example.batch1a"))
 	})
 
 	t.Run("stability timeout uses latest refreshable owned bounds", func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestInteractionBatch1BFromTimingStabilityAndFailures(t *testing.T) {
 		if got := sumBatch1ADurations(clock.waits); got != ElementStabilityTimeout {
 			t.Fatalf("stability waits = %v, want %v", got, ElementStabilityTimeout)
 		}
-		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 40, Y: 30}, "RIGHT", 400))
+		assertBatch1BSwipeAndSettle(t, driver, swipeElementRequest(device.Point{X: 40, Y: 30}, "RIGHT", 400, "com.example.batch1a"))
 	})
 
 	for _, test := range []struct {
@@ -324,12 +324,12 @@ func TestInteractionBatch1BHandlerOwnsSettleAndRequestUnion(t *testing.T) {
 	requests := []device.SwipeRequest{
 		ownedSwipeDirectionRequest("UP", 400),
 		ownedSwipePointRequest(device.Point{X: 1, Y: 2}, device.Point{X: 3, Y: 4}, 1),
-		ownedSwipeElementRequest(device.Point{X: 5, Y: 6}, "LEFT", 60000),
+		ownedSwipeElementRequest(device.Point{X: 5, Y: 6}, "LEFT", 60000, "com.example.swipe"),
 	}
 	want := []device.SwipeRequest{
 		{Direction: "UP", DurationMillis: 400},
 		swipePointRequest(device.Point{X: 1, Y: 2}, device.Point{X: 3, Y: 4}, 1),
-		swipeElementRequest(device.Point{X: 5, Y: 6}, "LEFT", 60000),
+		swipeElementRequest(device.Point{X: 5, Y: 6}, "LEFT", 60000, "com.example.swipe"),
 	}
 	if !reflect.DeepEqual(requests, want) {
 		t.Fatalf("exact request union = %#v, want %#v", requests, want)

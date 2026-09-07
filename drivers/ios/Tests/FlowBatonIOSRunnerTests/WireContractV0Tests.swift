@@ -7,7 +7,7 @@ final class WireContractV0Tests: XCTestCase {
     XCTAssertEqual(IOSWireContractV0.contractVersion, "v0")
     XCTAssertEqual(
       IOSWireContractV0.descriptorSHA256,
-      "352b5136f165510a741cb2277e09cc5b3c4c540c5d32b3c2429d6bf07a721f3a")
+      "c95bf28462061c5f92e6f239eac85da3f23e756103ca9c2dddf3c48fec2e2f80")
     XCTAssertEqual(IOSWireContractV0.bindHost, "127.0.0.1")
     XCTAssertEqual(IOSWireContractV0.defaultPort, 22_087)
     XCTAssertEqual(
@@ -65,7 +65,10 @@ final class WireContractV0Tests: XCTestCase {
           fields: [field("text", "string"), field("appIds", "array<string>")]),
         schema(
           "TouchRequest", "object", required: ["x", "y"],
-          fields: [field("x", "number"), field("y", "number"), field("duration", "number")]),
+          fields: [
+            field("x", "number"), field("y", "number"), field("duration", "number"),
+            field("appId", "string"),
+          ]),
         schema("ScreenshotQuery", "object", fields: [field("compressed", "boolean")]),
         schema(
           "ScreenStaticResponse", "object", required: ["isScreenStatic"],

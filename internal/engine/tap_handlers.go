@@ -510,7 +510,7 @@ func executeResolvedTapBatch(
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if err := state.dependencies.Driver.Tap(ctx, device.TapRequest{Point: point}); err != nil {
+		if err := state.dependencies.Driver.Tap(ctx, device.TapRequest{Point: point, AppID: elementAppID(plan.appID, plan.targetMode)}); err != nil {
 			if cancellation := ctx.Err(); cancellation != nil {
 				return nil, cancellation
 			}
@@ -571,6 +571,17 @@ func validateTapExecutionPlan(plan tapOnEvaluated) error {
 		return NewConfigurationError("tapOn point-only plan cannot observe waitUntilVisible", nil)
 	}
 	return nil
+}
+
+// elementAppID names the application a gesture point was read from, so the
+// driver can anchor the gesture in that application's coordinate space (iOS
+// issues #15 and #17). An authored screen point stays in screen space and
+// names no application.
+func elementAppID(appID string, mode tapTargetMode) string {
+	if mode == tapTargetScreenPoint {
+		return ""
+	}
+	return appID
 }
 
 func resolveTapPoint(

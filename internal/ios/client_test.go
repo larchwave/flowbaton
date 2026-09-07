@@ -86,6 +86,15 @@ func routeCases() []routeCase {
 			wantBody:   map[string]any{"x": 10.0, "y": 20.0, "duration": 1.5},
 		},
 		{
+			name: "touch with an app id anchors the point in that app",
+			call: func(ctx context.Context, client *Client) error {
+				return client.Touch(ctx, TouchRequest{X: 10, Y: 20, AppID: "com.example.a"})
+			},
+			wantMethod: http.MethodPost,
+			wantPath:   "/touch",
+			wantBody:   map[string]any{"x": 10.0, "y": 20.0, "appId": "com.example.a"},
+		},
+		{
 			name: "touch without a duration omits it",
 			call: func(ctx context.Context, client *Client) error {
 				return client.Touch(ctx, TouchRequest{X: 10, Y: 20})

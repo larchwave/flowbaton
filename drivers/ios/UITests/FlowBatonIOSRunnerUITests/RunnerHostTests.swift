@@ -199,13 +199,14 @@ final class RunnerHostTests: XCTestCase {
       marker.frame.y, info.heightPoints, "the end marker must start below the screen")
 
     // The host's ScrollVertical: a drag half the screen tall through the
-    // start point, here the link itself.
+    // start point, here the link itself, anchored on the app the point came
+    // from.
     let startX = link.frame.x + link.frame.width / 2
     let startY = link.frame.y + link.frame.height / 2
     try automation.swipeV2(
       startX: startX, startY: startY,
       endX: startX, endY: startY - info.heightPoints / 2,
-      duration: 0.5, appIDs: [])
+      duration: 0.5, appIDs: [Self.settleFixtureID])
 
     var tree = try Self.appTree(automation)
     for _ in 0..<20 {
@@ -263,6 +264,30 @@ final class RunnerHostTests: XCTestCase {
       "tapping Continue after the rotation did not reveal the confirmation")
   }
 
+  /// testATapOnAnAppAlertButtonRunsThatAction pins issue #17 on the device:
+  /// a tap at the centre of a button inside the app's own alert, anchored on
+  /// the app, runs that button's action. Anchored on the springboard the same
+  /// point closed the alert and landed on the view beneath it.
+  func testATapOnAnAppAlertButtonRunsThatAction() throws {
+    guard ProcessInfo.processInfo.environment[Self.settleFixtureVariable] == "1" else {
+      throw XCTSkip("set \(Self.settleFixtureVariable)=1 once the settle fixture is installed")
+    }
+    let automation = XCUITestAutomation()
+    try automation.launchApp(bundleID: Self.settleFixtureID)
+    defer { try? automation.terminateApp(appID: Self.settleFixtureID) }
+    let show = try XCTUnwrap(
+      try Self.waitFor("fixture.alert.show", automation),
+      "the alert's trigger is not in the hierarchy")
+    try Self.tap(show, automation)
+    let end = try XCTUnwrap(
+      try Self.waitFor(label: "End without saving", automation),
+      "the alert's destructive button is not in the hierarchy")
+    try Self.tap(end, automation)
+    XCTAssertNotNil(
+      try Self.waitFor("fixture.alert.ended", automation),
+      "the alert's action did not run: the tap landed somewhere else")
+  }
+
   /// waitForLandscape polls deviceInfo for up to five seconds while the
   /// rotation animates, and returns the last reading either way.
   private static func waitForLandscape(_ automation: XCUITestAutomation) throws
@@ -280,7 +305,7 @@ final class RunnerHostTests: XCTestCase {
     try automation.touch(
       x: element.frame.x + element.frame.width / 2,
       y: element.frame.y + element.frame.height / 2,
-      duration: nil)
+      duration: nil, appID: settleFixtureID)
   }
 
   /// waitFor polls the fixture's tree for an identifier for up to five seconds.
@@ -292,6 +317,32 @@ final class RunnerHostTests: XCTestCase {
         return found
       }
       Thread.sleep(forTimeInterval: 0.25)
+    }
+    return nil
+  }
+
+  /// waitFor(label:) is waitFor for an element that has a label but no
+  /// identifier, such as the buttons of a SwiftUI alert.
+  private static func waitFor(label: String, _ automation: XCUITestAutomation) throws
+    -> WireAXElement?
+  {
+    for _ in 0..<20 {
+      if let found = element(labelled: label, in: try appTree(automation)) {
+        return found
+      }
+      Thread.sleep(forTimeInterval: 0.25)
+    }
+    return nil
+  }
+
+  private static func element(labelled label: String, in root: WireAXElement) -> WireAXElement? {
+    if root.label == label {
+      return root
+    }
+    for child in root.children ?? [] {
+      if let found = element(labelled: label, in: child) {
+        return found
+      }
     }
     return nil
   }

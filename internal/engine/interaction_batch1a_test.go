@@ -132,16 +132,22 @@ func TestInteractionBatch1ATargetGrammarLateEvaluationAndStability(t *testing.T)
 			if effect.effectClass != EffectDeviceMutation {
 				t.Fatalf("effect class = %v, want device mutation", effect.effectClass)
 			}
+			// A point read from an element names the app it came from; an
+			// authored screen point names none (iOS issues #15 and #17).
+			wantAppID := "com.example.batch1a"
+			if test.command.Selector == nil || (test.command.Selector.TextRegex == nil && test.command.Selector.IDRegex == nil) {
+				wantAppID = ""
+			}
 			switch test.command.Kind {
 			case model.CommandDoubleTapOn:
 				requests := tapRequests(test.driver.Actions())
-				want := []device.TapRequest{{Point: test.wantPoint}, {Point: test.wantPoint}}
+				want := []device.TapRequest{{Point: test.wantPoint, AppID: wantAppID}, {Point: test.wantPoint, AppID: wantAppID}}
 				if !reflect.DeepEqual(requests, want) {
 					t.Fatalf("Tap requests = %#v, want %#v", requests, want)
 				}
 			case model.CommandLongPressOn:
 				requests := batch1ALongPressRequests(test.driver.Actions())
-				want := []device.LongPressRequest{{Point: test.wantPoint, DurationMillis: 3000}}
+				want := []device.LongPressRequest{{Point: test.wantPoint, DurationMillis: 3000, AppID: wantAppID}}
 				if !reflect.DeepEqual(requests, want) {
 					t.Fatalf("LongPress requests = %#v, want %#v", requests, want)
 				}

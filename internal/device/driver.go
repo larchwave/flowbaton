@@ -168,13 +168,19 @@ type AppRequest struct {
 	AppID string `json:"app_id"`
 }
 
+// TapRequest taps a point. AppID names the application whose hierarchy the
+// point was taken from, so a driver can anchor it in that application's
+// coordinate space; an authored screen point leaves it empty.
 type TapRequest struct {
-	Point Point `json:"point"`
+	Point Point  `json:"point"`
+	AppID string `json:"app_id,omitempty"`
 }
 
+// LongPressRequest holds a point; AppID has the meaning it has on TapRequest.
 type LongPressRequest struct {
-	Point          Point `json:"point"`
-	DurationMillis int64 `json:"duration_millis"`
+	Point          Point  `json:"point"`
+	DurationMillis int64  `json:"duration_millis"`
+	AppID          string `json:"app_id,omitempty"`
 }
 
 type PressKeyRequest struct {
@@ -187,10 +193,14 @@ type ContentDescriptorRequest struct {
 	ExcludeKeyboardElements bool     `json:"exclude_keyboard_elements"`
 }
 
+// ScrollVerticalRequest scrolls by a fraction of the screen. AppIDs, set
+// only with ElementPoint, names the application whose hierarchy the point
+// came from, so a driver can anchor the drag in that application's space.
 type ScrollVerticalRequest struct {
 	Direction    Direction `json:"direction"`
 	Amount       float64   `json:"amount"`
 	ElementPoint *Point    `json:"element_point,omitempty"`
+	AppIDs       []string  `json:"app_ids,omitempty"`
 }
 
 type KeyboardRequest struct {
@@ -205,6 +215,8 @@ type SwipeRequest struct {
 	Direction      Direction `json:"direction,omitempty"`
 	ElementPoint   *Point    `json:"element_point,omitempty"`
 	DurationMillis int64     `json:"duration_millis"`
+	// AppIDs has the meaning it has on ScrollVerticalRequest.
+	AppIDs []string `json:"app_ids,omitempty"`
 }
 
 type InputTextRequest struct {

@@ -84,7 +84,7 @@ public enum IOSWireContractV0 {
   public static let schemaVersion = 1
   public static let contractVersion = "v0"
   public static let descriptorSHA256 =
-    "352b5136f165510a741cb2277e09cc5b3c4c540c5d32b3c2429d6bf07a721f3a"
+    "c95bf28462061c5f92e6f239eac85da3f23e756103ca9c2dddf3c48fec2e2f80"
   public static let semanticManifest = [
     "descriptor|1|v0",
     "transport|http|127.0.0.1|22087",
@@ -295,6 +295,7 @@ public enum IOSWireContractV0 {
     "schema|TouchRequest|object",
     "schema-required|TouchRequest|0|x",
     "schema-required|TouchRequest|1|y",
+    "schema-field|TouchRequest|appId|string",
     "schema-field|TouchRequest|duration|number",
     "schema-field|TouchRequest|x|number",
     "schema-field|TouchRequest|y|number",
@@ -367,7 +368,10 @@ public enum IOSWireContractV0 {
       fields: [field("text", "string"), field("appIds", "array<string>")]),
     schema(
       "TouchRequest", "object", required: ["x", "y"],
-      fields: [field("x", "number"), field("y", "number"), field("duration", "number")]),
+      fields: [
+        field("x", "number"), field("y", "number"), field("duration", "number"),
+        field("appId", "string"),
+      ]),
     schema("ScreenshotQuery", "object", fields: [field("compressed", "boolean")]),
     schema(
       "ScreenStaticResponse", "object", required: ["isScreenStatic"],

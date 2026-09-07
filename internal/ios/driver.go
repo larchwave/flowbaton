@@ -304,8 +304,14 @@ func (driver *Driver) ClearKeychain(ctx context.Context) error {
 	return driver.simctl.ResetKeychain(ctx)
 }
 
+// Tap forwards the point and, for an element-derived point, the application it
+// was read from: the runner then anchors the touch in that application's
+// coordinate space rather than the screen's, which differ inside an iPhone
+// compatibility window on iPad and while an app-owned alert is up (issues
+// #15 and #17). An authored screen point carries no app and stays in screen
+// space.
 func (driver *Driver) Tap(ctx context.Context, request device.TapRequest) error {
-	return driver.client.Touch(ctx, TouchRequest{X: request.Point.X, Y: request.Point.Y})
+	return driver.client.Touch(ctx, TouchRequest{X: request.Point.X, Y: request.Point.Y, AppID: request.AppID})
 }
 
 // LongPress sends the same route with a duration. TouchRequest.Duration is a
@@ -314,7 +320,7 @@ func (driver *Driver) Tap(ctx context.Context, request device.TapRequest) error 
 func (driver *Driver) LongPress(ctx context.Context, request device.LongPressRequest) error {
 	seconds := float64(request.DurationMillis) / 1000
 	return driver.client.Touch(ctx, TouchRequest{
-		X: request.Point.X, Y: request.Point.Y, Duration: &seconds,
+		X: request.Point.X, Y: request.Point.Y, Duration: &seconds, AppID: request.AppID,
 	})
 }
 
@@ -462,8 +468,13 @@ func (driver *Driver) ScrollVertical(ctx context.Context, request device.ScrollV
 		amount = 0.5
 	}
 	centerX, centerY := info.WidthPoints/2, info.HeightPoints/2
+	// An element point is in the app's own coordinate space, so the drag is
+	// anchored there; a screen-centre drag names no app and stays in screen
+	// space (issue #15).
+	var appIDs []string
 	if request.ElementPoint != nil {
 		centerX, centerY = request.ElementPoint.X, request.ElementPoint.Y
+		appIDs = request.AppIDs
 	}
 	travel := info.HeightPoints * amount / 2
 	// Scrolling down means dragging content up.
@@ -474,6 +485,7 @@ func (driver *Driver) ScrollVertical(ctx context.Context, request device.ScrollV
 		StartX: centerX, StartY: centerY - travel,
 		EndX: centerX, EndY: centerY + travel,
 		Duration: defaultSwipeSeconds,
+		AppIDs:   appIDs,
 	})
 }
 
@@ -520,8 +532,10 @@ func (driver *Driver) Swipe(ctx context.Context, request device.SwipeRequest) er
 		return err
 	}
 	start := device.Point{X: info.WidthPoints / 2, Y: info.HeightPoints / 2}
+	var appIDs []string
 	if request.ElementPoint != nil {
 		start = *request.ElementPoint
+		appIDs = request.AppIDs
 	}
 	end, err := swipeGridEnd(request.Direction, start, info.WidthPoints, info.HeightPoints)
 	if err != nil {
@@ -531,6 +545,7 @@ func (driver *Driver) Swipe(ctx context.Context, request device.SwipeRequest) er
 		StartX: start.X, StartY: start.Y,
 		EndX: end.X, EndY: end.Y,
 		Duration: duration,
+		AppIDs:   appIDs,
 	})
 }
 

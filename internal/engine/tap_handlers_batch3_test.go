@@ -221,10 +221,9 @@ func TestTapBatch3RetryReResolvesSelectorPointPerBatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	want := []device.TapRequest{
-		{Point: device.Point{X: 20, Y: 30}}, {Point: device.Point{X: 20, Y: 30}}, {Point: device.Point{X: 20, Y: 30}},
-		{Point: device.Point{X: 60, Y: 70}}, {Point: device.Point{X: 60, Y: 70}}, {Point: device.Point{X: 60, Y: 70}},
-	}
+	want := append(
+		repeatedSelectorTapRequests(device.Point{X: 20, Y: 30}, 3),
+		repeatedSelectorTapRequests(device.Point{X: 60, Y: 70}, 3)...)
 	if got := tapRequests(driver.Actions()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tap points = %#v, want fresh batch points %#v", got, want)
 	}

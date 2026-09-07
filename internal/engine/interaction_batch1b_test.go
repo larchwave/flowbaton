@@ -111,7 +111,7 @@ func TestInteractionBatch1BDirectionCoordinateAndElementRequests(t *testing.T) {
 		{name: "spaced points", command: swipeCommand(map[string]any{"start": " 0, 1 ", "end": "399 ,883", "waitToSettleTimeoutMs": int64(0)}, nil), driver: batch1APointDriver(400, 884), want: swipePointRequest(device.Point{X: 0, Y: 1}, device.Point{X: 399, Y: 883}, 400)},
 		{name: "spaced percentages", command: swipeCommand(map[string]any{"start": "50%, 80%", "end": "50%, 24%", "waitToSettleTimeoutMs": int64(0)}, nil), driver: batch1APointDriver(400, 884), want: swipePointRequest(device.Point{X: 200, Y: 707}, device.Point{X: 200, Y: 212}, 400)},
 		{name: "late percentage floor", command: swipeCommand(map[string]any{"start": "${START}", "end": "${END}", "waitToSettleTimeoutMs": int64(0)}, nil), replacements: map[string]string{"START": "50%,36%", "END": "99%,99%"}, driver: batch1APointDriver(400, 884), want: swipePointRequest(device.Point{X: 200, Y: 318}, device.Point{X: 396, Y: 875}, 400)},
-		{name: "moving element latest center", command: swipeCommand(map[string]any{"from": map[string]any{"text": "${TARGET}"}, "direction": "RIGHT", "waitToSettleTimeoutMs": int64(0)}, swipeSelector("${TARGET}", nil)), replacements: map[string]string{"TARGET": "Continue"}, driver: batch1ASelectorDriver(device.Bounds{X: 10, Y: 20, Width: 20, Height: 20}, device.Bounds{X: 100, Y: 200, Width: 40, Height: 60}, device.Bounds{X: 100, Y: 200, Width: 40, Height: 60}), want: swipeElementRequest(device.Point{X: 120, Y: 230}, "RIGHT", 400)},
+		{name: "moving element latest center", command: swipeCommand(map[string]any{"from": map[string]any{"text": "${TARGET}"}, "direction": "RIGHT", "waitToSettleTimeoutMs": int64(0)}, swipeSelector("${TARGET}", nil)), replacements: map[string]string{"TARGET": "Continue"}, driver: batch1ASelectorDriver(device.Bounds{X: 10, Y: 20, Width: 20, Height: 20}, device.Bounds{X: 100, Y: 200, Width: 40, Height: 60}, device.Bounds{X: 100, Y: 200, Width: 40, Height: 60}), want: swipeElementRequest(device.Point{X: 120, Y: 230}, "RIGHT", 400, "com.example.batch1a")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			clock := newAdvancingClock()
@@ -487,8 +487,8 @@ func swipePointRequest(start, end device.Point, duration int64) device.SwipeRequ
 	return device.SwipeRequest{Start: &start, End: &end, DurationMillis: duration}
 }
 
-func swipeElementRequest(point device.Point, direction device.Direction, duration int64) device.SwipeRequest {
-	return device.SwipeRequest{ElementPoint: &point, Direction: direction, DurationMillis: duration}
+func swipeElementRequest(point device.Point, direction device.Direction, duration int64, appID string) device.SwipeRequest {
+	return device.SwipeRequest{ElementPoint: &point, Direction: direction, DurationMillis: duration, AppIDs: []string{appID}}
 }
 
 func swipeRequests(actions []enginetest.Action) []device.SwipeRequest {
@@ -546,7 +546,7 @@ func TestInteractionBatch1BRequestUnionPureHelper(t *testing.T) {
 	requests := []device.SwipeRequest{
 		ownedSwipeDirectionRequest("UP", 400),
 		ownedSwipePointRequest(device.Point{X: 1, Y: 2}, device.Point{X: 3, Y: 4}, 1),
-		ownedSwipeElementRequest(device.Point{X: 5, Y: 6}, "LEFT", 60000),
+		ownedSwipeElementRequest(device.Point{X: 5, Y: 6}, "LEFT", 60000, "com.example.swipe"),
 	}
 	if requests[0].Direction != "UP" || requests[0].Start != nil || requests[0].End != nil || requests[0].ElementPoint != nil ||
 		requests[1].Direction != "" || requests[1].Start == nil || requests[1].End == nil || requests[1].ElementPoint != nil ||

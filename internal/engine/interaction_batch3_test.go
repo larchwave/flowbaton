@@ -314,10 +314,10 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 		{name: "omitted", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}},
 		{name: "false", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: false},
 		{name: "zero amount", bounds: device.Bounds{Y: 40, Width: 100, Height: 20}, center: true},
-		{name: "below midpoint maps down", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.4, ElementPoint: &device.Point{X: 50, Y: 90}}},
-		{name: "above midpoint maps up", bounds: device.Bounds{Y: -20, Width: 100, Height: 40}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 0.5, ElementPoint: &device.Point{X: 50, Y: 0}}},
-		{name: "half-pixel center remains exact", bounds: device.Bounds{X: 1, Y: 75, Width: 99, Height: 31}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.405, ElementPoint: &device.Point{X: 50.5, Y: 90.5}}},
-		{name: "amount capped", bounds: device.Bounds{Width: 100, Height: 1000}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 1, ElementPoint: &device.Point{X: 50, Y: 500}}},
+		{name: "below midpoint maps down", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.4, ElementPoint: &device.Point{X: 50, Y: 90}, AppIDs: []string{"com.example.batch3"}}},
+		{name: "above midpoint maps up", bounds: device.Bounds{Y: -20, Width: 100, Height: 40}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 0.5, ElementPoint: &device.Point{X: 50, Y: 0}, AppIDs: []string{"com.example.batch3"}}},
+		{name: "half-pixel center remains exact", bounds: device.Bounds{X: 1, Y: 75, Width: 99, Height: 31}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.405, ElementPoint: &device.Point{X: 50.5, Y: 90.5}, AppIDs: []string{"com.example.batch3"}}},
+		{name: "amount capped", bounds: device.Bounds{Width: 100, Height: 1000}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 1, ElementPoint: &device.Point{X: 50, Y: 500}, AppIDs: []string{"com.example.batch3"}}},
 	}
 	for _, test := range tests {
 		test := test

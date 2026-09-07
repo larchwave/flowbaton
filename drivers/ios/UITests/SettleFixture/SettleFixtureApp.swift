@@ -20,6 +20,8 @@ struct SettleFixtureApp: App {
 
 struct SettleFixtureScreen: View {
   @State private var continued = false
+  @State private var confirmingEnd = false
+  @State private var ended = false
 
   var body: some View {
     if continued {
@@ -32,7 +34,23 @@ struct SettleFixtureScreen: View {
         DecorativeWaveform()
           .frame(height: 160)
           .accessibilityHidden(true)
+        if ended {
+          Text("Session ended")
+            .accessibilityIdentifier("fixture.alert.ended")
+        }
         Spacer()
+        // An app-owned alert with a destructive action, the shape of issue
+        // #17: a tap on its button must run that action, not land beneath it.
+        Button("End session") {
+          confirmingEnd = true
+        }
+        .accessibilityIdentifier("fixture.alert.show")
+        .alert("End this session?", isPresented: $confirmingEnd) {
+          Button("End without saving", role: .destructive) {
+            ended = true
+          }
+          Button("Keep going", role: .cancel) {}
+        }
         Button("Continue") {
           continued = true
         }

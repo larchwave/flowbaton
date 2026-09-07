@@ -17,8 +17,10 @@ public protocol DeviceAutomation: Sendable {
     startX: Double, startY: Double, endX: Double, endY: Double, duration: Double, appIDs: [String])
     throws
   func inputText(_ text: String, appIDs: [String]) throws
-  /// A nil duration is a tap; a present one is a long press.
-  func touch(x: Double, y: Double, duration: Double?) throws
+  /// A nil duration is a tap; a present one is a long press. A present appID
+  /// anchors the point in that application's coordinate space; nil anchors it
+  /// on the screen.
+  func touch(x: Double, y: Double, duration: Double?, appID: String?) throws
   func screenshot(compressed: Bool) throws -> Data
   func isScreenStatic() throws -> Bool
   func pressKey(_ key: String, appIDs: [String]) throws

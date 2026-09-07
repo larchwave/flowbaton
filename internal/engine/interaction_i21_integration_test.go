@@ -226,7 +226,7 @@ func TestInteractionI21GesturesExactModesSettleAndOwnership(t *testing.T) {
 		{Direction: "RIGHT", DurationMillis: 404},
 		swipePointRequest(device.Point{X: 10, Y: 20}, device.Point{X: 90, Y: 80}, 405),
 		swipePointRequest(device.Point{X: 40, Y: 176}, device.Point{X: 360, Y: 707}, 406),
-		swipeElementRequest(device.Point{X: 140, Y: 260}, "LEFT", 407),
+		swipeElementRequest(device.Point{X: 140, Y: 260}, "LEFT", 407, "com.example.g003.i21.gestures"),
 	}
 	if !reflect.DeepEqual(requests, want) {
 		t.Fatalf("gesture swipe requests = %#v, want %#v", requests, want)

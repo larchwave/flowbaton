@@ -110,7 +110,8 @@
     ]},
     {"name":"LongPressRequest","fields":[
       {"name":"Point","go_type":"Point","json_name":"point","omit_empty":false},
-      {"name":"DurationMillis","go_type":"int64","json_name":"duration_millis","omit_empty":false}
+      {"name":"DurationMillis","go_type":"int64","json_name":"duration_millis","omit_empty":false},
+      {"name":"AppID","go_type":"string","json_name":"app_id","omit_empty":true}
     ]},
     {"name":"MediaFile","fields":[{"name":"Path","go_type":"string","json_name":"path","omit_empty":false}]},
     {"name":"OpenLinkRequest","fields":[
@@ -145,7 +146,8 @@
     {"name":"ScrollVerticalRequest","fields":[
       {"name":"Direction","go_type":"Direction","json_name":"direction","omit_empty":false},
       {"name":"Amount","go_type":"float64","json_name":"amount","omit_empty":false},
-      {"name":"ElementPoint","go_type":"*Point","json_name":"element_point","omit_empty":true}
+      {"name":"ElementPoint","go_type":"*Point","json_name":"element_point","omit_empty":true},
+      {"name":"AppIDs","go_type":"[]string","json_name":"app_ids","omit_empty":true}
     ]},
     {"name":"SettleRequest","fields":[
       {"name":"InitialHierarchy","go_type":"*ViewHierarchy","json_name":"initial_hierarchy","omit_empty":true},
@@ -157,9 +159,13 @@
       {"name":"End","go_type":"*Point","json_name":"end","omit_empty":true},
       {"name":"Direction","go_type":"Direction","json_name":"direction","omit_empty":true},
       {"name":"ElementPoint","go_type":"*Point","json_name":"element_point","omit_empty":true},
-      {"name":"DurationMillis","go_type":"int64","json_name":"duration_millis","omit_empty":false}
+      {"name":"DurationMillis","go_type":"int64","json_name":"duration_millis","omit_empty":false},
+      {"name":"AppIDs","go_type":"[]string","json_name":"app_ids","omit_empty":true}
     ]},
-    {"name":"TapRequest","fields":[{"name":"Point","go_type":"Point","json_name":"point","omit_empty":false}]},
+    {"name":"TapRequest","fields":[
+      {"name":"Point","go_type":"Point","json_name":"point","omit_empty":false},
+      {"name":"AppID","go_type":"string","json_name":"app_id","omit_empty":true}
+    ]},
     {"name":"TreeNode","fields":[
       {"name":"Attributes","go_type":"map[string]string","json_name":"attributes","omit_empty":false},
       {"name":"Children","go_type":"[]TreeNode","json_name":"children","omit_empty":true},
