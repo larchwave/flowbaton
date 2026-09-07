@@ -344,13 +344,22 @@ func (driver *Driver) ScrollVertical(ctx context.Context, request device.ScrollV
 	if amount == 0 {
 		amount = 1
 	}
-	sign := "1"
-	if strings.EqualFold(string(request.Direction), "UP") {
-		sign = "-1"
+	horizontal, forward, err := device.ScrollAxis(request.Direction)
+	if err != nil {
+		return err
 	}
-	expression := fmt.Sprintf(
-		`(function(){window.scrollBy(0, %s * %s * (window.innerHeight||600)); return "";})()`,
-		sign, strconv.FormatFloat(amount, 'f', -1, 64))
+	sign := "-1"
+	if forward {
+		sign = "1"
+	}
+	// scrollBy(x, y): the authored axis gets the signed distance, the other 0.
+	delta := fmt.Sprintf("%s * %s * (window.innerHeight||600)", sign, strconv.FormatFloat(amount, 'f', -1, 64))
+	arguments := "0, " + delta
+	if horizontal {
+		delta = fmt.Sprintf("%s * %s * (window.innerWidth||800)", sign, strconv.FormatFloat(amount, 'f', -1, 64))
+		arguments = delta + ", 0"
+	}
+	expression := fmt.Sprintf(`(function(){window.scrollBy(%s); return "";})()`, arguments)
 	return connection.evaluate(ctx, expression, nil)
 }
 

@@ -21,6 +21,7 @@ type pageState struct {
 	keys       []map[string]any
 	navigated  string
 	scrolled   bool
+	scrollCall string
 }
 
 func newDriverUnderTest(t *testing.T, page *pageState) (*Driver, *pageState) {
@@ -71,13 +72,14 @@ func evaluateFake(page *pageState, expression string) map[string]any {
 		return value(page.hierarchy)
 	case strings.Contains(expression, "document.readyState"):
 		return value(page.readyState)
+	case strings.Contains(expression, "scrollBy"):
+		page.scrolled = true
+		page.scrollCall = expression
+		return value("")
 	case strings.Contains(expression, "innerWidth"):
 		return map[string]any{"result": map[string]any{
 			"type": "object", "value": map[string]any{"width": 1024, "height": 768},
 		}}
-	case strings.Contains(expression, "scrollBy"):
-		page.scrolled = true
-		return value("")
 	case strings.Contains(expression, "history.back"):
 		page.navigated = "back"
 		return value("")
@@ -377,5 +379,43 @@ func TestDriverStopAppStillRefusesAMobileAppID(t *testing.T) {
 	err := driver.StopApp(context.Background(), device.AppRequest{AppID: "com.example.app"})
 	if !errors.Is(err, device.ErrUnsupported) {
 		t.Fatalf("StopApp(bundle id) error = %v, want device.ErrUnsupported", err)
+	}
+}
+
+func TestScrollVerticalScrollsAlongTheAuthoredAxis(t *testing.T) {
+	t.Parallel()
+
+	// RIGHT mirrors DOWN (issue #19): a positive X scroll reveals what lies to
+	// the right; the other axis stays at zero.
+	for _, test := range []struct {
+		direction device.Direction
+		want      string
+	}{
+		{"UP", "window.scrollBy(0, -1 * 0.5 * (window.innerHeight||600))"},
+		{"DOWN", "window.scrollBy(0, 1 * 0.5 * (window.innerHeight||600))"},
+		{"LEFT", "window.scrollBy(-1 * 0.5 * (window.innerWidth||800), 0)"},
+		{"RIGHT", "window.scrollBy(1 * 0.5 * (window.innerWidth||800), 0)"},
+	} {
+		t.Run(string(test.direction), func(t *testing.T) {
+			t.Parallel()
+			driver, page := newDriverUnderTest(t, &pageState{hierarchy: sampleHierarchy})
+			err := driver.ScrollVertical(context.Background(), device.ScrollVerticalRequest{
+				Direction: test.direction, Amount: 0.5,
+			})
+			if err != nil {
+				t.Fatalf("ScrollVertical(%s) error = %v", test.direction, err)
+			}
+			if !strings.Contains(page.scrollCall, test.want) {
+				t.Fatalf("scroll expression = %q, want it to contain %q", page.scrollCall, test.want)
+			}
+		})
+	}
+
+	driver, page := newDriverUnderTest(t, &pageState{hierarchy: sampleHierarchy})
+	if err := driver.ScrollVertical(context.Background(), device.ScrollVerticalRequest{Direction: "DIAGONAL"}); err == nil {
+		t.Fatal("ScrollVertical() accepted the direction DIAGONAL")
+	}
+	if page.scrolled {
+		t.Fatal("a refused direction still scrolled the page")
 	}
 }

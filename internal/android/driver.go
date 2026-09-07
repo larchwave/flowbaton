@@ -689,14 +689,28 @@ func (driver *Driver) ScrollVertical(ctx context.Context, request device.ScrollV
 	if request.ElementPoint != nil {
 		centerX, centerY = request.ElementPoint.X, request.ElementPoint.Y
 	}
-	travel := float64(info.HeightPixels) * amount / 2
-	// Scrolling down means dragging content up.
-	if strings.EqualFold(string(request.Direction), "down") {
+	horizontal, forward, err := device.ScrollAxis(request.Direction)
+	if err != nil {
+		return err
+	}
+	axis := float64(info.HeightPixels)
+	if horizontal {
+		axis = float64(info.WidthPixels)
+	}
+	travel := axis * amount / 2
+	// Scrolling down (or right) means dragging content up (or left).
+	if forward {
 		travel = -travel
 	}
+	startX, startY, endX, endY := centerX, centerY, centerX, centerY
+	if horizontal {
+		startX, endX = centerX-travel, centerX+travel
+	} else {
+		startY, endY = centerY-travel, centerY+travel
+	}
 	return driver.adb.Swipe(ctx,
-		int(math.Round(centerX)), int(math.Round(centerY-travel)),
-		int(math.Round(centerX)), int(math.Round(centerY+travel)),
+		int(math.Round(startX)), int(math.Round(startY)),
+		int(math.Round(endX)), int(math.Round(endY)),
 		defaultSwipeMillis)
 }
 

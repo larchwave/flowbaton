@@ -325,11 +325,32 @@ func (driver *Driver) LongPress(ctx context.Context, request device.LongPressReq
 }
 
 func (driver *Driver) PressKey(ctx context.Context, request device.PressKeyRequest) error {
+	if strings.EqualFold(string(request.Code), "HOME") {
+		return driver.pressHome(ctx)
+	}
 	key, ok := keyCodes[strings.ToLower(string(request.Code))]
 	if !ok {
 		return fmt.Errorf("%w: iOS has no key %q", device.ErrUnsupported, request.Code)
 	}
 	return driver.client.PressKey(ctx, key, driver.defaultAppIDs(request.AppIDs))
+}
+
+// pressHome is the device's home button (issue #21): the foreground app goes
+// to the background with its state intact, and `launchApp` with `stopApp:
+// false` brings it back. It is the runner's /pressButton route, not /pressKey,
+// which types on a keyboard. The launched app is forgotten afterwards because
+// it is no longer in front: a caller that names no app (a diagnostic, not a
+// flow: the engine keeps naming the flow's app and is refused with "not in
+// the foreground" until launchApp) then reads the home screen (see
+// defaultAppIDs).
+// LOCK and the volume buttons stay refused: the runner cannot press them on a
+// simulator.
+func (driver *Driver) pressHome(ctx context.Context) error {
+	if err := driver.client.PressButton(ctx, ButtonHome); err != nil {
+		return err
+	}
+	driver.rememberLaunch("")
+	return nil
 }
 
 // keyCodes are the keys the frozen contract's pressKey route accepts. A code
@@ -476,17 +497,30 @@ func (driver *Driver) ScrollVertical(ctx context.Context, request device.ScrollV
 		centerX, centerY = request.ElementPoint.X, request.ElementPoint.Y
 		appIDs = request.AppIDs
 	}
-	travel := info.HeightPoints * amount / 2
-	// Scrolling down means dragging content up.
-	if strings.EqualFold(string(request.Direction), "down") {
+	horizontal, forward, err := device.ScrollAxis(request.Direction)
+	if err != nil {
+		return err
+	}
+	axis := info.HeightPoints
+	if horizontal {
+		axis = info.WidthPoints
+	}
+	travel := axis * amount / 2
+	// Scrolling down (or right) means dragging content up (or left).
+	if forward {
 		travel = -travel
 	}
-	return driver.client.SwipeV2(ctx, SwipeV2Request{
-		StartX: centerX, StartY: centerY - travel,
-		EndX: centerX, EndY: centerY + travel,
+	swipe := SwipeV2Request{
+		StartX: centerX, StartY: centerY, EndX: centerX, EndY: centerY,
 		Duration: defaultSwipeSeconds,
 		AppIDs:   appIDs,
-	})
+	}
+	if horizontal {
+		swipe.StartX, swipe.EndX = centerX-travel, centerX+travel
+	} else {
+		swipe.StartY, swipe.EndY = centerY-travel, centerY+travel
+	}
+	return driver.client.SwipeV2(ctx, swipe)
 }
 
 // defaultSwipeSeconds is the ScrollVertical duration and the fallback for a

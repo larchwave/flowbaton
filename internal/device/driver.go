@@ -7,6 +7,8 @@ package device
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 )
 
 const ContractVersionV0 = "v0"
@@ -217,7 +219,9 @@ type ContentDescriptorRequest struct {
 	ExcludeKeyboardElements bool     `json:"exclude_keyboard_elements"`
 }
 
-// ScrollVerticalRequest scrolls by a fraction of the screen. AppIDs, set
+// ScrollVerticalRequest scrolls by a fraction of the screen along the axis
+// Direction names: DOWN and RIGHT reveal what lies below and to the right, UP
+// and LEFT what lies above and to the left (see ScrollAxis). AppIDs, set
 // only with ElementPoint, names the application whose hierarchy the point
 // came from, so a driver can anchor the drag in that application's space.
 type ScrollVerticalRequest struct {
@@ -225,6 +229,26 @@ type ScrollVerticalRequest struct {
 	Amount       float64   `json:"amount"`
 	ElementPoint *Point    `json:"element_point,omitempty"`
 	AppIDs       []string  `json:"app_ids,omitempty"`
+}
+
+// ScrollAxis reads a scroll direction: horizontal is LEFT or RIGHT, forward is
+// DOWN or RIGHT. A forward scroll moves the content against the direction (a
+// finger drag from bottom to top scrolls DOWN). The engine's scrollUntilVisible
+// course relies on RIGHT mirroring DOWN on the X axis; a direction outside the
+// four is refused rather than scrolled down by default (issue #19).
+func ScrollAxis(direction Direction) (horizontal, forward bool, err error) {
+	switch strings.ToUpper(string(direction)) {
+	case "UP":
+		return false, false, nil
+	case "DOWN":
+		return false, true, nil
+	case "LEFT":
+		return true, false, nil
+	case "RIGHT":
+		return true, true, nil
+	default:
+		return false, false, fmt.Errorf("%w: scroll direction %q is not UP, DOWN, LEFT or RIGHT", ErrUnsupported, direction)
+	}
 }
 
 type KeyboardRequest struct {

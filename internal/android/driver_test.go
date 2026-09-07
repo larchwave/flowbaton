@@ -1289,6 +1289,47 @@ func TestSwipeShapesLandOnInputSwipe(t *testing.T) {
 	}
 }
 
+func TestScrollVerticalDragsAlongTheAuthoredAxis(t *testing.T) {
+	t.Parallel()
+
+	// A 1000x2000 screen, default amount 0.5: a quarter of the axis either side
+	// of the centre. RIGHT mirrors DOWN (issue #19): the finger drags
+	// right-to-left to reveal what lies to the right.
+	for _, test := range []struct {
+		direction device.Direction
+		want      []string
+	}{
+		{"UP", []string{"500", "500", "500", "1500", "500"}},
+		{"DOWN", []string{"500", "1500", "500", "500", "500"}},
+		{"LEFT", []string{"250", "1000", "750", "1000", "500"}},
+		{"RIGHT", []string{"750", "1000", "250", "1000", "500"}},
+	} {
+		t.Run(string(test.direction), func(t *testing.T) {
+			t.Parallel()
+			driver, runner, _ := newOpenDriver(t, answerDeviceInfo(1000, 2000))
+			err := driver.ScrollVertical(context.Background(), device.ScrollVerticalRequest{Direction: test.direction})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := runner.calls[len(runner.calls)-1][1:]
+			want := append([]string{"-s", testSerial, "shell", "input", "swipe"}, test.want...)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("argv = %v, want %v", got, want)
+			}
+		})
+	}
+
+	driver, runner, _ := newOpenDriver(t, answerDeviceInfo(1000, 2000))
+	adbCalls := len(runner.calls)
+	err := driver.ScrollVertical(context.Background(), device.ScrollVerticalRequest{Direction: "SIDEWAYS"})
+	if !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("invented direction = %v, want an ErrUnsupported refusal", err)
+	}
+	if len(runner.calls) != adbCalls {
+		t.Fatal("a refused direction still swiped somewhere")
+	}
+}
+
 func TestOpenLinkForcesChromeOnlyWhenAsked(t *testing.T) {
 	t.Parallel()
 
