@@ -2042,3 +2042,39 @@ func writeFile(t *testing.T, path, content string) {
 		t.Fatalf("writing %s: %v", path, err)
 	}
 }
+
+// A segment far larger than the cap is streamed, not loaded: the merge must
+// stop at the cap without reading the rest of the file.
+func TestAStdioSegmentLargerThanTheCapIsStreamedNotLoaded(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	segment := filepath.Join(directory, "big.out")
+	file, err := os.Create(segment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A sparse file: 1 GiB on disk costs nothing, in memory it would.
+	if err := file.Truncate(1 << 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var merged strings.Builder
+	limiter := newIOSLogWriter(&merged, 64)
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	err = appendStdioSection(limiter, 1, "stdout", segment)
+	runtime.ReadMemStats(&after)
+	if !errors.Is(err, errIOSDeviceLogLimit) {
+		t.Fatalf("appendStdioSection() error = %v, want the byte cap", err)
+	}
+	if allocated := after.TotalAlloc - before.TotalAlloc; allocated > 8<<20 {
+		t.Fatalf("merging allocated %d bytes for a 1 GiB segment; the merge must stream", allocated)
+	}
+	if merged.Len() != 64 || !strings.HasPrefix(merged.String(), "### launch 1 stdout\n") {
+		t.Fatalf("merged %d bytes %q, want exactly the 64-byte cap after the marker", merged.Len(), merged.String())
+	}
+}

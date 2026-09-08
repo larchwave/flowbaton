@@ -189,20 +189,47 @@ func finalizeIOSStdioCapture(capture *iosStdioCapture, limit int64) ([]device.Ar
 	return []device.Artifact{{Kind: "log", Path: capture.outputPath, Metadata: metadata}}, nil
 }
 
+// appendStdioSection streams one segment file through the capped writer. It
+// never holds the file in memory: the process may have written far more than
+// the cap, and the stop must not pay for that.
 func appendStdioSection(writer io.Writer, launch int, label, path string) error {
-	content, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
-	if label == "stderr" && len(content) == 0 {
-		return nil
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return err
 	}
-	if len(content) > 0 && content[len(content)-1] != '\n' {
-		content = append(content, '\n')
+	if label == "stderr" && info.Size() == 0 {
+		return nil
 	}
 	if _, err := fmt.Fprintf(writer, "### launch %d %s\n", launch, label); err != nil {
 		return err
 	}
-	_, err = writer.Write(content)
+	tracked := &lastByteWriter{Writer: writer}
+	written, err := io.Copy(tracked, file)
+	if err != nil {
+		return err
+	}
+	if written > 0 && tracked.last != '\n' {
+		_, err = io.WriteString(writer, "\n")
+	}
 	return err
+}
+
+// lastByteWriter remembers the last byte that reached the writer, so a
+// section that does not end in a newline gets one before the next marker.
+type lastByteWriter struct {
+	io.Writer
+	last byte
+}
+
+func (writer *lastByteWriter) Write(data []byte) (int, error) {
+	written, err := writer.Writer.Write(data)
+	if written > 0 {
+		writer.last = data[written-1]
+	}
+	return written, err
 }
