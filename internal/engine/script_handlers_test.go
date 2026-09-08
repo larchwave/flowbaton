@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/larchwave/flowbaton/internal/capability"
@@ -40,29 +41,89 @@ func TestScriptHandlerSpecsComposeExactTwo(t *testing.T) {
 	}
 }
 
-func TestEvalScriptInterpolatesTheAuthoredScriptDuringExecution(t *testing.T) {
+func TestEvalScriptEvaluatesTheAuthoredScriptDuringExecution(t *testing.T) {
 	t.Parallel()
 
 	runtime := &recordingJSFactory{}
-	command := model.Command{
+	script := model.Command{
 		Kind: model.CommandEvalScript, Form: model.CommandFormObject,
 		Arguments: "output.value = 'ok'",
 	}
-	result, err := runScriptCommand(t, scriptServices{factory: runtime}, command, nil)
+	check := model.Command{
+		Kind: model.CommandAssertTrue, Form: model.CommandFormObject,
+		Arguments: "output.value === 'ok'",
+	}
+	result, err := runScriptCommands(t, scriptServices{factory: runtime}, nil, script, check)
 	if err != nil {
-		t.Fatalf("execute(evalScript) error = %T %v", err, err)
+		t.Fatalf("execute(evalScript, assertTrue) error = %T %v", err, err)
 	}
 	if result.Outcome() != Completed {
-		t.Fatalf("outcome = %s, want %s", result.Outcome(), Completed)
+		t.Fatalf("outcome = %s, want %s: %s", result.Outcome(), Completed, scriptOutcomes(result))
 	}
-	// The script is interpolated verbatim; the engine never pre-interpolates it
-	// during evaluation, which would run the mutation a phase too early.
-	if !runtime.interpolated("output.value = 'ok'") {
-		t.Fatalf("interpolations = %#v, want the authored script", runtime.interpolations)
+	// The authored source is a statement, not a template: it runs through the
+	// evaluator, once, during execution, and its effect is visible to the next
+	// command in the same session.
+	// Two evaluations: the authored script, then the assertTrue condition.
+	if len(runtime.evaluations) != 2 || runtime.evaluations[0].Script != "output.value = 'ok'" {
+		t.Fatalf("evaluations = %#v, want the authored script then the assertion", runtime.evaluations)
 	}
-	if len(runtime.evaluations) != 0 {
-		t.Fatalf("evaluations = %#v, want none for evalScript", runtime.evaluations)
+	if runtime.evaluations[0].RunInSubScope {
+		t.Fatal("evalScript must share the session scope so output values survive it")
 	}
+}
+
+func TestEvalScriptRunsInterpolatedSideEffectsExactlyOnce(t *testing.T) {
+	t.Parallel()
+
+	runtime := &recordingJSFactory{}
+	script := model.Command{
+		Kind: model.CommandEvalScript, Form: model.CommandFormObject,
+		Arguments: "${output.n = (output.n || 0) + 1}",
+	}
+	check := model.Command{
+		Kind: model.CommandAssertTrue, Form: model.CommandFormObject,
+		Arguments: "output.n === 1",
+	}
+	result, err := runScriptCommands(t, scriptServices{factory: runtime}, nil, script, check)
+	if err != nil {
+		t.Fatalf("execute(evalScript ${...}) error = %T %v", err, err)
+	}
+	if result.Outcome() != Completed {
+		t.Fatalf("outcome = %s, want %s: %s", result.Outcome(), Completed, scriptOutcomes(result))
+	}
+}
+
+func TestEvalScriptThrowFailsTheCommandAndStopsTheFlow(t *testing.T) {
+	t.Parallel()
+
+	runtime := &recordingJSFactory{}
+	script := model.Command{
+		Kind: model.CommandEvalScript, Form: model.CommandFormObject,
+		Arguments: `throw new Error("DOGFOOD_MUST_FAIL")`,
+	}
+	after := model.Command{
+		Kind: model.CommandEvalScript, Form: model.CommandFormObject,
+		Arguments: "output.after = true",
+	}
+	result, err := runScriptCommands(t, scriptServices{factory: runtime}, nil, script, after)
+	var evalErr *js.EvaluationError
+	if !errors.As(err, &evalErr) || !strings.Contains(evalErr.Error(), "DOGFOOD_MUST_FAIL") {
+		t.Fatalf("error = %T %v, want the authored EvaluationError", err, err)
+	}
+	if result.Outcome() != Failed {
+		t.Fatalf("outcome = %s, want %s: %s", result.Outcome(), Failed, scriptOutcomes(result))
+	}
+	if len(runtime.evaluations) != 1 {
+		t.Fatalf("evaluations = %#v, want the throw only; later commands must not run", runtime.evaluations)
+	}
+}
+
+func scriptOutcomes(result FlowResult) string {
+	parts := make([]string, 0, len(result.Commands()))
+	for _, command := range result.Commands() {
+		parts = append(parts, string(command.Outcome()))
+	}
+	return strings.Join(parts, ",")
 }
 
 func TestRunScriptEvaluatesTheResolvedFileInASubScope(t *testing.T) {
@@ -312,15 +373,27 @@ func runScriptCommand(
 	environment map[string]string,
 ) (FlowResult, error) {
 	t.Helper()
-	registry, err := newHandlerRegistry(scriptHandlerSpecs()...)
+	return runScriptCommands(t, services, environment, command)
+}
+
+// runScriptCommands runs the commands as one flow so a later command can
+// observe what an earlier script left in the shared session runtime.
+func runScriptCommands(
+	t testing.TB,
+	services scriptServices,
+	environment map[string]string,
+	commands ...model.Command,
+) (FlowResult, error) {
+	t.Helper()
+	registry, err := newHandlerRegistry(append(scriptHandlerSpecs(), assertTrueHandlerSpec())...)
 	if err != nil {
 		t.Fatalf("newHandlerRegistry(script) error = %v", err)
 	}
-	path := "/workspace/script-" + string(command.Kind) + ".yaml"
+	path := "/workspace/script-" + string(commands[0].Kind) + ".yaml"
 	flow := model.Flow{
 		SchemaVersion: model.ASTVersionV0, Path: path,
 		Config:   model.Config{AppID: "com.example.script", Env: environment},
-		Commands: []model.Command{command},
+		Commands: commands,
 	}
 	program := &Program{
 		roots: []string{path}, paths: []string{path},
@@ -333,7 +406,7 @@ func runScriptCommand(
 	}
 	compiled, compileErr := compileProgram(context.Background(), program, registry)
 	if compileErr != nil {
-		t.Fatalf("compileProgram(%s) error = %v", command.Kind, compileErr)
+		t.Fatalf("compileProgram(%s) error = %v", commands[0].Kind, compileErr)
 	}
 	root, ok := compiled.Flow(compiled.Roots()[0])
 	if !ok {

@@ -11,9 +11,11 @@ import (
 
 // specs/01-core-engine.md:98 is the whole contract: runScript evaluates the
 // linked file with runInSubScope=true and scriptDir set, gated by `when`;
-// evalScript is an interpolation of the script string. Both count as mutating,
-// so both perform their effect in execute — interpolating during evaluation
-// would run the mutation a phase early and repeat it on every re-evaluation.
+// evalScript interpolates `${...}` in the authored source and then evaluates
+// it in the session scope, the way a script condition does. Both count as
+// mutating, so both perform their effect in execute — running the script
+// during evaluation would run the mutation a phase early and repeat it on
+// every re-evaluation.
 
 type scriptCompiled struct {
 	keyword model.CommandKeyword
@@ -184,8 +186,7 @@ func executeScript(ctx context.Context, state *executionState, evaluated evaluat
 		return effect, err
 	}
 	if payload.keyword == model.CommandEvalScript {
-		_, err = runtime.Interpolate(ctx, payload.script, nil)
-		return effect, err
+		return effect, evalAuthoredScript(ctx, runtime, payload.script, evaluated.command.Source.Path)
 	}
 
 	condition, matches, err := state.evaluateCondition(ctx, evaluated.command.Condition)
@@ -211,6 +212,23 @@ func executeScript(ctx context.Context, state *executionState, evaluated evaluat
 		RunInSubScope: true,
 	})
 	return effect, err
+}
+
+// evalAuthoredScript runs an inline evalScript body. Interpolation first keeps
+// the documented `output.value = ${VALUE}` form working; the interpolated text
+// is then evaluated as a statement so plain assignments take effect and a thrown
+// error fails the command instead of being copied through as literal bytes.
+func evalAuthoredScript(ctx context.Context, runtime js.Runtime, authored, sourcePath string) error {
+	script, err := runtime.Interpolate(ctx, authored, nil)
+	if err != nil {
+		return err
+	}
+	request := js.EvalRequest{Script: script, SourceName: sourcePath}
+	if sourcePath != "" {
+		request.ScriptDir = path.Dir(sourcePath)
+	}
+	_, err = runtime.Evaluate(ctx, request)
+	return err
 }
 
 func stringMapAsAny(source map[string]string) map[string]any {
