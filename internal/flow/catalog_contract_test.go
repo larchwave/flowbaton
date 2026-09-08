@@ -39,7 +39,7 @@ func TestCommandManifestCoversTypedV0Catalog(t *testing.T) {
 	if manifest.SchemaVersion != "flowbaton.command-manifest/v0" {
 		t.Fatalf("manifest schemaVersion = %q", manifest.SchemaVersion)
 	}
-	if got, want := len(manifest.Entries), 53; got != want {
+	if got, want := len(manifest.Entries), 55; got != want {
 		t.Fatalf("manifest entry count = %d, want %d", got, want)
 	}
 

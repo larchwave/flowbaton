@@ -73,6 +73,10 @@ func TestDeviceLogCaptureStreamsSyslogIntoTheArtifact(t *testing.T) {
 	if len(artifacts) != 1 || artifacts[0].Kind != "log" {
 		t.Fatalf("artifacts = %#v, want one log artifact", artifacts)
 	}
+	// The syslog relay is the whole device; the artifact says which log it is.
+	if artifacts[0].Metadata["source"] != "syslog" || artifacts[0].Metadata["scope"] != "device" {
+		t.Fatalf("artifact metadata = %#v, want source syslog and scope device", artifacts[0].Metadata)
+	}
 	content, err := os.ReadFile(artifacts[0].Path)
 	if err != nil {
 		t.Fatal(err)

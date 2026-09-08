@@ -59,6 +59,11 @@ Orientation values use the four canonical flow enums: `PORTRAIT`,
 the XCTest runner's lower-camel-case wire values without dropping underscores
 before lookup.
 
+Device-log capture spawns `log stream` inside the simulator. When the flow
+names an application, the stream is filtered to that bundle's executable with
+an exact `process ==` predicate (resolved through `simctl appinfo`), and the
+artifact metadata records the source, the scope and the process.
+
 ## 4. Web
 
 The web driver owns browser lifecycle, page navigation, hierarchy extraction,

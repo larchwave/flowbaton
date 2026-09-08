@@ -184,7 +184,7 @@ Flags, certificates, and inventory:
 | Assertions | `assertVisible` `assertNotVisible` `assertTrue` `assertScreenshot` |
 | AI assertions | `assertWithAI` `assertNoDefectsWithAI` `extractTextWithAI` |
 | Device | `setLocation` `travel` `setOrientation` `setAirplaneMode` `toggleAirplaneMode` `openLink` `openBrowser` `addMedia` |
-| Capture | `takeScreenshot` `startRecording` `stopRecording` |
+| Capture | `takeScreenshot` `startRecording` `stopRecording` `startLogCapture` `stopLogCapture` |
 | Control | `runFlow` `repeat` `retry` `extendedWaitUntil` `action` |
 | Scripting | `runScript` `evalScript` |
 

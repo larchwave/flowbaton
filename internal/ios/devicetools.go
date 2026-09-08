@@ -14,6 +14,9 @@ type DeviceTools interface {
 	Terminate(ctx context.Context, bundleID string) error
 	Uninstall(ctx context.Context, bundleID string) error
 	AppContainer(ctx context.Context, bundleID string) (string, error)
+	// AppExecutable names the process an installed bundle runs as, which is
+	// what the unified log filters by.
+	AppExecutable(ctx context.Context, bundleID string) (string, error)
 	Install(ctx context.Context, appPath string) error
 	Diagnose(ctx context.Context, outputDirectory string, timeout time.Duration) error
 	ResetKeychain(ctx context.Context) error

@@ -68,9 +68,9 @@ func TestParserMaximalCommandsMatchStaticV0Golden(t *testing.T) {
 	}
 
 	keywords := model.CommandKeywords()
-	if len(keywords) != 53 || len(manifest.Entries) != len(keywords) || len(golden.Entries) != len(keywords) {
+	if len(keywords) != 55 || len(manifest.Entries) != len(keywords) || len(golden.Entries) != len(keywords) {
 		t.Fatalf(
-			"catalog/manifest/golden counts = %d/%d/%d, want 53/53/53",
+			"catalog/manifest/golden counts = %d/%d/%d, want 55/55/55",
 			len(keywords),
 			len(manifest.Entries),
 			len(golden.Entries),

@@ -92,6 +92,10 @@ func TestDeviceLogCaptureUsesSafeUniqueIDsAndExactArgv(t *testing.T) {
 	if artifacts[0].Metadata["serial"] != testSerial {
 		t.Fatalf("artifact metadata = %#v, want serial %q", artifacts[0].Metadata, testSerial)
 	}
+	// Without an application the capture is the whole device, and says so.
+	if artifacts[0].Metadata["source"] != "logcat" || artifacts[0].Metadata["scope"] != "device" {
+		t.Fatalf("artifact metadata = %#v, want source logcat and scope device", artifacts[0].Metadata)
+	}
 	resolvedDirectory, err := filepath.EvalSymlinks(directory)
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +134,13 @@ func TestDeviceLogCaptureFiltersByReadOnlyPIDLookup(t *testing.T) {
 	if got := runner.calls[0][1:]; !reflect.DeepEqual(got, wantPID) {
 		t.Fatalf("pid lookup argv = %v, want %v", got, wantPID)
 	}
-	_, _ = driver.StopDeviceLogCapture(context.Background(), id)
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if err != nil {
+		t.Fatalf("StopDeviceLogCapture() error = %v", err)
+	}
+	if artifacts[0].Metadata["scope"] != "app" || artifacts[0].Metadata["app_id"] != "com.example.app" {
+		t.Fatalf("artifact metadata = %#v, want scope app for com.example.app", artifacts[0].Metadata)
+	}
 }
 
 func TestDeviceLogStartFailureRemovesItsPartialFile(t *testing.T) {

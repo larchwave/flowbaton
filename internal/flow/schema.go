@@ -827,6 +827,8 @@ func buildCommandSchemaV0() map[model.CommandKeyword]commandSchema {
 		model.CommandAddMedia:           {valueKinds: yamlKindSequence, valueValidator: validateStringList},
 		model.CommandSetAirplaneMode:    {valueKinds: yamlKindString, valueValidator: validateAirplaneMode},
 		model.CommandToggleAirplaneMode: noArgumentRule(),
+		model.CommandStartLogCapture:    stringRule(false),
+		model.CommandStopLogCapture:     noArgumentRule(),
 	}
 }
 

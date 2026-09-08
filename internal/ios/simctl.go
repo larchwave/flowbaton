@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -145,6 +146,26 @@ func (simctl *Simctl) AppContainer(ctx context.Context, bundleID string) (string
 		return "", fmt.Errorf("simctl get_app_container returned non-absolute application path %q", path)
 	}
 	return path, nil
+}
+
+// appInfoExecutable reads the executable name out of `simctl appinfo`, which
+// prints an old-style property list: `CFBundleExecutable = Name;`, quoted
+// when the name needs it.
+var appInfoExecutable = regexp.MustCompile(`(?m)^\s*CFBundleExecutable\s*=\s*"?([^";]+?)"?\s*;`)
+
+// AppExecutable returns the CFBundleExecutable of an installed bundle. An
+// unknown bundle is an error: a log filter for a process that does not exist
+// would silently capture nothing.
+func (simctl *Simctl) AppExecutable(ctx context.Context, bundleID string) (string, error) {
+	output, err := simctl.runOutput(ctx, []string{"appinfo", simctl.udid, bundleID}, true)
+	if err != nil {
+		return "", err
+	}
+	match := appInfoExecutable.FindSubmatch(output)
+	if match == nil {
+		return "", fmt.Errorf("simctl appinfo %s: no CFBundleExecutable in %q", bundleID, strings.TrimSpace(string(output)))
+	}
+	return string(match[1]), nil
 }
 
 func (simctl *Simctl) Install(ctx context.Context, appPath string) error {

@@ -41,7 +41,9 @@ Hardware notes, once that evidence exists:
 - Screen recordings are assembled from the instruments screenshot stream
   into an MJPEG AVI container, regardless of the requested file extension.
 - Device logs stream from the syslog relay, capped by
-  `FLOWBATON_IOS_DEVICE_LOG_LIMIT` bytes per capture.
+  `FLOWBATON_IOS_DEVICE_LOG_LIMIT` bytes per capture. `startLogCapture`
+  captures the whole device here (`scope: device`); the Simulator filters
+  to the application's process.
 - `setPermissions` cannot pre-grant the way `simctl privacy` does. The
   runner auto-answers system permission dialogs as they appear
   (`allow` / `deny`; `unset` does not exist on hardware).

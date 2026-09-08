@@ -28,7 +28,7 @@ func TestDefaultRegistryIsExhaustiveAndValid(t *testing.T) {
 	}
 
 	wantCounts := map[FeatureKind]int{
-		FeatureCommand:         53,
+		FeatureCommand:         55,
 		FeatureSelector:        29,
 		FeatureConfigExtension: 4,
 		FeatureCLISubcommand:   21,

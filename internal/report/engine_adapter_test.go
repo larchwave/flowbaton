@@ -242,7 +242,9 @@ func TestFromEngineFlowResultMapsArtifactsMetadataAndDefensiveCopies(t *testing.
 			duration: time.Millisecond,
 			artifacts: []device.Artifact{
 				{Kind: "screenshot", Path: "artifacts/failure.png", Metadata: map[string]string{"owner": "duplicate"}},
-				{Kind: "log", Path: "artifacts/device.log", Metadata: map[string]string{"stream": "device"}},
+				{Kind: "device-log", Path: "artifacts/device.log", Metadata: map[string]string{
+					"source": "logcat", "scope": "app", "appId": "com.example", "serial": "host-only",
+				}},
 			},
 		},
 	})
@@ -264,10 +266,15 @@ func TestFromEngineFlowResultMapsArtifactsMetadataAndDefensiveCopies(t *testing.
 	if len(got.Commands[1].Metadata) != 0 {
 		t.Fatalf("empty metadata = %#v", got.Commands[1].Metadata)
 	}
+	// Only the public keys ride along: a device log says which log it is and
+	// what it covers; host bookkeeping such as an owner or a serial does not
+	// reach the document.
 	wantArtifacts := []Artifact{
 		{Kind: "screenshot", Path: "artifacts/failure.png"},
 		{Kind: "hierarchy", Path: "artifacts/hierarchy.xml"},
-		{Kind: "log", Path: "artifacts/device.log"},
+		{Kind: "device-log", Path: "artifacts/device.log", Metadata: map[string]string{
+			"source": "logcat", "scope": "app", "appId": "com.example",
+		}},
 	}
 	if !reflect.DeepEqual(got.Commands[0].Artifacts, wantArtifacts[:2]) {
 		t.Fatalf("first command artifacts = %#v", got.Commands[0].Artifacts)

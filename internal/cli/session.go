@@ -62,6 +62,7 @@ func (session DeviceSession) Execute(
 
 	var recordingFinalizer func(context.Context) error
 	var recordingController engine.RecordingController
+	var logCaptureController engine.LogCaptureController
 	var results []engine.FlowResult
 	var executeErr error
 
@@ -70,6 +71,7 @@ func (session DeviceSession) Execute(
 		executeErr = err
 	} else {
 		recordingController = dependencies.RecordingController
+		logCaptureController = dependencies.LogCaptureController
 		recordingFinalizer, executeErr = startSessionRecording(
 			ctx, recordingController, options.RecordTo)
 		if executeErr == nil {
@@ -93,6 +95,17 @@ func (session DeviceSession) Execute(
 		_, stopAllErr := finalizer.StopAll(recordingCleanupCtx)
 		if stopAllErr != nil {
 			stopAllErr = fmt.Errorf("device session: finalizing active recording: %w", stopAllErr)
+		}
+		recordingErr = errors.Join(recordingErr, stopAllErr)
+	}
+	// Same for an authored startLogCapture: the file is kept under its name so
+	// a flow that failed mid-capture still leaves its log behind.
+	if finalizer, ok := logCaptureController.(interface {
+		StopAll(context.Context) ([]device.Artifact, error)
+	}); ok {
+		_, stopAllErr := finalizer.StopAll(recordingCleanupCtx)
+		if stopAllErr != nil {
+			stopAllErr = fmt.Errorf("device session: finalizing active log capture: %w", stopAllErr)
 		}
 		recordingErr = errors.Join(recordingErr, stopAllErr)
 	}
@@ -230,9 +243,12 @@ func (session DeviceSession) dependencies(options TestOptions) (engine.Dependenc
 		// against the process working directory, not the flow's directory.
 		ArtifactSink:        NewArtifactSink(outputDirectory, "."),
 		RecordingController: recordingController(session.Driver),
-		ResourceReader:      NewResourceReader(baseDirectory),
-		InputGenerator:      NewInputGenerator(),
-		ImageChecker:        ImageChecker{},
+		// The run directory, not ".": a device log is diagnostic evidence
+		// alongside the failure screenshots, not an authored deliverable.
+		LogCaptureController: logCaptureController(session.Driver, outputDirectory),
+		ResourceReader:       NewResourceReader(baseDirectory),
+		InputGenerator:       NewInputGenerator(),
+		ImageChecker:         ImageChecker{},
 	}, nil
 }
 

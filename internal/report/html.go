@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"strings"
 	"time"
 )
 
@@ -64,6 +65,17 @@ type htmlStep struct {
 	Status         string
 	Passed         bool
 	FailureMessage string
+	Artifacts      []htmlArtifact
+}
+
+// htmlArtifact is one file a step produced. Note is the producer's own
+// description of it — for a device log, the source, the scope and the size —
+// so a reader can tell a filtered application log from a whole-device one
+// without opening the file.
+type htmlArtifact struct {
+	Kind string
+	Path string
+	Note string
 }
 
 // MarshalHTML renders the run as a self-contained document.
@@ -130,6 +142,11 @@ func htmlSteps(commands []CommandResult) []htmlStep {
 		}
 		if command.Failure != nil {
 			step.FailureMessage = command.Failure.Message
+		}
+		for _, artifact := range command.Artifacts {
+			step.Artifacts = append(step.Artifacts, htmlArtifact{
+				Kind: artifact.Kind, Path: artifact.Path, Note: artifactNote(artifact.Metadata),
+			})
 		}
 		steps = append(steps, step)
 	}
@@ -207,7 +224,7 @@ th { color: #6b7280; font-weight: 500; }
 {{range .Steps}}
 <tr>
 <td>{{.Sequence}}</td>
-<td>{{.Keyword}}{{if .Description}} — {{.Description}}{{end}}{{if .FailureMessage}}<pre>{{.FailureMessage}}</pre>{{end}}</td>
+<td>{{.Keyword}}{{if .Description}} — {{.Description}}{{end}}{{if .FailureMessage}}<pre>{{.FailureMessage}}</pre>{{end}}{{range .Artifacts}}<div class="artifact">{{.Kind}} <code>{{.Path}}</code>{{if .Note}} · {{.Note}}{{end}}</div>{{end}}</td>
 <td>{{.Status}}</td>
 </tr>
 {{end}}
@@ -218,3 +235,26 @@ th { color: #6b7280; font-weight: 500; }
 </body>
 </html>
 `))
+
+// artifactNote turns artifact metadata into the one line the step shows.
+// Only the keys a reader acts on are spelled out; the rest stay in the
+// commands document.
+func artifactNote(metadata map[string]string) string {
+	var parts []string
+	if source := metadata["source"]; source != "" {
+		parts = append(parts, source)
+	}
+	switch metadata["scope"] {
+	case "app":
+		parts = append(parts, "scope app "+metadata["appId"])
+	case "device":
+		parts = append(parts, "scope device-wide")
+	}
+	if bytes := metadata["bytes"]; bytes != "" {
+		parts = append(parts, bytes+" bytes")
+	}
+	if metadata["truncated"] == "true" {
+		parts = append(parts, "truncated")
+	}
+	return strings.Join(parts, " · ")
+}

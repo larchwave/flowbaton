@@ -74,6 +74,8 @@ func productionKeywords() []model.CommandKeyword {
 		model.CommandStartRecording,
 		model.CommandStopRecording,
 		model.CommandAddMedia,
+		model.CommandStartLogCapture,
+		model.CommandStopLogCapture,
 		// screenshot assertion
 		model.CommandAssertScreenshot,
 		// scripting
@@ -113,8 +115,8 @@ func TestProductionHandlerRegistryMatchesAcceptedCommandSet(t *testing.T) {
 	}
 	sort.Slice(got, func(left, right int) bool { return got[left] < got[right] })
 	want := productionKeywords()
-	if len(want) != 53 {
-		t.Fatalf("production keyword count = %d, want exactly fifty-three", len(want))
+	if len(want) != 55 {
+		t.Fatalf("production keyword count = %d, want exactly fifty-five", len(want))
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("production handler registry = %#v, want %#v", got, want)

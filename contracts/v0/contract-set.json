@@ -58,7 +58,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/ast.json",
       "coverage": "contract-complete",
-      "sha256": "3a8859b335eff6ee91fc9bba4200904209cc2035639217ccc345666dfe616de5"
+      "sha256": "40f9ba4aaf43f7908d69093b6c3e04eca4ad3fdef2faba8d1505baf708dcbe1a"
     },
     {
       "id": "support-json-snapshot",
@@ -66,7 +66,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/support-registry.json",
       "coverage": "contract-complete",
-      "sha256": "2d9847019c997aab119b47c333b68b3f879d83c3d6f03c4d3e1f3b38333792d6"
+      "sha256": "0eff54acea23af53e0c246f20193529d4e4ca3aec5c5f4e4772f0c0ef0ba7119"
     },
     {
       "id": "asset-schema-snapshot",
@@ -82,7 +82,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/parser-commands.json",
       "coverage": "contract-complete",
-      "sha256": "8e8e07a8519acb85c733e8657772f26cfa9a60fdf2dc3b7378c1c6160b9ba2f6"
+      "sha256": "82440b14779a4016230152df93b655164dec2bdfce1b773c2ba1f30af364a89f"
     },
     {
       "id": "android-canonical-proto",

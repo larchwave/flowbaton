@@ -72,3 +72,34 @@ button, so the flow's application is no longer in front afterwards: a following
 `launchApp` with `stopApp: false` resumes it, and commands that read its
 hierarchy before that are refused as "not in the foreground". `LOCK`, `POWER`
 and the volume keys stay Android-only; preflight refuses them on iOS.
+
+## 10. Log capture
+
+`startLogCapture: NAME` opens one device-log stream and `stopLogCapture`
+closes it; the finished file is an artifact of the stop command, named
+`NAME` plus the driver's extension, kept in the run output directory next to
+the failure screenshots. `NAME` is a basename: no path separators, no
+traversal. A second `startLogCapture` while one is open is refused, as is a
+`stopLogCapture` with none open. A capture still open when the session ends
+is closed and its file kept under its name, but no command links it.
+
+The stream is the flow's application where the platform can filter, and the
+whole device where it cannot; the artifact metadata says which
+(`scope: app` or `scope: device`), and which log it is (`source`):
+
+| Platform | Source | Scope | Bound |
+| --- | --- | --- | --- |
+| Android | `logcat` | the application's process (`--pid`) | 16 MiB |
+| iOS Simulator | `unified-log` | `process == CFBundleExecutable` | 16 MiB |
+| iOS device | `syslog` (relay) | whole device | `FLOWBATON_IOS_DEVICE_LOG_LIMIT` |
+| Web | none | refused at preflight | — |
+
+None of these sources carries the application's standard output or standard
+error: on iOS a process that prints instead of logging leaves nothing in the
+unified log. Capturing Simulator stdio is a separate capability, not a mode
+of this one. An unknown application on the Simulator fails `startLogCapture`
+rather than filtering for a process that cannot exist. A capture whose stream
+produced no bytes at all fails `stopLogCapture`; a quiet application yields a
+small file, not an error. `stopLogCapture` reports the file, its source, its
+scope and its size in the command's log messages and in the artifact
+metadata of the commands document and the detailed HTML report.

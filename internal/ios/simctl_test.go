@@ -309,3 +309,43 @@ func TestTerminateStillReportsARealFailure(t *testing.T) {
 		t.Fatalf("error = %q, want simctl's own explanation carried through", err)
 	}
 }
+
+func TestAppExecutableReadsTheNameOutOfAppInfo(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{name: "bare", output: "{\n    CFBundleExecutable = DustlineP1MarginFixture;\n    CFBundleIdentifier = \"dev.example.fixture\";\n}\n", want: "DustlineP1MarginFixture"},
+		{name: "quoted", output: "{\n    CFBundleExecutable = \"My App\";\n}\n", want: "My App"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := &recordingRunner{output: []byte(test.output)}
+			got, err := NewSimctl("UDID-1", runner).AppExecutable(context.Background(), "dev.example.fixture")
+			if err != nil {
+				t.Fatalf("AppExecutable() error = %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("AppExecutable() = %q, want %q", got, test.want)
+			}
+			want := []string{"xcrun", "simctl", "appinfo", "UDID-1", "dev.example.fixture"}
+			if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
+				t.Fatalf("argv = %v, want %v", runner.calls, want)
+			}
+		})
+	}
+	t.Run("unknown bundle", func(t *testing.T) {
+		runner := &recordingRunner{output: []byte("An error was encountered processing the command"), err: errors.New("exit status 3")}
+		if _, err := NewSimctl("UDID-1", runner).AppExecutable(context.Background(), "dev.example.missing"); err == nil {
+			t.Fatal("AppExecutable() accepted an unknown bundle")
+		}
+	})
+	t.Run("no executable in the output", func(t *testing.T) {
+		runner := &recordingRunner{output: []byte("{\n}\n")}
+		if _, err := NewSimctl("UDID-1", runner).AppExecutable(context.Background(), "dev.example.odd"); err == nil {
+			t.Fatal("AppExecutable() invented an executable name")
+		}
+	})
+}

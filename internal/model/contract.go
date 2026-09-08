@@ -57,6 +57,8 @@ const (
 	CommandAddMedia               CommandKeyword = "addMedia"
 	CommandSetAirplaneMode        CommandKeyword = "setAirplaneMode"
 	CommandToggleAirplaneMode     CommandKeyword = "toggleAirplaneMode"
+	CommandStartLogCapture        CommandKeyword = "startLogCapture"
+	CommandStopLogCapture         CommandKeyword = "stopLogCapture"
 
 	CommandApplyConfiguration CommandKeyword = "applyConfiguration"
 	CommandDefineVariables    CommandKeyword = "defineVariables"
@@ -116,6 +118,8 @@ var commandKeywordsV0 = []CommandKeyword{
 	CommandAddMedia,
 	CommandSetAirplaneMode,
 	CommandToggleAirplaneMode,
+	CommandStartLogCapture,
+	CommandStopLogCapture,
 }
 
 var selectorFieldsV0 = []string{
@@ -147,7 +151,7 @@ func ContractV0() ContractDescriptor {
 	}
 }
 
-// CommandKeywords returns the canonical 53-keyword catalog in contract order.
+// CommandKeywords returns the canonical 55-keyword catalog in contract order.
 func CommandKeywords() []CommandKeyword {
 	return append([]CommandKeyword(nil), commandKeywordsV0...)
 }

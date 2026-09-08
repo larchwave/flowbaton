@@ -673,6 +673,30 @@
       "reason": "production drivers expose this command only on the listed platforms"
     },
     {
+      "kind": "command",
+      "name": "startLogCapture",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "android",
+        "ios-simulator",
+        "ios-physical"
+      ],
+      "reason": "production drivers expose this command only on the listed platforms"
+    },
+    {
+      "kind": "command",
+      "name": "stopLogCapture",
+      "parseStatus": "parseable",
+      "runtimeStatus": "platform-limited",
+      "platforms": [
+        "android",
+        "ios-simulator",
+        "ios-physical"
+      ],
+      "reason": "production drivers expose this command only on the listed platforms"
+    },
+    {
       "kind": "selector-feature",
       "name": "text",
       "parseStatus": "parseable",

@@ -167,6 +167,15 @@ func (tools *Tools) AppContainer(context.Context, string) (string, error) {
 		device.ErrUnsupported)
 }
 
+// AppExecutable feeds the simulator's unified-log process filter. Hardware
+// logs go through the physical driver's own syslog capture, which is
+// device-wide; nothing on this path asks for an executable name.
+func (tools *Tools) AppExecutable(context.Context, string) (string, error) {
+	return "", fmt.Errorf(
+		"%w: physical-device log capture is device-wide and does not resolve an executable",
+		device.ErrUnsupported)
+}
+
 func (tools *Tools) Diagnose(context.Context, string, time.Duration) error {
 	return fmt.Errorf(
 		"%w: physical-device diagnostics arrive with the go-ios syslog/crash slice",

@@ -172,7 +172,12 @@ func (driver *Driver) StopDeviceLogCapture(
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-	return []device.Artifact{{Kind: "log", Path: capture.outputPath}}, nil
+	return []device.Artifact{{
+		Kind: "log", Path: capture.outputPath,
+		// The relay carries every process on the device; there is no
+		// per-application filter on this path.
+		Metadata: map[string]string{"source": "syslog", "scope": "device"},
+	}}, nil
 }
 
 // stopAllLogCaptures releases every capture still running at Close.

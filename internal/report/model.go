@@ -39,9 +39,13 @@ type Failure struct {
 }
 
 // Artifact identifies an output-root-relative file produced for a result.
+// Metadata is what the producer knows about the file that its path does not
+// say: for a device log, the log source and whether it covers one application
+// or the whole device.
 type Artifact struct {
-	Kind string `json:"kind"`
-	Path string `json:"path"`
+	Kind     string            `json:"kind"`
+	Path     string            `json:"path"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // CommandResult is the engine-neutral report shape for one executed command.
@@ -144,9 +148,12 @@ func cloneMetadata(metadata map[string]string) map[string]string {
 }
 
 func cloneAndSortArtifacts(artifacts []Artifact) []Artifact {
-	cloned := append([]Artifact(nil), artifacts...)
-	if cloned == nil {
-		cloned = []Artifact{}
+	cloned := make([]Artifact, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		if len(artifact.Metadata) != 0 {
+			artifact.Metadata = cloneMetadata(artifact.Metadata)
+		}
+		cloned = append(cloned, artifact)
 	}
 	sort.SliceStable(cloned, func(i, j int) bool {
 		if cloned[i].Kind == cloned[j].Kind {

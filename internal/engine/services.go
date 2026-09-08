@@ -46,6 +46,22 @@ type RecordingController interface {
 	Stop(context.Context) ([]device.Artifact, error)
 }
 
+// LogCaptureStartRequest describes one host-managed device-log capture. AppID
+// is the flow's application; a driver that cannot filter by it captures the
+// whole device and says so in the artifact metadata.
+type LogCaptureStartRequest struct {
+	Name  string
+	AppID string
+}
+
+// LogCaptureController completes the startLogCapture/stopLogCapture lifecycle
+// outside frozen device.Driver v0 and returns only finalized artifacts from
+// Stop.
+type LogCaptureController interface {
+	Start(context.Context, LogCaptureStartRequest) error
+	Stop(context.Context) ([]device.Artifact, error)
+}
+
 // ResourceReadRequest names one independently resolved host resource.
 type ResourceReadRequest struct {
 	Path string
@@ -169,9 +185,12 @@ type Dependencies struct {
 
 	ArtifactSink        ArtifactSink
 	RecordingController RecordingController
-	ResourceReader      ResourceReader
-	InputGenerator      InputGenerator
-	ImageChecker        ImageChecker
+	// LogCaptureController is optional. Nil fails the log-capture commands
+	// closed with a ConfigurationError.
+	LogCaptureController LogCaptureController
+	ResourceReader       ResourceReader
+	InputGenerator       InputGenerator
+	ImageChecker         ImageChecker
 	// AIEngine is optional. A nil engine fails AI commands closed with
 	// ErrCloudAPIKeyNotAvailable (specs/01-core-engine.md).
 	AIEngine AIPredictionEngine
@@ -459,6 +478,37 @@ func (state *executionState) stopRecording(ctx context.Context) ([]device.Artifa
 		return nil, NewConfigurationError("recording controller is required by this command", nil)
 	}
 	artifacts, err := state.dependencies.RecordingController.Stop(ctx)
+	artifacts = cloneDeviceArtifacts(artifacts)
+	if err != nil {
+		return artifacts, err
+	}
+	if err := ctx.Err(); err != nil {
+		return artifacts, err
+	}
+	return artifacts, nil
+}
+
+func (state *executionState) startLogCapture(ctx context.Context, request LogCaptureStartRequest) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if state == nil || isNilValue(state.dependencies.LogCaptureController) {
+		return NewConfigurationError("log capture controller is required by this command", nil)
+	}
+	if err := state.dependencies.LogCaptureController.Start(ctx, request); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
+
+func (state *executionState) stopLogCapture(ctx context.Context) ([]device.Artifact, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if state == nil || isNilValue(state.dependencies.LogCaptureController) {
+		return nil, NewConfigurationError("log capture controller is required by this command", nil)
+	}
+	artifacts, err := state.dependencies.LogCaptureController.Stop(ctx)
 	artifacts = cloneDeviceArtifacts(artifacts)
 	if err != nil {
 		return artifacts, err

@@ -752,6 +752,21 @@
         "kind": "toggleAirplaneMode",
         "form": "scalar"
       }
+    },
+    {
+      "keyword": "startLogCapture",
+      "command": {
+        "kind": "startLogCapture",
+        "form": "object",
+        "arguments": "fixture-console"
+      }
+    },
+    {
+      "keyword": "stopLogCapture",
+      "command": {
+        "kind": "stopLogCapture",
+        "form": "scalar"
+      }
     }
   ]
 }

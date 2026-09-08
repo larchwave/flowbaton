@@ -125,7 +125,7 @@ type artifactIdentity struct {
 func engineArtifactsToReport(artifacts []device.Artifact) []Artifact {
 	converted := make([]Artifact, len(artifacts))
 	for index, artifact := range artifacts {
-		converted[index] = Artifact{Kind: artifact.Kind, Path: artifact.Path}
+		converted[index] = Artifact{Kind: artifact.Kind, Path: artifact.Path, Metadata: reportedArtifactMetadata(artifact.Metadata)}
 	}
 	return converted
 }
@@ -183,4 +183,28 @@ func engineOutcomeToReport(outcome engine.Outcome) (Status, error) {
 	default:
 		return Status(""), engine.NewConfigurationError(fmt.Sprintf("engine outcome %q is invalid", outcome), nil)
 	}
+}
+
+// reportedArtifactKeys are the artifact metadata keys that belong to the
+// public report: what a device log is and what it covers
+// (specs/05-command-semantics-addendum.md §10). Everything else on an engine
+// artifact is host bookkeeping (which sink wrote a failure screenshot, for
+// one) and stays out of the document.
+var reportedArtifactKeys = []string{"source", "scope", "appId", "process", "bytes", "truncated"}
+
+// reportedArtifactMetadata keeps an absent map absent, so the report field
+// stays omitted for artifacts that carry nothing public.
+func reportedArtifactMetadata(metadata map[string]string) map[string]string {
+	var reported map[string]string
+	for _, key := range reportedArtifactKeys {
+		value, ok := metadata[key]
+		if !ok {
+			continue
+		}
+		if reported == nil {
+			reported = make(map[string]string, len(reportedArtifactKeys))
+		}
+		reported[key] = value
+	}
+	return reported
 }

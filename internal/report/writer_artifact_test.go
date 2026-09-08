@@ -26,7 +26,7 @@ func TestWriterWriteAndRegisterArtifactIncludeOwnedFilesInManifest(t *testing.T)
 	if err != nil {
 		t.Fatalf("WriteArtifact() error = %v", err)
 	}
-	if written != (Artifact{Kind: "debug", Path: "nested/debug/output.bin"}) {
+	if !reflect.DeepEqual(written, Artifact{Kind: "debug", Path: "nested/debug/output.bin"}) {
 		t.Fatalf("WriteArtifact() = %#v", written)
 	}
 	if got := mustReadFile(t, root, written.Path); !bytes.Equal(got, writtenBefore) {
@@ -48,7 +48,7 @@ func TestWriterWriteAndRegisterArtifactIncludeOwnedFilesInManifest(t *testing.T)
 	if err != nil {
 		t.Fatalf("RegisterArtifact() error = %v", err)
 	}
-	if registered != (Artifact{Kind: "recording", Path: recordingPath}) {
+	if !reflect.DeepEqual(registered, Artifact{Kind: "recording", Path: recordingPath}) {
 		t.Fatalf("RegisterArtifact() = %#v", registered)
 	}
 	afterInfo, err := os.Stat(fullRecordingPath)
@@ -104,7 +104,7 @@ func TestWriterArtifactReplacementIsDeterministicByRelativePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("replacement RegisterArtifact() error = %v", err)
 	}
-	if registered != (Artifact{Kind: "registered-kind", Path: replacement.Path}) {
+	if !reflect.DeepEqual(registered, Artifact{Kind: "registered-kind", Path: replacement.Path}) {
 		t.Fatalf("replacement RegisterArtifact() = %#v", registered)
 	}
 	if got := mustReadFile(t, root, replacement.Path); string(got) != "second" {

@@ -1076,10 +1076,18 @@ func (driver *Driver) StartDeviceLogCapture(
 	ctx context.Context,
 	request device.DeviceLogRequest,
 ) (device.CaptureID, error) {
-	if strings.TrimSpace(request.AppID) != "" {
-		return "", fmt.Errorf(
-			"%w: iOS unified-log capture is device-wide and cannot filter bundle %q",
-			device.ErrUnsupported, request.AppID)
+	// The unified log filters by process, not bundle: resolve the executable
+	// first, and exactly (`--process` would match any prefix). An unknown
+	// application is refused here rather than captured as silence.
+	args := []string{"simctl", "spawn", driver.udid, "log", "stream", "--style", "ndjson"}
+	metadata := map[string]string{"source": "unified-log", "scope": "device"}
+	if appID := strings.TrimSpace(request.AppID); appID != "" {
+		executable, err := driver.simctl.AppExecutable(ctx, appID)
+		if err != nil {
+			return "", fmt.Errorf("resolving the process of %s for log capture: %w", appID, err)
+		}
+		args = append(args, "--predicate", fmt.Sprintf("process == %q", executable))
+		metadata["scope"], metadata["appId"], metadata["process"] = "app", appID, executable
 	}
 	directory, err := prepareIOSArtifactDirectory(request.OutputDirectory)
 	if err != nil {
@@ -1110,11 +1118,7 @@ func (driver *Driver) StartDeviceLogCapture(
 		spawn = realIOSDeviceLog
 	}
 	limiter := newIOSLogWriter(output, driver.iosDeviceLogLimit())
-	process, err := spawn(
-		ctx,
-		[]string{"simctl", "spawn", driver.udid, "log", "stream", "--style", "ndjson"},
-		limiter,
-	)
+	process, err := spawn(ctx, args, limiter)
 	if err != nil {
 		_ = output.Close()
 		_ = os.Remove(outputPath)
@@ -1123,6 +1127,7 @@ func (driver *Driver) StartDeviceLogCapture(
 	id := device.CaptureID(outputPath)
 	capture := &iosDeviceLog{
 		process: process, output: output, outputPath: outputPath, limiter: limiter, done: make(chan struct{}),
+		metadata: metadata,
 	}
 	if limiter.limitError() != nil {
 		cleanupContext, cancel := context.WithTimeout(context.Background(), iosDiagnosticStopTimeout)
@@ -1166,7 +1171,7 @@ func (driver *Driver) StopDeviceLogCapture(
 	if err := finalizeIOSDeviceLog(stopContext, capture); err != nil {
 		return nil, err
 	}
-	return []device.Artifact{{Kind: "log", Path: capture.outputPath}}, nil
+	return []device.Artifact{{Kind: "log", Path: capture.outputPath, Metadata: capture.metadata}}, nil
 }
 
 func (driver *Driver) CollectCrashArtifacts(
@@ -1254,6 +1259,9 @@ type iosDeviceLog struct {
 	once       sync.Once
 	done       chan struct{}
 	result     error
+	// metadata says which log this is and whether it was filtered to the
+	// flow's application; the driver knows, the caller cannot guess.
+	metadata map[string]string
 }
 
 type iosArtifactQuota struct {

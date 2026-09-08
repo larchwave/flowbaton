@@ -173,7 +173,8 @@ func TestEveryManifestAuthoredFormExecutes(t *testing.T) {
 					ExecutionID: "manifest-execute", Driver: manifestDriver(),
 					Clock: newAdvancingClock(), JSFactory: tapJSFactory(t), Controller: NoopController{},
 					ArtifactSink: &recordingArtifactSink{}, RecordingController: controller,
-					ResourceReader: &batch714ResourceReader{}, ImageChecker: &stubImageChecker{},
+					LogCaptureController: &logCaptureControllerStub{},
+					ResourceReader:       &batch714ResourceReader{}, ImageChecker: &stubImageChecker{},
 					InputGenerator: manifestInputGenerator{},
 				})
 				if isConfigurationError(err) {

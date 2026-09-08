@@ -75,6 +75,8 @@ func productionHandlerRegistry() (handlerRegistry, error) {
 	specs = append(specs, deviceStateHandlerSpecs()...)
 	// Media and artifact commands use their shared service set.
 	specs = append(specs, mediaHandlerSpecs()...)
+	// Log capture brackets a device-log stream and links the file to stopLogCapture.
+	specs = append(specs, logCaptureHandlerSpecs()...)
 	// assertScreenshot also requires expected-image resolution and image checking.
 	specs = append(specs, assertScreenshotHandlerSpec())
 	// Scripting commands share the JavaScript runtime.

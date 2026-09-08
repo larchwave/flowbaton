@@ -149,9 +149,10 @@ func finalizeDeviceLog(
 		}
 		return nil, fmt.Errorf("finalizing Android device log %q: %w", id, err)
 	}
-	metadata := map[string]string{"serial": capture.serial}
+	metadata := map[string]string{"serial": capture.serial, "source": "logcat", "scope": "device"}
 	if capture.appID != "" {
 		metadata["app_id"] = capture.appID
+		metadata["scope"] = "app"
 	}
 	return []device.Artifact{{Kind: "device-log", Path: capture.path, Metadata: metadata}}, nil
 }

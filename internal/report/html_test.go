@@ -27,6 +27,10 @@ func htmlFlows() []FlowResult {
 			Commands: []CommandResult{
 				{Sequence: 1, Keyword: "launchApp", Description: "Launch com.example", Status: Completed},
 				{Sequence: 2, Keyword: "tapOn", Description: "Tap on Buy", Status: Completed},
+				{Sequence: 3, Keyword: "stopLogCapture", Status: Completed, Artifacts: []Artifact{{
+					Kind: "device-log", Path: "/run/fixture-console.ndjson",
+					Metadata: map[string]string{"source": "unified-log", "scope": "app", "appId": "com.example", "bytes": "8192"},
+				}}},
 			},
 		},
 		{
@@ -103,10 +107,15 @@ func TestOnlyTheDetailedReportListsSteps(t *testing.T) {
 	if strings.Contains(plain, "tapOn") {
 		t.Fatalf("the summary report listed a step:\n%s", plain)
 	}
-	for _, want := range []string{"launchApp", "tapOn", "Tap on Buy", "assertVisible"} {
+	for _, want := range []string{"launchApp", "tapOn", "Tap on Buy", "assertVisible",
+		// A step's artifact is listed with what it is, not just where it is.
+		"device-log", "/run/fixture-console.ndjson", "unified-log", "scope app com.example", "8192 bytes"} {
 		if !strings.Contains(detailed, want) {
 			t.Fatalf("the detailed report is missing %q", want)
 		}
+	}
+	if strings.Contains(plain, "fixture-console") {
+		t.Fatalf("the summary report listed an artifact:\n%s", plain)
 	}
 }
 

@@ -189,7 +189,7 @@ func TestInteractionI21ReportProjectionIsDefensive(t *testing.T) {
 	}
 	artifactReport, artifactReportErr := report.FromEngineFlowResult(artifactScenario.Flow, artifactScenario.Config)
 	wantReportArtifact := report.Artifact{Kind: "failure-screenshot", Path: "i21-warned-failure.png"}
-	if artifactReportErr != nil || len(artifactReport.Commands) != 4 || len(artifactReport.Commands[1].Artifacts) != 1 || len(artifactReport.Artifacts) != 1 || artifactReport.Commands[1].Artifacts[0] != wantReportArtifact || artifactReport.Artifacts[0] != wantReportArtifact {
+	if artifactReportErr != nil || len(artifactReport.Commands) != 4 || len(artifactReport.Commands[1].Artifacts) != 1 || len(artifactReport.Artifacts) != 1 || !reflect.DeepEqual(artifactReport.Commands[1].Artifacts[0], wantReportArtifact) || !reflect.DeepEqual(artifactReport.Artifacts[0], wantReportArtifact) {
 		t.Fatalf("warned report artifact surfaces = %#v error %v", artifactReport, artifactReportErr)
 	}
 
@@ -206,7 +206,7 @@ func TestInteractionI21ReportProjectionIsDefensive(t *testing.T) {
 		t.Fatalf("engine event artifact ownership escaped = %#v", freshEventArtifacts)
 	}
 	freshArtifactReport, freshArtifactReportErr := report.FromEngineFlowResult(artifactScenario.Flow, artifactScenario.Config)
-	if freshArtifactReportErr != nil || len(freshArtifactReport.Commands) != 4 || len(freshArtifactReport.Commands[1].Artifacts) != 1 || len(freshArtifactReport.Artifacts) != 1 || freshArtifactReport.Commands[1].Artifacts[0] != wantReportArtifact || freshArtifactReport.Artifacts[0] != wantReportArtifact {
+	if freshArtifactReportErr != nil || len(freshArtifactReport.Commands) != 4 || len(freshArtifactReport.Commands[1].Artifacts) != 1 || len(freshArtifactReport.Artifacts) != 1 || !reflect.DeepEqual(freshArtifactReport.Commands[1].Artifacts[0], wantReportArtifact) || !reflect.DeepEqual(freshArtifactReport.Artifacts[0], wantReportArtifact) {
 		t.Fatalf("report artifact ownership escaped = %#v error %v", freshArtifactReport, freshArtifactReportErr)
 	}
 }

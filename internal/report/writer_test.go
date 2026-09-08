@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -54,7 +55,7 @@ func TestWriterCreatesCanonicalArtifactsAndFiltersManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteFailureScreenshot(7) error = %v", err)
 	}
-	if deletedScreenshot != (Artifact{Kind: ArtifactKindFailureScreenshot, Path: "Checkout-VIP/failure-000007.png"}) {
+	if !reflect.DeepEqual(deletedScreenshot, Artifact{Kind: ArtifactKindFailureScreenshot, Path: "Checkout-VIP/failure-000007.png"}) {
 		t.Fatalf("WriteFailureScreenshot(7) = %#v", deletedScreenshot)
 	}
 	if got := mustReadFile(t, root, deletedScreenshot.Path); !bytes.Equal(got, screenshotBytes) {
@@ -75,7 +76,7 @@ func TestWriterCreatesCanonicalArtifactsAndFiltersManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteCommands() error = %v", err)
 	}
-	if commandsArtifact != (Artifact{Kind: ArtifactKindCommands, Path: "Checkout-VIP/commands.json"}) {
+	if !reflect.DeepEqual(commandsArtifact, Artifact{Kind: ArtifactKindCommands, Path: "Checkout-VIP/commands.json"}) {
 		t.Fatalf("WriteCommands() = %#v", commandsArtifact)
 	}
 	wantCommands, err := MarshalCommands(flow)
@@ -93,7 +94,7 @@ func TestWriterCreatesCanonicalArtifactsAndFiltersManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteJUnit() error = %v", err)
 	}
-	if junitArtifact != (Artifact{Kind: ArtifactKindJUnit, Path: "junit.xml"}) {
+	if !reflect.DeepEqual(junitArtifact, Artifact{Kind: ArtifactKindJUnit, Path: "junit.xml"}) {
 		t.Fatalf("WriteJUnit() = %#v", junitArtifact)
 	}
 
@@ -108,7 +109,7 @@ func TestWriterCreatesCanonicalArtifactsAndFiltersManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteManifest() error = %v", err)
 	}
-	if manifestArtifact != (Artifact{Kind: ArtifactKindManifest, Path: "artifacts.json"}) {
+	if !reflect.DeepEqual(manifestArtifact, Artifact{Kind: ArtifactKindManifest, Path: "artifacts.json"}) {
 		t.Fatalf("WriteManifest() = %#v", manifestArtifact)
 	}
 

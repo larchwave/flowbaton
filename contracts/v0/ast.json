@@ -56,7 +56,9 @@
       "stopRecording",
       "addMedia",
       "setAirplaneMode",
-      "toggleAirplaneMode"
+      "toggleAirplaneMode",
+      "startLogCapture",
+      "stopLogCapture"
     ],
     "selectorFields": [
       "text",

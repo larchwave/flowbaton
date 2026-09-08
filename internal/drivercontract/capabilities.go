@@ -152,6 +152,8 @@ func webDocument() Document {
 		model.CommandAddMedia:           true,
 		model.CommandSetAirplaneMode:    true,
 		model.CommandToggleAirplaneMode: true,
+		model.CommandStartLogCapture:    true,
+		model.CommandStopLogCapture:     true,
 	})
 	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB")
 	return Document{Platform: PlatformWeb, features: features}

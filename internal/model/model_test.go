@@ -14,11 +14,11 @@ func TestContractV0DescriptorIsStableAndComplete(t *testing.T) {
 	if contract.Version != ASTVersionV0 {
 		t.Fatalf("contract version = %q, want %q", contract.Version, ASTVersionV0)
 	}
-	if got := len(contract.CommandKeywords); got != 53 {
-		t.Fatalf("command keyword count = %d, want 53", got)
+	if got := len(contract.CommandKeywords); got != 55 {
+		t.Fatalf("command keyword count = %d, want 55", got)
 	}
 
-	wantFirstLast := []CommandKeyword{CommandLaunchApp, CommandToggleAirplaneMode}
+	wantFirstLast := []CommandKeyword{CommandLaunchApp, CommandStopLogCapture}
 	gotFirstLast := []CommandKeyword{
 		contract.CommandKeywords[0],
 		contract.CommandKeywords[len(contract.CommandKeywords)-1],

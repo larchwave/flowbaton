@@ -36,6 +36,11 @@ func (fake *fakeDeviceTools) AppContainer(_ context.Context, bundleID string) (s
 	return "", nil
 }
 
+func (fake *fakeDeviceTools) AppExecutable(_ context.Context, bundleID string) (string, error) {
+	fake.note("executable " + bundleID)
+	return "FakeApp", nil
+}
+
 func (fake *fakeDeviceTools) Install(_ context.Context, appPath string) error {
 	fake.note("install " + appPath)
 	return nil

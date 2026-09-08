@@ -1767,3 +1767,81 @@ func settleFixtureHierarchy() map[string]any {
 		"depth": 1,
 	}
 }
+
+// A flow with an application gets its unified log filtered to that process,
+// exactly (`--process` would match any prefix), and the artifact says so.
+func TestDeviceLogCaptureFiltersTheFlowApplicationByProcess(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{output: []byte("{\n    CFBundleExecutable = Fixture;\n}\n")}
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	var gotArgs []string
+	driver.spawnDeviceLog = func(_ context.Context, args []string, output io.Writer) (deviceLogProcess, error) {
+		gotArgs = append([]string(nil), args...)
+		_, err := io.WriteString(output, "{\"process\":\"Fixture\"}\n")
+		return &fakeIOSLogProcess{}, err
+	}
+	id, err := driver.StartDeviceLogCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "dev.example.fixture"})
+	if err != nil {
+		t.Fatalf("StartDeviceLogCapture() error = %v", err)
+	}
+	wantArgs := []string{"simctl", "spawn", "UDID-1", "log", "stream", "--style", "ndjson",
+		"--predicate", `process == "Fixture"`}
+	if !reflect.DeepEqual(gotArgs, wantArgs) {
+		t.Fatalf("log argv = %#v, want %#v", gotArgs, wantArgs)
+	}
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if err != nil {
+		t.Fatalf("StopDeviceLogCapture() error = %v", err)
+	}
+	want := map[string]string{"source": "unified-log", "scope": "app", "appId": "dev.example.fixture", "process": "Fixture"}
+	if len(artifacts) != 1 || !reflect.DeepEqual(artifacts[0].Metadata, want) {
+		t.Fatalf("artifacts = %#v, want one with metadata %#v", artifacts, want)
+	}
+}
+
+func TestDeviceLogCaptureWithoutAnApplicationIsDeviceWideAndSaysSo(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
+		_, err := io.WriteString(output, "{\"process\":\"SpringBoard\"}\n")
+		return &fakeIOSLogProcess{}, err
+	}
+	id, err := driver.StartDeviceLogCapture(context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()})
+	if err != nil {
+		t.Fatalf("StartDeviceLogCapture() error = %v", err)
+	}
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if err != nil {
+		t.Fatalf("StopDeviceLogCapture() error = %v", err)
+	}
+	want := map[string]string{"source": "unified-log", "scope": "device"}
+	if len(artifacts) != 1 || !reflect.DeepEqual(artifacts[0].Metadata, want) {
+		t.Fatalf("artifacts = %#v, want one with metadata %#v", artifacts, want)
+	}
+}
+
+// An application that is not installed is an error before any log child
+// starts: a filter for a process that cannot exist would capture nothing and
+// look like a quiet app.
+func TestDeviceLogCaptureRefusesAnUnknownApplication(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{err: errors.New("exit status 3"), output: []byte("no such bundle")}
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	spawned := false
+	driver.spawnDeviceLog = func(context.Context, []string, io.Writer) (deviceLogProcess, error) {
+		spawned = true
+		return &fakeIOSLogProcess{}, nil
+	}
+	_, err := driver.StartDeviceLogCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "dev.example.missing"})
+	if err == nil || errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("StartDeviceLogCapture() error = %v, want a plain failure, not unsupported", err)
+	}
+	if spawned {
+		t.Fatal("a log child was started for an unknown application")
+	}
+}
