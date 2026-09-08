@@ -75,16 +75,19 @@ and the volume keys stay Android-only; preflight refuses them on iOS.
 
 ## 10. Log capture
 
-`startLogCapture: NAME` opens one device-log stream and `stopLogCapture`
-closes it; the finished file is an artifact of the stop command, named
-`NAME` plus the driver's extension, kept in the run output directory next to
-the failure screenshots. `NAME` is a basename: no path separators, no
-traversal. A second `startLogCapture` while one is open is refused, as is a
-`stopLogCapture` with none open. A capture still open when the session ends
-is closed and its file kept under its name, but no command links it.
+`startLogCapture: NAME` (or `startLogCapture: {name: NAME, stream: STREAM}`)
+opens one log stream and `stopLogCapture` closes it; the finished file is an
+artifact of the stop command, named `NAME` plus the driver's extension, kept
+in the run output directory next to the failure screenshots. `NAME` is a
+basename: no path separators, no traversal. `stream` is `system` (the
+default: the platform's own log) or `stdio` (the process's standard output
+and error, §10.1); any other value is refused. A second `startLogCapture`
+while one is open is refused, as is a `stopLogCapture` with none open. A
+capture still open when the session ends is closed and its file kept under
+its name, but no command links it.
 
-The stream is the flow's application where the platform can filter, and the
-whole device where it cannot; the artifact metadata says which
+The system stream is the flow's application where the platform can filter,
+and the whole device where it cannot; the artifact metadata says which
 (`scope: app` or `scope: device`), and which log it is (`source`):
 
 | Platform | Source | Scope | Bound |
@@ -94,12 +97,38 @@ whole device where it cannot; the artifact metadata says which
 | iOS device | `syslog` (relay) | whole device | `FLOWBATON_IOS_DEVICE_LOG_LIMIT` |
 | Web | none | refused at preflight | — |
 
-None of these sources carries the application's standard output or standard
-error: on iOS a process that prints instead of logging leaves nothing in the
-unified log. Capturing Simulator stdio is a separate capability, not a mode
-of this one. An unknown application on the Simulator fails `startLogCapture`
-rather than filtering for a process that cannot exist. A capture whose stream
-produced no bytes at all fails `stopLogCapture`; a quiet application yields a
-small file, not an error. `stopLogCapture` reports the file, its source, its
-scope and its size in the command's log messages and in the artifact
-metadata of the commands document and the detailed HTML report.
+None of these system sources carries the application's standard output or
+standard error: on iOS a process that prints instead of logging leaves
+nothing in the unified log. That is what the `stdio` stream is for. An
+unknown application on the Simulator fails `startLogCapture` rather than
+filtering for a process that cannot exist. A capture whose stream produced
+no bytes at all fails `stopLogCapture`; a quiet application yields a small
+file, not an error. `stopLogCapture` reports the file, its source, its scope
+and its size in the command's log messages and in the artifact metadata of
+the commands document and the detailed HTML report.
+
+### 10.1 The stdio stream
+
+`stream: stdio` captures what the application's process writes to its
+standard output and standard error. Only a driver that launches the process
+itself can bind those streams, so the stream exists on the iOS Simulator
+only (`simctl launch --stdout --stderr`); a physical iOS device, Android and
+Web refuse it at the `startLogCapture` step with the reason. Preflight
+cannot tell a Simulator from a physical device, so that refusal is at the
+step, not before the run.
+
+The capture is pending until the flow launches its application:
+`startLogCapture` must come before the `launchApp` whose output it wants.
+Every launch of the flow's application while the capture is open is bound to
+it; a launch of another application is an ordinary launch. A bound launch
+always terminates a running copy of the application, even with
+`stopApp: false`, because a running process has its streams bound elsewhere.
+The finished file (`NAME.log`, `source: stdio`, `scope: app`) holds each
+launch in order under marker lines `### launch N stdout` and
+`### launch N stderr`; the stderr section appears only when the process
+wrote to it. The file is capped at 16 MiB when it is assembled
+(`truncated: true` in the metadata); bytes the process has not flushed by
+`stopLogCapture` are not in it. A `stopLogCapture` that saw no launch of the
+application fails and leaves no file; when the session cleans up an unused
+capture after a flow failed earlier, that flow's own error is the one
+reported.

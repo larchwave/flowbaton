@@ -222,3 +222,17 @@ type failingLogStream struct{ err error }
 
 func (stream failingLogStream) ReadLogMessage() (string, error) { return "", stream.err }
 func (stream failingLogStream) Close() error                    { return nil }
+
+// A physical device launches through go-ios, which cannot bind the process's
+// stdout and stderr. The promoted simulator method must refuse, not pretend.
+func TestStdioCaptureIsRefusedOnAPhysicalDevice(t *testing.T) {
+	driver := boundDriver(t)
+	id, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "com.example.a"})
+	if !errors.Is(err, device.ErrUnsupported) || id != "" {
+		t.Fatalf("StartStdioCapture() = %q, %v; want ErrUnsupported", id, err)
+	}
+	if !strings.Contains(err.Error(), "physical device") {
+		t.Fatalf("refusal %q does not say why", err)
+	}
+}

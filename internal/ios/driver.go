@@ -97,8 +97,11 @@ type Driver struct {
 	spawnDeviceLog     func(context.Context, []string, io.Writer) (deviceLogProcess, error)
 	logReservations    int
 	deviceLogByteLimit int64
-	diagnoseInFlight   bool
-	diagnosticQuota    iosArtifactQuota
+	// stdio is the pending or launch-bound stdout/stderr capture, at most one
+	// (stdio_capture.go); guarded by logMu.
+	stdio            *iosStdioCapture
+	diagnoseInFlight bool
+	diagnosticQuota  iosArtifactQuota
 	// ClearAppState preserves the installed bundle across the uninstall. These
 	// seams keep the filesystem work deterministic in tests.
 	makeTemporaryDirectory func() (string, error)
@@ -193,12 +196,31 @@ func (driver *Driver) DeviceInfo(ctx context.Context) (device.DeviceInfo, error)
 
 // LaunchApp goes through simctl, not the runner: only simctl can carry the
 // typed launch arguments, and the runner's route would drop them silently.
+// A pending stdio capture of this app binds the launch's stdout and stderr
+// to its next segment; that launch always terminates a running copy, whose
+// streams are bound elsewhere.
 func (driver *Driver) LaunchApp(ctx context.Context, request device.LaunchAppRequest) error {
 	arguments := make([]LaunchArgument, 0, len(request.Arguments))
 	for _, argument := range request.Arguments {
 		arguments = append(arguments, LaunchArgument(argument))
 	}
-	if err := driver.simctl.Launch(ctx, request.AppID, arguments, false); err != nil {
+	segment, err := driver.nextStdioSegment(request.AppID)
+	if err != nil {
+		return err
+	}
+	if segment == nil {
+		err = driver.simctl.Launch(ctx, request.AppID, arguments, false)
+	} else {
+		launcher, ok := driver.simctl.(stdioLauncher)
+		if !ok {
+			return fmt.Errorf("%w: these device tools cannot bind stdio", device.ErrUnsupported)
+		}
+		err = launcher.LaunchCapturingStdio(ctx, request.AppID, arguments, segment.stdout, segment.stderr)
+		if err != nil {
+			driver.dropStdioSegment(*segment)
+		}
+	}
+	if err != nil {
 		return err
 	}
 	driver.rememberLaunch(request.AppID)
@@ -1159,6 +1181,9 @@ func (driver *Driver) StopDeviceLogCapture(
 	ctx context.Context,
 	id device.CaptureID,
 ) ([]device.Artifact, error) {
+	if stdio := driver.takeStdioCapture(id); stdio != nil {
+		return finalizeIOSStdioCapture(stdio, driver.iosDeviceLogLimit())
+	}
 	driver.logMu.Lock()
 	capture, ok := driver.deviceLogs[id]
 	delete(driver.deviceLogs, id)
@@ -1462,6 +1487,14 @@ func (driver *Driver) stopAllDeviceLogs(ctx context.Context) error {
 	for _, rawID := range ids {
 		if err := finalizeIOSDeviceLog(stopContext, captures[device.CaptureID(rawID)]); err != nil {
 			errs = append(errs, fmt.Errorf("device-log capture %q: %w", rawID, err))
+		}
+	}
+	// A stdio capture the host never stopped is merged under its temp name so
+	// the evidence stays; one that saw no launch has nothing to keep.
+	if stdio := driver.takeStdioCapture(""); stdio != nil {
+		if _, err := finalizeIOSStdioCapture(stdio, driver.iosDeviceLogLimit()); err != nil &&
+			!errors.Is(err, ErrStdioCaptureUnused) {
+			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)

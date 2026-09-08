@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/js"
 	"github.com/larchwave/flowbaton/internal/model"
 )
 
@@ -20,14 +21,18 @@ const deviceLogArtifactKind = "device-log"
 
 type logCaptureCompiled struct {
 	keyword model.CommandKeyword
-	// name is the authored capture name, uninterpolated.
-	name string
+	// name and stream are authored, uninterpolated. A blank stream is the
+	// system default; a literal one is checked here, an interpolated one after
+	// evaluation.
+	name   string
+	stream string
 }
 
 type logCaptureEvaluated struct {
 	keyword model.CommandKeyword
 	name    string
 	appID   string
+	stream  string
 }
 
 func logCaptureHandlerSpecs() []handlerSpec {
@@ -55,17 +60,53 @@ func compileLogCapture(command model.Command) (any, error) {
 		}
 		return payload, nil
 	case model.CommandStartLogCapture:
-		name, err := decodeString(command)
+		decoded, err := decodeStringOrObject(command)
 		if err != nil {
 			return nil, err
 		}
-		if strings.TrimSpace(name) == "" {
+		switch {
+		case decoded.stringValue != nil:
+			payload.name = *decoded.stringValue
+		case decoded.objectValue != nil:
+			object := *decoded.objectValue
+			if err := object.rejectUnknown("name", "stream"); err != nil {
+				return nil, err
+			}
+			if payload.name, err = object.requireString("name"); err != nil {
+				return nil, err
+			}
+			if payload.stream, _, err = object.optionalString("stream"); err != nil {
+				return nil, err
+			}
+		default:
+			return nil, commandDecodeError(command.Kind, "requires a name or a name/stream object")
+		}
+		if strings.TrimSpace(payload.name) == "" {
 			return nil, commandDecodeError(command.Kind, "requires a non-blank name")
 		}
-		payload.name = name
+		if !js.HasInterpolationExpression(payload.stream) {
+			if _, err := resolveLogStream(command.Kind, payload.stream); err != nil {
+				return nil, err
+			}
+		}
 		return payload, nil
 	default:
 		return nil, NewConfigurationError("log capture keyword is invalid", nil)
+	}
+}
+
+// resolveLogStream maps the authored stream onto the request vocabulary. Blank
+// is the system stream; anything else must be spelled exactly, so a typo does
+// not silently capture the wrong thing.
+func resolveLogStream(keyword model.CommandKeyword, authored string) (string, error) {
+	switch strings.TrimSpace(authored) {
+	case "", LogStreamSystem:
+		return LogStreamSystem, nil
+	case LogStreamStdio:
+		return LogStreamStdio, nil
+	default:
+		return "", NewConfigurationError(fmt.Sprintf(
+			"command %s stream %q is not one of %s, %s", keyword, authored, LogStreamSystem, LogStreamStdio), nil)
 	}
 }
 
@@ -92,6 +133,13 @@ func evaluateLogCapture(
 				fmt.Sprintf("command %s name must not be blank after interpolation", command.Kind), nil)
 		}
 		value.name = name
+		stream, err := evaluation.Interpolate(ctx, payload.stream, nil)
+		if err != nil {
+			return evaluated, err
+		}
+		if value.stream, err = resolveLogStream(command.Kind, stream); err != nil {
+			return evaluated, err
+		}
 		// The flow's application scopes the capture where the driver can.
 		appID, err := evaluatedActiveAppID(ctx, evaluation, command.Kind)
 		if err != nil {
@@ -114,7 +162,8 @@ func executeLogCapture(ctx context.Context, state *executionState, evaluated eva
 	switch payload.keyword {
 	case model.CommandStartLogCapture:
 		effect := commandEffect{effectClass: EffectHostMutation}
-		return effect, state.startLogCapture(ctx, LogCaptureStartRequest{Name: payload.name, AppID: payload.appID})
+		return effect, state.startLogCapture(ctx, LogCaptureStartRequest{
+			Name: payload.name, AppID: payload.appID, Stream: payload.stream})
 	case model.CommandStopLogCapture:
 		effect := commandEffect{effectClass: EffectArtifact}
 		artifacts, err := state.stopLogCapture(ctx)

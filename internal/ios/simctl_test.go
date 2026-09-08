@@ -66,6 +66,17 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 			want: []string{"simctl", "launch", udid, "com.example.a", "-mode", "probe", "flag", "true"},
 		},
 		{
+			name: "launch binding stdout and stderr to files",
+			call: func(ctx context.Context, simctl *Simctl) error {
+				return simctl.LaunchCapturingStdio(ctx, "com.example.a",
+					[]LaunchArgument{{Key: "mode", Value: "probe", Type: "string"}}, "/run/s-1.out", "/run/s-1.err")
+			},
+			// A stdio-bound launch always terminates the running copy: its streams
+			// are bound elsewhere and would stay out of the capture.
+			want: []string{"simctl", "launch", "--terminate-running-process",
+				"--stdout=/run/s-1.out", "--stderr=/run/s-1.err", udid, "com.example.a", "-mode", "probe"},
+		},
+		{
 			name: "terminate",
 			call: func(ctx context.Context, simctl *Simctl) error { return simctl.Terminate(ctx, "com.example.a") },
 			want: []string{"simctl", "terminate", udid, "com.example.a"},

@@ -46,12 +46,23 @@ type RecordingController interface {
 	Stop(context.Context) ([]device.Artifact, error)
 }
 
+// Log streams a flow can ask startLogCapture for. The system stream is the
+// platform's own log (logcat, the unified log, syslog); stdio is the
+// application's standard output and error, which only a driver that launches
+// the process itself can bind.
+const (
+	LogStreamSystem = "system"
+	LogStreamStdio  = "stdio"
+)
+
 // LogCaptureStartRequest describes one host-managed device-log capture. AppID
 // is the flow's application; a driver that cannot filter by it captures the
-// whole device and says so in the artifact metadata.
+// whole device and says so in the artifact metadata. Stream is one of the
+// LogStream constants, never blank once evaluated.
 type LogCaptureStartRequest struct {
-	Name  string
-	AppID string
+	Name   string
+	AppID  string
+	Stream string
 }
 
 // LogCaptureController completes the startLogCapture/stopLogCapture lifecycle

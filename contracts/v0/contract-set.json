@@ -82,7 +82,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/parser-commands.json",
       "coverage": "contract-complete",
-      "sha256": "82440b14779a4016230152df93b655164dec2bdfce1b773c2ba1f30af364a89f"
+      "sha256": "7d2fdd1876d73e4fed14a5b23b1e55f9f5a50f372ed93ce19d1d01cecd7d8bc9"
     },
     {
       "id": "android-canonical-proto",

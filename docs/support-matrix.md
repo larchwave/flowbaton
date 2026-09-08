@@ -43,7 +43,9 @@ Hardware notes, once that evidence exists:
 - Device logs stream from the syslog relay, capped by
   `FLOWBATON_IOS_DEVICE_LOG_LIMIT` bytes per capture. `startLogCapture`
   captures the whole device here (`scope: device`); the Simulator filters
-  to the application's process.
+  to the application's process. `stream: stdio` is Simulator-only and is
+  refused here at the step (the launch goes through go-ios, which cannot
+  bind the process's streams).
 - `setPermissions` cannot pre-grant the way `simctl privacy` does. The
   runner auto-answers system permission dialogs as they appear
   (`allow` / `deny`; `unset` does not exist on hardware).

@@ -52,12 +52,54 @@ func TestStartLogCapturePassesTheNameAndTheFlowApp(t *testing.T) {
 	if len(controller.started) != 1 {
 		t.Fatalf("controller starts = %#v, want exactly one", controller.started)
 	}
-	want := LogCaptureStartRequest{Name: "fixture-console", AppID: "com.example.logs"}
+	want := LogCaptureStartRequest{Name: "fixture-console", AppID: "com.example.logs", Stream: LogStreamSystem}
 	if controller.started[0] != want {
 		t.Fatalf("start request = %#v, want %#v", controller.started[0], want)
 	}
 	if got := result.Commands()[0].Outcome(); got != Completed {
 		t.Fatalf("startLogCapture outcome = %q, want %q", got, Completed)
+	}
+}
+
+func TestStartLogCaptureObjectFormCarriesTheStream(t *testing.T) {
+	t.Parallel()
+
+	controller := &logCaptureControllerStub{}
+	command := model.Command{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject,
+		Arguments: map[string]any{"name": "console-${SUFFIX}", "stream": "${STREAM}"}}
+	if _, err := runLogCaptureCommands(t, controller, command); err != nil {
+		t.Fatalf("startLogCapture object form error = %v", err)
+	}
+	want := LogCaptureStartRequest{Name: "console-console", AppID: "com.example.logs", Stream: LogStreamStdio}
+	if len(controller.started) != 1 || controller.started[0] != want {
+		t.Fatalf("start requests = %#v, want exactly %#v", controller.started, want)
+	}
+
+	// The default stream is the platform's system log, spelled either way.
+	for _, arguments := range []any{"plain", map[string]any{"name": "plain"}, map[string]any{"name": "plain", "stream": "system"}} {
+		controller := &logCaptureControllerStub{}
+		command := model.Command{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject, Arguments: arguments}
+		if _, err := runLogCaptureCommands(t, controller, command); err != nil {
+			t.Fatalf("startLogCapture %#v error = %v", arguments, err)
+		}
+		if len(controller.started) != 1 || controller.started[0].Stream != LogStreamSystem {
+			t.Fatalf("startLogCapture %#v requests = %#v, want the system stream", arguments, controller.started)
+		}
+	}
+}
+
+func TestStartLogCaptureRefusesAnUnknownStreamAfterInterpolation(t *testing.T) {
+	t.Parallel()
+
+	controller := &logCaptureControllerStub{}
+	command := model.Command{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject,
+		Arguments: map[string]any{"name": "console", "stream": "std${SUFFIX}"}}
+	_, err := runLogCaptureCommands(t, controller, command)
+	if !isConfigurationError(err) || !strings.Contains(err.Error(), "stdconsole") {
+		t.Fatalf("interpolated stream error = %T %v, want ConfigurationError naming the value", err, err)
+	}
+	if len(controller.started) != 0 {
+		t.Fatalf("controller started %#v despite the refused stream", controller.started)
 	}
 }
 
@@ -143,6 +185,10 @@ func TestLogCaptureCompileRefusesBadShapes(t *testing.T) {
 		{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject, Arguments: "   "},
 		{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject, Arguments: []any{"console"}},
 		{Kind: model.CommandStopLogCapture, Form: model.CommandFormObject, Arguments: map[string]any{"mystery": true}},
+		{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject, Arguments: map[string]any{"stream": "stdio"}},
+		{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject, Arguments: map[string]any{"name": "x", "mystery": true}},
+		{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject, Arguments: map[string]any{"name": "x", "stream": "syslog"}},
+		{Kind: model.CommandStartLogCapture, Form: model.CommandFormObject, Arguments: map[string]any{"name": "x", "stream": 7}},
 	} {
 		if compiled, err := compileLogCapture(command); compiled != nil || !isConfigurationError(err) {
 			t.Fatalf("compileLogCapture(%s %#v) = %#v, %T %v; want nil and ConfigurationError",
@@ -160,7 +206,7 @@ func runLogCaptureCommands(t testing.TB, controller LogCaptureController, comman
 	path := "/workspace/logs-" + string(command.Kind) + ".yaml"
 	flow := model.Flow{
 		SchemaVersion: model.ASTVersionV0, Path: path,
-		Config:   model.Config{AppID: "com.example.logs", Env: map[string]string{"SUFFIX": "console"}},
+		Config:   model.Config{AppID: "com.example.logs", Env: map[string]string{"SUFFIX": "console", "STREAM": "stdio"}},
 		Commands: []model.Command{command},
 	}
 	program := &Program{

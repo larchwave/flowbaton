@@ -62,7 +62,11 @@ before lookup.
 Device-log capture spawns `log stream` inside the simulator. When the flow
 names an application, the stream is filtered to that bundle's executable with
 an exact `process ==` predicate (resolved through `simctl appinfo`), and the
-artifact metadata records the source, the scope and the process.
+artifact metadata records the source, the scope and the process. A stdio
+capture instead binds the application's next launch to files through
+`simctl launch --stdout --stderr --terminate-running-process`; the driver
+creates the files (simctl only opens them) and merges one pair per launch at
+the stop.
 
 ## 4. Web
 

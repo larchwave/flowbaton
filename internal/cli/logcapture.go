@@ -19,6 +19,7 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/ios"
 )
 
 // deviceLogArtifactKind matches the engine's label for a finished capture.
@@ -28,6 +29,13 @@ const deviceLogArtifactKind = "device-log"
 type deviceLogDriver interface {
 	StartDeviceLogCapture(context.Context, device.DeviceLogRequest) (device.CaptureID, error)
 	StopDeviceLogCapture(context.Context, device.CaptureID) ([]device.Artifact, error)
+}
+
+// stdioLogDriver is the optional start of a stdout/stderr capture. Only a
+// driver that launches the process itself can bind its streams; the stop half
+// is the frozen one.
+type stdioLogDriver interface {
+	StartStdioCapture(context.Context, device.DeviceLogRequest) (device.CaptureID, error)
 }
 
 // DriverLogCaptureController holds one capture between the two commands.
@@ -73,6 +81,14 @@ func (controller *DriverLogCaptureController) Start(
 	}
 	appID := strings.TrimSpace(request.AppID)
 	scope := "app"
+	if request.Stream == engine.LogStreamStdio {
+		capture, err := controller.startStdio(ctx, appID)
+		if err != nil {
+			return err
+		}
+		controller.capture, controller.name, controller.appID, controller.scope = capture, name, appID, scope
+		return nil
+	}
 	capture, err := controller.driver.StartDeviceLogCapture(
 		ctx, device.DeviceLogRequest{OutputDirectory: controller.directory, AppID: appID})
 	if errors.Is(err, device.ErrUnsupported) && appID != "" {
@@ -87,6 +103,17 @@ func (controller *DriverLogCaptureController) Start(
 	}
 	controller.capture, controller.name, controller.appID, controller.scope = capture, name, appID, scope
 	return nil
+}
+
+// startStdio asks the driver for the process streams. There is no device-wide
+// fallback: a driver without the method has no stdio to offer, and saying so
+// beats handing back a system log under a stdio name.
+func (controller *DriverLogCaptureController) startStdio(ctx context.Context, appID string) (device.CaptureID, error) {
+	driver, ok := controller.driver.(stdioLogDriver)
+	if !ok {
+		return "", fmt.Errorf("%w: stdio capture is available on the iOS Simulator only", device.ErrUnsupported)
+	}
+	return driver.StartStdioCapture(ctx, device.DeviceLogRequest{OutputDirectory: controller.directory, AppID: appID})
 }
 
 func (controller *DriverLogCaptureController) Stop(ctx context.Context) ([]device.Artifact, error) {
@@ -132,6 +159,12 @@ func (controller *DriverLogCaptureController) stopLocked(ctx context.Context, re
 	controller.capture, controller.name, controller.appID, controller.scope = "", "", "", ""
 	artifacts, err := controller.driver.StopDeviceLogCapture(ctx, capture)
 	if err != nil {
+		// A stdio capture that never saw its launch is a flow-order mistake
+		// when the flow stops it, and noise when the session cleans up after a
+		// flow that failed before its launchApp.
+		if !requireActive && errors.Is(err, ios.ErrStdioCaptureUnused) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	finalized := make([]device.Artifact, 0, len(artifacts))

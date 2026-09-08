@@ -1845,3 +1845,200 @@ func TestDeviceLogCaptureRefusesAnUnknownApplication(t *testing.T) {
 		t.Fatal("a log child was started for an unknown application")
 	}
 }
+
+// stdioCaptureFiles returns the --stdout / --stderr paths of the last simctl
+// launch and fails when the launch was not a stdio-bound one.
+func stdioCaptureFiles(t *testing.T, call []string) (string, string) {
+	t.Helper()
+	want := []string{"xcrun", "simctl", "launch", "--terminate-running-process"}
+	if len(call) < 8 || !reflect.DeepEqual(call[:4], want) ||
+		!strings.HasPrefix(call[4], "--stdout=") || !strings.HasPrefix(call[5], "--stderr=") {
+		t.Fatalf("launch argv = %#v, want a stdio-bound simctl launch", call)
+	}
+	for _, path := range []string{call[4][len("--stdout="):], call[5][len("--stderr="):]} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("simctl does not create %s itself, the driver must: %v", path, err)
+		}
+	}
+	return call[4][len("--stdout="):], call[5][len("--stderr="):]
+}
+
+func TestStdioCaptureBindsEveryLaunchOfTheFlowAppAndMergesThemOnStop(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	driver := newTestDriverWithSimctl(t, foregroundAfter(t, "com.example.a", 0), runner)
+	directory := t.TempDir()
+	id, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: directory, AppID: "com.example.a"})
+	if err != nil {
+		t.Fatalf("StartStdioCapture() error = %v", err)
+	}
+	resolvedDirectory, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		t.Fatalf("resolving the run directory: %v", err)
+	}
+	if filepath.Dir(string(id)) != resolvedDirectory {
+		t.Fatalf("capture id %q is not under the run directory %q", id, resolvedDirectory)
+	}
+	// Another application's launch is a plain launch and leaves the capture pending.
+	if err := driver.LaunchApp(context.Background(), device.LaunchAppRequest{AppID: "com.example.other"}); err == nil {
+		t.Fatal("LaunchApp(other) succeeded although the runner reports only com.example.a in front")
+	}
+	if want := []string{"xcrun", "simctl", "launch", "UDID-1", "com.example.other"}; !reflect.DeepEqual(runner.calls[0], want) {
+		t.Fatalf("other app launch argv = %#v, want plain %#v", runner.calls[0], want)
+	}
+	err = driver.LaunchApp(context.Background(), device.LaunchAppRequest{
+		AppID: "com.example.a", Arguments: []device.LaunchArgument{{Key: "mode", Value: "probe", Type: "string"}},
+	})
+	if err != nil {
+		t.Fatalf("LaunchApp(first) error = %v", err)
+	}
+	firstOut, firstErr := stdioCaptureFiles(t, runner.calls[1])
+	if tail := runner.calls[1][6:]; !reflect.DeepEqual(tail, []string{"UDID-1", "com.example.a", "-mode", "probe"}) {
+		t.Fatalf("launch argv tail = %#v, want the udid, bundle and rendered arguments", tail)
+	}
+	writeFile(t, firstOut, "P1 phase=menu\n")
+	writeFile(t, firstErr, "warning one")
+	if err := driver.LaunchApp(context.Background(), device.LaunchAppRequest{AppID: "com.example.a"}); err != nil {
+		t.Fatalf("LaunchApp(second) error = %v", err)
+	}
+	secondOut, secondErr := stdioCaptureFiles(t, runner.calls[2])
+	if secondOut == firstOut || secondErr == firstErr {
+		t.Fatalf("second launch reused the first segment files %q %q", secondOut, secondErr)
+	}
+	writeFile(t, secondOut, "P1 phase=menu again\n")
+
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if err != nil {
+		t.Fatalf("StopDeviceLogCapture() error = %v", err)
+	}
+	wantMetadata := map[string]string{"source": "stdio", "scope": "app", "appId": "com.example.a"}
+	if len(artifacts) != 1 || artifacts[0].Kind != "log" || artifacts[0].Path != string(id) ||
+		!reflect.DeepEqual(artifacts[0].Metadata, wantMetadata) {
+		t.Fatalf("artifacts = %#v, want one log at %q with %#v", artifacts, id, wantMetadata)
+	}
+	merged, err := os.ReadFile(string(id))
+	if err != nil {
+		t.Fatalf("reading the merged capture: %v", err)
+	}
+	want := "### launch 1 stdout\nP1 phase=menu\n### launch 1 stderr\nwarning one\n### launch 2 stdout\nP1 phase=menu again\n"
+	if string(merged) != want {
+		t.Fatalf("merged capture =\n%s\nwant\n%s", merged, want)
+	}
+	for _, path := range []string{firstOut, firstErr, secondOut, secondErr} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("segment %s survived the merge: %v", path, err)
+		}
+	}
+	if _, err := driver.StopDeviceLogCapture(context.Background(), id); err == nil {
+		t.Fatal("second stop of the same capture succeeded")
+	}
+}
+
+func TestAStdioCaptureWithoutALaunchFailsTheStopAndLeavesNoFile(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, &recordingRunner{})
+	id, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "com.example.a"})
+	if err != nil {
+		t.Fatalf("StartStdioCapture() error = %v", err)
+	}
+	if _, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "com.example.a"}); err == nil {
+		t.Fatal("a second stdio capture opened beside the first")
+	}
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if !errors.Is(err, ErrStdioCaptureUnused) || artifacts != nil {
+		t.Fatalf("StopDeviceLogCapture() = %#v, %v; want ErrStdioCaptureUnused", artifacts, err)
+	}
+	if _, err := os.Stat(string(id)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unused capture left %s behind: %v", id, err)
+	}
+	if _, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "com.example.a"}); err != nil {
+		t.Fatalf("StartStdioCapture() after the failed stop: %v", err)
+	}
+}
+
+func TestAFailedStdioLaunchDropsItsSegmentAndKeepsTheCapturePending(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{err: errors.New("simulator is shut down")}
+	driver := newTestDriverWithSimctl(t, foregroundAfter(t, "com.example.a", 0), runner)
+	id, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "com.example.a"})
+	if err != nil {
+		t.Fatalf("StartStdioCapture() error = %v", err)
+	}
+	if err := driver.LaunchApp(context.Background(), device.LaunchAppRequest{AppID: "com.example.a"}); err == nil {
+		t.Fatal("LaunchApp() succeeded although simctl failed")
+	}
+	stdout, stderr := runner.calls[0][4][len("--stdout="):], runner.calls[0][5][len("--stderr="):]
+	for _, path := range []string{stdout, stderr} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("segment %s of the failed launch survived: %v", path, err)
+		}
+	}
+	if _, err := driver.StopDeviceLogCapture(context.Background(), id); !errors.Is(err, ErrStdioCaptureUnused) {
+		t.Fatalf("stop after a failed launch: error = %v, want ErrStdioCaptureUnused", err)
+	}
+}
+
+func TestAStdioCaptureIsCappedWhenMerged(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	driver := newTestDriverWithSimctl(t, foregroundAfter(t, "com.example.a", 0), runner)
+	driver.deviceLogByteLimit = 32
+	id, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "com.example.a"})
+	if err != nil {
+		t.Fatalf("StartStdioCapture() error = %v", err)
+	}
+	if err := driver.LaunchApp(context.Background(), device.LaunchAppRequest{AppID: "com.example.a"}); err != nil {
+		t.Fatalf("LaunchApp() error = %v", err)
+	}
+	stdout, _ := stdioCaptureFiles(t, runner.calls[0])
+	writeFile(t, stdout, strings.Repeat("x", 100)+"\n")
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if err != nil {
+		t.Fatalf("StopDeviceLogCapture() error = %v", err)
+	}
+	if artifacts[0].Metadata["truncated"] != "true" {
+		t.Fatalf("metadata = %#v, want truncated=true", artifacts[0].Metadata)
+	}
+	info, err := os.Stat(string(id))
+	if err != nil || info.Size() != 32 {
+		t.Fatalf("merged size = %d (%v), want the 32-byte cap", info.Size(), err)
+	}
+}
+
+func TestClosingTheDriverDropsAPendingStdioCapture(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	driver := newTestDriverWithSimctl(t, foregroundAfter(t, "com.example.a", 0), runner)
+	id, err := driver.StartStdioCapture(context.Background(),
+		device.DeviceLogRequest{OutputDirectory: t.TempDir(), AppID: "com.example.a"})
+	if err != nil {
+		t.Fatalf("StartStdioCapture() error = %v", err)
+	}
+	if err := driver.stopAllDeviceLogs(context.Background()); err != nil {
+		t.Fatalf("stopAllDeviceLogs() with an unused stdio capture: %v", err)
+	}
+	if _, err := os.Stat(string(id)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unused capture left %s behind after close: %v", id, err)
+	}
+	if _, err := driver.StopDeviceLogCapture(context.Background(), id); err == nil {
+		t.Fatal("a closed capture still stopped")
+	}
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+}

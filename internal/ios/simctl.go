@@ -91,6 +91,22 @@ func (simctl *Simctl) Launch(
 	return simctl.run(ctx, args, true)
 }
 
+// LaunchCapturingStdio starts an app with its standard output and error
+// bound to two files the caller has created (simctl opens, it does not
+// create). The running copy is always terminated: its streams are bound
+// elsewhere and would stay out of the capture.
+func (simctl *Simctl) LaunchCapturingStdio(
+	ctx context.Context,
+	bundleID string,
+	arguments []LaunchArgument,
+	stdoutPath, stderrPath string,
+) error {
+	args := []string{"launch", "--terminate-running-process",
+		"--stdout=" + stdoutPath, "--stderr=" + stderrPath, simctl.udid, bundleID}
+	args = append(args, renderLaunchArguments(arguments)...)
+	return simctl.run(ctx, args, true)
+}
+
 // renderLaunchArguments applies the serialization defined by
 // specs/06-launch-app-semantics.md section 5: a boolean is
 // passed bare, everything else takes a leading dash.

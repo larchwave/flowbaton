@@ -758,7 +758,10 @@
       "command": {
         "kind": "startLogCapture",
         "form": "object",
-        "arguments": "fixture-console"
+        "arguments": {
+          "name": "fixture-console",
+          "stream": "stdio"
+        }
       }
     },
     {

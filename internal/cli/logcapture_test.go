@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/larchwave/flowbaton/internal/device"
 	"github.com/larchwave/flowbaton/internal/engine"
+	"github.com/larchwave/flowbaton/internal/ios"
 )
 
 // logCaptureSpy is a driver that captures logs the way the real ones do: it
@@ -189,5 +191,103 @@ func TestAStopFailureEndsTheCapture(t *testing.T) {
 	}
 	if err := controller.Start(context.Background(), engine.LogCaptureStartRequest{Name: "y"}); err != nil {
 		t.Fatalf("Start() after a failed stop error = %v, want a fresh capture", err)
+	}
+}
+
+// stdioLogCaptureSpy is a driver with the optional stdio start, the way the
+// simulator driver has it; the plain spy stands for every driver without it.
+type stdioLogCaptureSpy struct {
+	*logCaptureSpy
+	stdioRequests []device.DeviceLogRequest
+}
+
+func (spy *stdioLogCaptureSpy) StartStdioCapture(
+	_ context.Context, request device.DeviceLogRequest,
+) (device.CaptureID, error) {
+	spy.stdioRequests = append(spy.stdioRequests, request)
+	file, err := os.CreateTemp(request.OutputDirectory, "spy-stdio-*.log")
+	if err != nil {
+		return "", err
+	}
+	if _, err := file.WriteString(spy.content); err != nil {
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+	return device.CaptureID(file.Name()), nil
+}
+
+func TestAStdioCaptureGoesToTheDriversStdioStart(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	spy := &stdioLogCaptureSpy{logCaptureSpy: &logCaptureSpy{
+		content: "### launch 1 stdout\nhello\n", metadata: map[string]string{"source": "stdio", "scope": "app"}}}
+	controller := NewDriverLogCaptureController(spy, directory)
+	err := controller.Start(context.Background(), engine.LogCaptureStartRequest{
+		Name: "console", AppID: "com.example.fixture", Stream: engine.LogStreamStdio})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if len(spy.requests) != 0 || len(spy.stdioRequests) != 1 ||
+		spy.stdioRequests[0] != (device.DeviceLogRequest{OutputDirectory: directory, AppID: "com.example.fixture"}) {
+		t.Fatalf("driver calls: system %#v stdio %#v; want one stdio request only", spy.requests, spy.stdioRequests)
+	}
+	artifacts, err := controller.Stop(context.Background())
+	if err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	want := filepath.Join(directory, "console.log")
+	if len(artifacts) != 1 || artifacts[0].Path != want || artifacts[0].Metadata["source"] != "stdio" ||
+		artifacts[0].Metadata["scope"] != "app" || artifacts[0].Metadata["appId"] != "com.example.fixture" {
+		t.Fatalf("artifacts = %#v, want %s with stdio/app metadata", artifacts, want)
+	}
+}
+
+func TestADriverWithoutStdioRefusesAStdioCaptureInsteadOfFallingBack(t *testing.T) {
+	t.Parallel()
+
+	spy := &logCaptureSpy{}
+	controller := NewDriverLogCaptureController(spy, t.TempDir())
+	err := controller.Start(context.Background(), engine.LogCaptureStartRequest{
+		Name: "console", AppID: "com.example.fixture", Stream: engine.LogStreamStdio})
+	if !errors.Is(err, device.ErrUnsupported) || !strings.Contains(err.Error(), "Simulator only") {
+		t.Fatalf("Start(stdio) error = %v, want ErrUnsupported naming the Simulator", err)
+	}
+	if len(spy.requests) != 0 {
+		t.Fatalf("driver was asked for a system capture %#v under a stdio name", spy.requests)
+	}
+	if _, err := controller.Stop(context.Background()); err == nil {
+		t.Fatal("Stop() succeeded after a refused start")
+	}
+}
+
+func TestSessionCleanupSwallowsAnUnusedStdioCaptureButAFlowDoesNot(t *testing.T) {
+	t.Parallel()
+
+	unused := fmt.Errorf("iOS stdio capture: %w", ios.ErrStdioCaptureUnused)
+	for _, authored := range []bool{true, false} {
+		spy := &stdioLogCaptureSpy{logCaptureSpy: &logCaptureSpy{stopErr: unused}}
+		controller := NewDriverLogCaptureController(spy, t.TempDir())
+		if err := controller.Start(context.Background(), engine.LogCaptureStartRequest{
+			Name: "console", AppID: "com.example.fixture", Stream: engine.LogStreamStdio}); err != nil {
+			t.Fatalf("Start() error = %v", err)
+		}
+		var err error
+		if authored {
+			_, err = controller.Stop(context.Background())
+		} else {
+			_, err = controller.StopAll(context.Background())
+		}
+		if authored && !errors.Is(err, ios.ErrStdioCaptureUnused) {
+			t.Fatalf("authored Stop() error = %v, want the unused sentinel", err)
+		}
+		if !authored && err != nil {
+			t.Fatalf("StopAll() error = %v, want the unused capture dropped silently", err)
+		}
+		if len(spy.stopped) != 1 {
+			t.Fatalf("driver stops = %#v, want exactly one", spy.stopped)
+		}
 	}
 }
