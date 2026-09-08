@@ -2,7 +2,9 @@ package iosdevice
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -33,6 +35,10 @@ type syslogCapture struct {
 	stream     logStream
 	outputPath string
 	done       chan struct{}
+	// written and readErr are set by the reader before done closes: the
+	// stop needs to tell a relay that went quiet from one that failed.
+	written int64
+	readErr error
 }
 
 const (
@@ -129,17 +135,22 @@ func (driver *Driver) StartDeviceLogCapture(
 		defer close(capture.done)
 		defer output.Close()
 		written := int64(0)
+		defer func() { capture.written = written }()
 		for {
 			line, err := stream.ReadLogMessage()
 			if err != nil {
+				if !errors.Is(err, io.EOF) {
+					capture.readErr = err
+				}
 				return
 			}
 			if !strings.HasSuffix(line, "\n") {
 				line += "\n"
 			}
 			if written+int64(len(line)) > limit {
-				fmt.Fprintf(output, "[flowbaton] capture truncated at %d bytes (%s)\n",
+				count, _ := fmt.Fprintf(output, "[flowbaton] capture truncated at %d bytes (%s)\n",
 					written, deviceLogLimitEnv)
+				written += int64(count)
 				_ = stream.Close()
 				return
 			}
@@ -171,6 +182,16 @@ func (driver *Driver) StopDeviceLogCapture(
 	case <-capture.done:
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+	// The relay of a live device is never silent, so no bytes means the
+	// stream failed, not that the phone had nothing to say. An empty file
+	// would read as evidence of a quiet app; refuse it instead.
+	if capture.written == 0 {
+		_ = os.Remove(capture.outputPath)
+		if capture.readErr != nil {
+			return nil, fmt.Errorf("iOS device-log capture %q is empty: relay failed: %w", id, capture.readErr)
+		}
+		return nil, fmt.Errorf("iOS device-log capture %q is empty: the syslog relay produced no lines", id)
 	}
 	return []device.Artifact{{
 		Kind: "log", Path: capture.outputPath,

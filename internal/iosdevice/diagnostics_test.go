@@ -183,3 +183,42 @@ func TestCollectCrashArtifactsIsDeviceWide(t *testing.T) {
 		t.Fatalf("error = %v, want ErrUnsupported for a bundle filter", err)
 	}
 }
+
+// A relay that produced nothing is a broken capture, not a quiet device: the
+// syslog relay of a live phone is never silent. The stop fails and leaves no
+// artifact that could be mistaken for evidence.
+func TestAnEmptyDeviceLogCaptureFailsTheStop(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		stream logStream
+	}{
+		{name: "relay closed before any line", stream: newFakeLogStream()},
+		{name: "relay read failed at once", stream: failingLogStream{err: errors.New("relay reset")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			driver := boundDriver(t)
+			driver.openSyslog = func(goios.DeviceEntry) (logStream, error) { return test.stream, nil }
+			directory := t.TempDir()
+			id, err := driver.StartDeviceLogCapture(context.Background(),
+				device.DeviceLogRequest{OutputDirectory: directory})
+			if err != nil {
+				t.Fatalf("StartDeviceLogCapture: %v", err)
+			}
+			artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+			if err == nil || artifacts != nil {
+				t.Fatalf("StopDeviceLogCapture = %#v, %v; want an error and no artifact", artifacts, err)
+			}
+			if !strings.Contains(err.Error(), "empty") {
+				t.Fatalf("error %q does not say the capture is empty", err)
+			}
+			if _, statErr := os.Stat(string(id)); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("empty capture file left behind: %v", statErr)
+			}
+		})
+	}
+}
+
+type failingLogStream struct{ err error }
+
+func (stream failingLogStream) ReadLogMessage() (string, error) { return "", stream.err }
+func (stream failingLogStream) Close() error                    { return nil }
