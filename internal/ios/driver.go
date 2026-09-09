@@ -85,6 +85,9 @@ type Driver struct {
 	// keyboardDismissWait bounds how long HideKeyboard polls /keyboard after
 	// tapping a dismiss control; zero means keyboardDismissTimeout.
 	keyboardDismissWait time.Duration
+	// deviceLogStartWait bounds how long StartDeviceLogCapture waits for the
+	// stream's first bytes; zero means iosDeviceLogStartTimeout.
+	deviceLogStartWait time.Duration
 
 	// recMu guards recordings, the screen recordings in flight keyed by the
 	// CaptureID StartScreenRecording handed out.
@@ -1141,6 +1144,9 @@ func (driver *Driver) StartDeviceLogCapture(
 		cancel()
 		return "", fmt.Errorf("starting iOS device-log capture: %w", err)
 	}
+	if err := driver.waitForDeviceLogStream(ctx, capture); err != nil {
+		return "", err
+	}
 	driver.logMu.Lock()
 	if driver.deviceLogs == nil {
 		driver.deviceLogs = map[device.CaptureID]*iosDeviceLog{}
@@ -1159,6 +1165,41 @@ func (driver *Driver) StartDeviceLogCapture(
 		}
 	}()
 	return id, nil
+}
+
+// waitForDeviceLogStream holds the start until the stream has written its
+// first bytes. `log stream` inside the Simulator takes a few hundred
+// milliseconds to come up after simctl spawns it (the header line arrives at
+// about 500 ms on a warm Simulator, later on a cold one); a stop that reaches
+// simctl before then ends the child with nothing written, which is what a
+// startLogCapture/stopLogCapture pair with no UI step in between hit (issue
+// #28). A child that exits, or a wait that runs out, before any byte is a
+// failed start, not a quiet stream: the quiet stream still writes its
+// "Filtering the log data" header.
+func (driver *Driver) waitForDeviceLogStream(ctx context.Context, capture *iosDeviceLog) error {
+	wait := driver.deviceLogStartWait
+	if wait <= 0 {
+		wait = iosDeviceLogStartTimeout
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	var reason error
+	select {
+	case <-capture.limiter.ready:
+		return nil
+	case <-capture.limiter.exceeded:
+		// finalizeIOSDeviceLog reports the limit itself.
+	case <-capture.process.exited():
+		reason = errors.New("the log child exited before writing anything")
+	case <-timer.C:
+		reason = fmt.Errorf("the log stream wrote nothing within %s", wait)
+	case <-ctx.Done():
+		reason = ctx.Err()
+	}
+	cleanupContext, cancel := context.WithTimeout(context.Background(), iosDiagnosticStopTimeout)
+	defer cancel()
+	finalizeErr := finalizeIOSDeviceLog(cleanupContext, capture)
+	return fmt.Errorf("starting iOS device-log capture: %w", errors.Join(reason, finalizeErr))
 }
 
 func (driver *Driver) StopDeviceLogCapture(
@@ -1252,12 +1293,21 @@ const (
 	maxIOSCrashFileBytes      = int64(256 << 20)
 	maxIOSCrashAggregateBytes = int64(1 << 30)
 	iosDiagnosticStopTimeout  = 10 * time.Second
+	iosDeviceLogStartTimeout  = 10 * time.Second
+	// iosDeviceLogPipeDelay bounds how long Wait drains the output pipe after
+	// simctl exits: the `log` child inside the Simulator can outlive simctl
+	// and keep the pipe open, which once held a stop for its whole timeout.
+	iosDeviceLogPipeDelay = 2 * time.Second
+	// iosDeviceLogReapTimeout covers a killed simctl plus the pipe delay.
+	iosDeviceLogReapTimeout   = iosDeviceLogPipeDelay + time.Second
 	iosDiagnoseCommandTimeout = 30 * time.Second
 	iosDiagnoseOuterTimeout   = 45 * time.Second
 )
 
 type deviceLogProcess interface {
 	stop(context.Context) error
+	// exited is closed once the child is gone; a nil channel never is.
+	exited() <-chan struct{}
 }
 
 type iosDeviceLog struct {
@@ -1335,12 +1385,17 @@ func realIOSDeviceLog(
 	cmd := exec.CommandContext(ctx, "xcrun", args...)
 	cmd.Stdout = output
 	cmd.Stderr = output
+	cmd.WaitDelay = iosDeviceLogPipeDelay
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	return &execDeviceLogProcess{cmd: cmd, done: done}, nil
+	gone := make(chan struct{})
+	go func() {
+		done <- cmd.Wait()
+		close(gone)
+	}()
+	return &execDeviceLogProcess{cmd: cmd, done: done, gone: gone}, nil
 }
 
 type iosLogWriter struct {
@@ -1351,10 +1406,16 @@ type iosLogWriter struct {
 	err      error
 	exceeded chan struct{}
 	once     sync.Once
+	// ready is closed on the first write: the stream is up.
+	ready     chan struct{}
+	readyOnce sync.Once
 }
 
 func newIOSLogWriter(output io.Writer, maximum int64) *iosLogWriter {
-	return &iosLogWriter{output: output, maximum: maximum, exceeded: make(chan struct{})}
+	return &iosLogWriter{
+		output: output, maximum: maximum,
+		exceeded: make(chan struct{}), ready: make(chan struct{}),
+	}
 }
 
 func (writer *iosLogWriter) Write(data []byte) (int, error) {
@@ -1362,6 +1423,9 @@ func (writer *iosLogWriter) Write(data []byte) (int, error) {
 	defer writer.mu.Unlock()
 	if writer.err != nil {
 		return 0, writer.err
+	}
+	if len(data) > 0 {
+		writer.readyOnce.Do(func() { close(writer.ready) })
 	}
 	remaining := writer.maximum - writer.written
 	if int64(len(data)) <= remaining {
@@ -1392,12 +1456,20 @@ func (writer *iosLogWriter) limitError() error {
 type execDeviceLogProcess struct {
 	cmd  *exec.Cmd
 	done <-chan error
+	gone <-chan struct{}
 }
 
+func (process *execDeviceLogProcess) exited() <-chan struct{} { return process.gone }
+
+// stop interrupts simctl, which forwards the signal to the `log` child inside
+// the Simulator (the child is not in simctl's process group, so signalling
+// the group would not reach it); the child then flushes its closing record
+// and exits. The pipe delay set at spawn keeps Wait from hanging when the
+// child lingers.
 func (process *execDeviceLogProcess) stop(ctx context.Context) error {
 	select {
 	case err := <-process.done:
-		return err
+		return allowPipeDelayExit(err)
 	default:
 	}
 	if err := process.cmd.Process.Signal(os.Interrupt); err != nil && !errors.Is(err, os.ErrProcessDone) {
@@ -1411,14 +1483,23 @@ func (process *execDeviceLogProcess) stop(ctx context.Context) error {
 		select {
 		case waitErr := <-process.done:
 			return errors.Join(ctx.Err(), killErr, waitErr)
-		case <-time.After(time.Second):
+		case <-time.After(iosDeviceLogReapTimeout):
 			return errors.Join(ctx.Err(), killErr, errors.New("timed out waiting for killed iOS log child"))
 		}
 	}
 }
 
+// allowPipeDelayExit accepts a child that exited cleanly while a descendant
+// held its output pipe open past the delay: the file has what was written.
+func allowPipeDelayExit(err error) error {
+	if errors.Is(err, exec.ErrWaitDelay) {
+		return nil
+	}
+	return err
+}
+
 func allowInterruptExit(err error) error {
-	if err == nil {
+	if err == nil || errors.Is(err, exec.ErrWaitDelay) {
 		return nil
 	}
 	var exitErr *exec.ExitError

@@ -813,7 +813,13 @@ type fakeIOSRecorder struct {
 type fakeIOSLogProcess struct {
 	stopped bool
 	stopErr error
+	// gone, when set, tells the driver the child is already dead.
+	gone chan struct{}
 }
+
+func (process *fakeIOSLogProcess) exited() <-chan struct{} { return process.gone }
+
+func (process *notifyingIOSLogProcess) exited() <-chan struct{} { return nil }
 
 type notifyingIOSLogProcess struct {
 	once    sync.Once
@@ -1064,22 +1070,44 @@ func TestDeviceLogCaptureRejectsUnknownEmptyAndFailedCaptures(t *testing.T) {
 	if _, err := driver.StopDeviceLogCapture(context.Background(), "unknown"); err == nil {
 		t.Fatal("StopDeviceLogCapture accepted an unknown id")
 	}
+	// A stream that never writes is a failed start, not a capture that fails
+	// later at the stop (issue #28): the file is removed and the slot freed.
+	driver.deviceLogStartWait = 50 * time.Millisecond
+	silent := &fakeIOSLogProcess{}
 	driver.spawnDeviceLog = func(context.Context, []string, io.Writer) (deviceLogProcess, error) {
-		return &fakeIOSLogProcess{}, nil
+		return silent, nil
 	}
-	id, err := driver.StartDeviceLogCapture(
-		context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
+	directory := t.TempDir()
+	if _, err := driver.StartDeviceLogCapture(
+		context.Background(), device.DeviceLogRequest{OutputDirectory: directory}); err == nil ||
+		!strings.Contains(err.Error(), "wrote nothing within") {
+		t.Fatalf("StartDeviceLogCapture error = %v, want the silent-stream failure", err)
 	}
-	if _, err := driver.StopDeviceLogCapture(context.Background(), id); err == nil {
-		t.Fatal("StopDeviceLogCapture accepted an empty artifact")
+	if !silent.stopped {
+		t.Fatal("a silent stream was left running")
+	}
+	if entries, err := os.ReadDir(directory); err != nil || len(entries) != 0 {
+		t.Fatalf("silent stream left files %v (err %v), want none", entries, err)
 	}
 
+	// A child that dies before its first byte names the exit.
+	dead := &fakeIOSLogProcess{gone: make(chan struct{}), stopErr: errors.New("exit status 1")}
+	close(dead.gone)
 	driver.spawnDeviceLog = func(context.Context, []string, io.Writer) (deviceLogProcess, error) {
+		return dead, nil
+	}
+	if _, err := driver.StartDeviceLogCapture(
+		context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()}); err == nil ||
+		!strings.Contains(err.Error(), "exited before writing") || !strings.Contains(err.Error(), "exit status 1") {
+		t.Fatalf("StartDeviceLogCapture error = %v, want the dead-child failure with its exit", err)
+	}
+
+	// After the stream is up, a child failure still fails the stop.
+	driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
+		_, _ = io.WriteString(output, "Filtering the log data using \"process == \"Fixture\"\"\n")
 		return &fakeIOSLogProcess{stopErr: errors.New("log child failed")}, nil
 	}
-	id, err = driver.StartDeviceLogCapture(
+	id, err := driver.StartDeviceLogCapture(
 		context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
@@ -1087,6 +1115,87 @@ func TestDeviceLogCaptureRejectsUnknownEmptyAndFailedCaptures(t *testing.T) {
 	if _, err := driver.StopDeviceLogCapture(context.Background(), id); err == nil ||
 		!strings.Contains(err.Error(), "log child failed") {
 		t.Fatalf("StopDeviceLogCapture error = %v, want child failure", err)
+	}
+}
+
+// A capture stopped right after it started keeps the stream's header as its
+// small file: the quiet-application case spec 05 §10 promises.
+func TestDeviceLogCaptureStoppedAtOnceKeepsTheHeader(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	header := "Filtering the log data using \"process == \"Fixture\"\"\n"
+	driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			_, _ = io.WriteString(output, header)
+		}()
+		return &fakeIOSLogProcess{}, nil
+	}
+	id, err := driver.StartDeviceLogCapture(
+		context.Background(), device.DeviceLogRequest{OutputDirectory: t.TempDir()})
+	if err != nil {
+		t.Fatalf("StartDeviceLogCapture() error = %v", err)
+	}
+	artifacts, err := driver.StopDeviceLogCapture(context.Background(), id)
+	if err != nil {
+		t.Fatalf("StopDeviceLogCapture() error = %v", err)
+	}
+	data, err := os.ReadFile(artifacts[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != header {
+		t.Fatalf("artifact = %q, want the header the stream wrote before the stop", data)
+	}
+}
+
+// realIOSDeviceLog against a shell child: the start returns once the child
+// has written, the stop returns promptly, and a grandchild holding the output
+// pipe cannot hold the stop past the pipe delay (issue #28's hang).
+func TestRealIOSDeviceLogStartsOnFirstBytesAndBoundsTheStop(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell child")
+	}
+
+	for _, tc := range []struct {
+		name   string
+		script string
+	}{
+		{"child", "echo header; sleep 30"},
+		{"grandchild holds the pipe", "echo header; sleep 30 & sleep 30"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			output := newIOSLogWriter(io.Discard, 1<<20)
+			process, err := realIOSDeviceLog(context.Background(), []string{"sh", "-c", tc.script}, output)
+			if err != nil {
+				t.Fatalf("realIOSDeviceLog() error = %v", err)
+			}
+			child := process.(*execDeviceLogProcess)
+			select {
+			case <-output.ready:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the child wrote nothing")
+			}
+			// The shell ignores nothing here: SIGINT ends it. A stop context far
+			// longer than the pipe delay proves the bound comes from WaitDelay.
+			stopContext, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			stopStarted := time.Now()
+			if err := process.stop(stopContext); err != nil {
+				t.Fatalf("stop() error = %v", err)
+			}
+			if took := time.Since(stopStarted); took > iosDeviceLogPipeDelay+2*time.Second {
+				t.Fatalf("stop took %s, want it bounded by the pipe delay", took)
+			}
+			select {
+			case <-child.gone:
+			case <-time.After(time.Second):
+				t.Fatal("exited() never closed after the stop")
+			}
+		})
 	}
 }
 
@@ -1210,6 +1319,7 @@ func TestDeviceLogCaptureEnforcesActiveAndByteLimits(t *testing.T) {
 		var logOutput io.Writer
 		driver.spawnDeviceLog = func(_ context.Context, _ []string, output io.Writer) (deviceLogProcess, error) {
 			logOutput = output
+			_, _ = io.WriteString(output, "log\n")
 			return process, nil
 		}
 		id, err := driver.StartDeviceLogCapture(

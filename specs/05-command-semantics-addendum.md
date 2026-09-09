@@ -101,11 +101,13 @@ None of these system sources carries the application's standard output or
 standard error: on iOS a process that prints instead of logging leaves
 nothing in the unified log. That is what the `stdio` stream is for. An
 unknown application on the Simulator fails `startLogCapture` rather than
-filtering for a process that cannot exist. A capture whose stream produced
-no bytes at all fails `stopLogCapture`; a quiet application yields a small
-file, not an error. `stopLogCapture` reports the file, its source, its scope
-and its size in the command's log messages and in the artifact metadata of
-the commands document and the detailed HTML report.
+filtering for a process that cannot exist. `startLogCapture` completes only
+once the stream has written its first bytes, so a stop that follows at once
+still finds a file; a stream that never writes fails `startLogCapture`, and
+a quiet application yields a small file, not an error. `stopLogCapture`
+reports the file, its source, its scope and its size in the command's log
+messages and in the artifact metadata of the commands document and the
+detailed HTML report.
 
 ### 10.1 The stdio stream
 
