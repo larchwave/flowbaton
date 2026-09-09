@@ -1158,6 +1158,9 @@ func TestRealIOSDeviceLogStartsOnFirstBytesAndBoundsTheStop(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell child")
 	}
+	if _, err := exec.LookPath("xcrun"); err != nil {
+		t.Skip("realIOSDeviceLog spawns through xcrun, which only a macOS host has")
+	}
 
 	for _, tc := range []struct {
 		name   string
