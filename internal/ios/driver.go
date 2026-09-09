@@ -82,6 +82,9 @@ type Driver struct {
 	// driver knows. See defaultAppIDs.
 	launchedMu    sync.Mutex
 	launchedAppID string
+	// keyboardDismissWait bounds how long HideKeyboard polls /keyboard after
+	// tapping a dismiss control; zero means keyboardDismissTimeout.
+	keyboardDismissWait time.Duration
 
 	// recMu guards recordings, the screen recordings in flight keyed by the
 	// CaptureID StartScreenRecording handed out.
@@ -652,25 +655,6 @@ func (driver *Driver) OpenLink(ctx context.Context, request device.OpenLinkReque
 			device.ErrUnsupported, request.Browser)
 	}
 	return driver.simctl.OpenURL(ctx, request.Link)
-}
-
-// HideKeyboard has no route of its own. The keyboard dismisses on return,
-// which is the gesture a person would use.
-//
-// The press is skipped when no keyboard is up, and not only to save a round
-// trip: the runner refuses to type when nothing on screen accepts text, so
-// asking it to press Return on a screen without a keyboard turns a keyboard
-// that is already hidden into a failed command.
-func (driver *Driver) HideKeyboard(ctx context.Context) error {
-	appIDs := driver.defaultAppIDs(nil)
-	visible, err := driver.client.KeyboardVisible(ctx, appIDs)
-	if err != nil {
-		return err
-	}
-	if !visible {
-		return nil
-	}
-	return driver.client.PressKey(ctx, KeyReturn, appIDs)
 }
 
 func (driver *Driver) TakeScreenshot(

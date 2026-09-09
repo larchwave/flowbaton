@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1602,10 +1603,11 @@ func TestLaunchAppWaitsForTheAppToComeToTheForeground(t *testing.T) {
 	}
 }
 
-// HideKeyboard presses Return, and the runner refuses to type when nothing on
-// screen accepts text (session mmx23: that refusal took the runner's whole
-// process with it). Hiding a keyboard that is not up is already done, so the
-// press must not be made at all.
+// hideKeyboard must never press Return: on an on-submit field that submits the
+// form, in a multiline field it inserts a newline (issue #25). Dismissal only
+// goes through a control a person would use — the iPad hide key or the app's
+// own keyboard toolbar button — and is verified through /keyboard afterwards.
+
 func TestHideKeyboardDoesNothingWhenNoKeyboardIsUp(t *testing.T) {
 	t.Parallel()
 
@@ -1622,29 +1624,271 @@ func TestHideKeyboardDoesNothingWhenNoKeyboardIsUp(t *testing.T) {
 	if err := driver.HideKeyboard(context.Background()); err != nil {
 		t.Fatalf("HideKeyboard: %v", err)
 	}
-	if slices.Contains(routes, "/pressKey") {
-		t.Fatalf("routes = %v, want no key press when the keyboard is already hidden", routes)
+	if slices.Contains(routes, "/pressKey") || slices.Contains(routes, "/touch") {
+		t.Fatalf("routes = %v, want no key press or touch when the keyboard is already hidden", routes)
 	}
 }
 
-func TestHideKeyboardPressesReturnWhenTheKeyboardIsUp(t *testing.T) {
+func TestHideKeyboardTapsTheKeyboardToolbarButtonAndVerifies(t *testing.T) {
 	t.Parallel()
 
-	var routes []string
-	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
-		routes = append(routes, r.URL.Path)
-		switch r.URL.Path {
-		case "/keyboard":
-			_, _ = io.WriteString(w, `{"isKeyboardVisible": true}`)
-		default:
-			_, _ = io.WriteString(w, `{}`)
-		}
-	})
+	var touched []TouchRequest
+	var visibilityChecks int
+	driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy: hideKeyboardHierarchy(keyboardToolbar{
+			frame: Frame{X: 0, Y: 491, Width: 402, Height: 48},
+			buttons: []AXElement{{Identifier: "origami.keyboardDone", Label: "Done", ElementType: buttonElementType, Enabled: true,
+				Frame: Frame{X: 318, Y: 497, Width: 63, Height: 36}}},
+		}),
+		visible: func() bool { visibilityChecks++; return len(touched) == 0 },
+		touch:   func(request TouchRequest) { touched = append(touched, request) },
+	}))
+	driver.launchedAppID = "studio.example.origami"
 	if err := driver.HideKeyboard(context.Background()); err != nil {
 		t.Fatalf("HideKeyboard: %v", err)
 	}
-	if !slices.Contains(routes, "/pressKey") {
-		t.Fatalf("routes = %v, want the Return press", routes)
+	// The point came from the hierarchy, so the tap is anchored in that
+	// application's coordinate space, as Tap does for element points.
+	if len(touched) != 1 || touched[0].X != 349.5 || touched[0].Y != 515 || touched[0].Duration != nil ||
+		touched[0].AppID != "studio.example.origami" {
+		t.Fatalf("touches = %#v, want one app-anchored tap on the Done button's center", touched)
+	}
+	if visibilityChecks < 2 {
+		t.Fatalf("visibility checks = %d, want the keyboard to be re-checked after the tap", visibilityChecks)
+	}
+}
+
+func TestHideKeyboardTapsTheIPadHideKey(t *testing.T) {
+	t.Parallel()
+
+	var touched []TouchRequest
+	hierarchy := hideKeyboardHierarchy(keyboardToolbar{})
+	keyboard := &hierarchy.AXElement.Children[0].Children[1]
+	keyboard.Children = append(keyboard.Children, AXElement{
+		Identifier: "Hide keyboard", Label: "Hide keyboard", ElementType: buttonElementType, Enabled: true,
+		Frame: Frame{X: 340, Y: 760, Width: 50, Height: 50},
+	})
+	driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy: hierarchy,
+		visible:   func() bool { return len(touched) == 0 },
+		touch:     func(request TouchRequest) { touched = append(touched, request) },
+	}))
+	if err := driver.HideKeyboard(context.Background()); err != nil {
+		t.Fatalf("HideKeyboard: %v", err)
+	}
+	if len(touched) != 1 || touched[0].X != 365 || touched[0].Y != 785 {
+		t.Fatalf("touches = %#v, want one tap on the hide key", touched)
+	}
+}
+
+// A "Done" in the navigation bar closes a sheet, and the keyboard's own
+// "return" key is the bug being fixed: neither is a dismiss control. With no
+// safe control nothing is tapped; the driver drags the keyboard down instead
+// and, when that leaves it up, fails with what the flow can do.
+func TestHideKeyboardSwipesWithoutAControlAndFailsWhenTheKeyboardStaysUp(t *testing.T) {
+	t.Parallel()
+
+	var routes []string
+	var swipes []SwipeV2Request
+	hierarchy := hideKeyboardHierarchy(keyboardToolbar{})
+	app := &hierarchy.AXElement.Children[0]
+	app.Children = append(app.Children, AXElement{
+		Identifier: "NavigationBar", ElementType: navigationBarElementType, Frame: Frame{X: 0, Y: 0, Width: 402, Height: 100},
+		Children: []AXElement{{Label: "Done", ElementType: buttonElementType, Enabled: true, Frame: Frame{X: 340, Y: 50, Width: 50, Height: 40}}},
+	}, AXElement{
+		Identifier: "BottomToolbar", ElementType: toolbarElementType, Frame: Frame{X: 0, Y: 830, Width: 402, Height: 44},
+		Children: []AXElement{{Label: "Done", ElementType: buttonElementType, Enabled: true, Frame: Frame{X: 340, Y: 832, Width: 50, Height: 40}}},
+	})
+	driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy: hierarchy,
+		visible:   func() bool { return true },
+		touch:     func(TouchRequest) { t.Fatal("touched a control that is not a keyboard dismissal") },
+		swipe:     func(request SwipeV2Request) { swipes = append(swipes, request) },
+		routes:    &routes,
+	}))
+	driver.keyboardDismissWait = 30 * time.Millisecond
+	err := driver.HideKeyboard(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "still visible") ||
+		!strings.Contains(err.Error(), "no keyboard toolbar button") {
+		t.Fatalf("HideKeyboard error = %v, want the actionable still-visible failure", err)
+	}
+	if len(swipes) != 1 {
+		t.Fatalf("swipes = %#v, want exactly one attempt", swipes)
+	}
+	if slices.Contains(routes, "/pressKey") {
+		t.Fatalf("routes = %v, want no Return press", routes)
+	}
+}
+
+// Without a control the drag starts in the content just above the keyboard
+// and ends at its bottom edge, in the application's coordinate space; the
+// dismissal counts only when the text inputs read the same afterwards.
+func TestHideKeyboardSwipesTheKeyboardDownAndKeepsTheInputs(t *testing.T) {
+	t.Parallel()
+
+	var swipes []SwipeV2Request
+	hierarchy := hideKeyboardHierarchy(keyboardToolbar{})
+	value := "LocalDraft"
+	hierarchy.AXElement.Children[0].Children = append(hierarchy.AXElement.Children[0].Children, AXElement{
+		Identifier: "onboarding.name", ElementType: textFieldElementType, Value: &value,
+		Frame: Frame{X: 20, Y: 300, Width: 362, Height: 44},
+	})
+	driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy: hierarchy,
+		visible:   func() bool { return len(swipes) == 0 },
+		touch:     func(TouchRequest) { t.Fatal("tapped with no dismiss control on screen") },
+		swipe:     func(request SwipeV2Request) { swipes = append(swipes, request) },
+	}))
+	driver.launchedAppID = "com.example.twoinks"
+	if err := driver.HideKeyboard(context.Background()); err != nil {
+		t.Fatalf("HideKeyboard: %v", err)
+	}
+	want := SwipeV2Request{StartX: 201, StartY: 559, EndX: 201, EndY: 816, Duration: 0.3,
+		AppIDs: []string{"com.example.twoinks"}}
+	if len(swipes) != 1 || !reflect.DeepEqual(swipes[0], want) {
+		t.Fatalf("swipes = %#v, want %#v", swipes, want)
+	}
+}
+
+// A drag can pull a sheet down or refresh a list and still take the
+// keyboard with it. The keyboard being gone is not success when the text
+// inputs changed.
+func TestHideKeyboardFailsWhenTheSwipeChangesTheInputs(t *testing.T) {
+	t.Parallel()
+
+	var swipes []SwipeV2Request
+	hierarchy := hideKeyboardHierarchy(keyboardToolbar{})
+	value := "LocalDraft"
+	hierarchy.AXElement.Children[0].Children = append(hierarchy.AXElement.Children[0].Children, AXElement{
+		Identifier: "onboarding.name", ElementType: textFieldElementType, Value: &value,
+		Frame: Frame{X: 20, Y: 300, Width: 362, Height: 44},
+	})
+	after := hideKeyboardHierarchy(keyboardToolbar{})
+	birthday := ""
+	after.AXElement.Children[0].Children = append(after.AXElement.Children[0].Children, AXElement{
+		Identifier: "onboarding.birthday", ElementType: textFieldElementType, Value: &birthday,
+		Frame: Frame{X: 20, Y: 300, Width: 362, Height: 44},
+	})
+	driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy:      hierarchy,
+		hierarchyAfter: &after,
+		visible:        func() bool { return len(swipes) == 0 },
+		touch:          func(TouchRequest) { t.Fatal("tapped with no dismiss control on screen") },
+		swipe:          func(request SwipeV2Request) { swipes = append(swipes, request) },
+	}))
+	err := driver.HideKeyboard(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "changed the screen") ||
+		!strings.Contains(err.Error(), "onboarding.birthday") {
+		t.Fatalf("HideKeyboard error = %v, want the changed-inputs failure naming the new field", err)
+	}
+}
+
+func TestHideKeyboardFailsWhenTheKeyboardStaysUpAfterTheTap(t *testing.T) {
+	t.Parallel()
+
+	var touched []TouchRequest
+	driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy: hideKeyboardHierarchy(keyboardToolbar{
+			frame:   Frame{X: 0, Y: 491, Width: 402, Height: 48},
+			buttons: []AXElement{{Label: "Done", ElementType: buttonElementType, Enabled: true, Frame: Frame{X: 318, Y: 497, Width: 63, Height: 36}}},
+		}),
+		visible: func() bool { return true },
+		touch:   func(request TouchRequest) { touched = append(touched, request) },
+	}))
+	driver.keyboardDismissWait = 30 * time.Millisecond
+	err := driver.HideKeyboard(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "keyboard is still visible") {
+		t.Fatalf("HideKeyboard error = %v, want the still-visible failure", err)
+	}
+	if len(touched) != 1 {
+		t.Fatalf("touches = %#v, want exactly one attempt", touched)
+	}
+}
+
+type keyboardToolbar struct {
+	frame   Frame
+	buttons []AXElement
+}
+
+// hideKeyboardHierarchy mirrors the AI Origami tree recorded on the Simulator
+// for issue #25: an application, an optional keyboard toolbar sitting 44pt
+// above the keyboard (the predictive bar lives in between), and a keyboard
+// that carries its own "return" button.
+func hideKeyboardHierarchy(toolbar keyboardToolbar) ViewHierarchy {
+	app := AXElement{ElementType: 2, Frame: Frame{X: 0, Y: 0, Width: 402, Height: 874}}
+	if toolbar.frame.Height != 0 {
+		app.Children = append(app.Children, AXElement{
+			Identifier: "Toolbar", Label: "Toolbar", ElementType: toolbarElementType, Frame: toolbar.frame,
+			Children: toolbar.buttons,
+		})
+	} else {
+		app.Children = append(app.Children, AXElement{ElementType: 1})
+	}
+	app.Children = append(app.Children, AXElement{
+		ElementType: keyboardElementType, Frame: Frame{X: 0, Y: 583, Width: 402, Height: 233},
+		Children: []AXElement{
+			{Label: "Q", ElementType: keyElementType, Frame: Frame{X: 4, Y: 590, Width: 40, Height: 54}},
+			{Identifier: "Return", Label: "return", ElementType: buttonElementType, Enabled: true, Frame: Frame{X: 300, Y: 752, Width: 99, Height: 54}},
+		},
+	})
+	return ViewHierarchy{AXElement: AXElement{Children: []AXElement{app}}}
+}
+
+type hideKeyboardStub struct {
+	hierarchy ViewHierarchy
+	// hierarchyAfter, when set, answers every /viewHierarchy read after the
+	// first: the screen a dismissal gesture left behind.
+	hierarchyAfter *ViewHierarchy
+	visible        func() bool
+	touch          func(TouchRequest)
+	swipe          func(SwipeV2Request)
+	routes         *[]string
+}
+
+func hideKeyboardRunner(t *testing.T, stub hideKeyboardStub) http.HandlerFunc {
+	t.Helper()
+	var mu sync.Mutex
+	var hierarchyReads int
+	return func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if stub.routes != nil {
+			*stub.routes = append(*stub.routes, r.URL.Path)
+		}
+		switch r.URL.Path {
+		case "/keyboard":
+			_, _ = fmt.Fprintf(w, `{"isKeyboardVisible": %t}`, stub.visible())
+		case "/viewHierarchy":
+			hierarchyReads++
+			hierarchy := stub.hierarchy
+			if hierarchyReads > 1 && stub.hierarchyAfter != nil {
+				hierarchy = *stub.hierarchyAfter
+			}
+			_ = json.NewEncoder(w).Encode(hierarchy)
+		case "/touch":
+			var request TouchRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decoding /touch: %v", err)
+			}
+			stub.touch(request)
+			_, _ = io.WriteString(w, `{}`)
+		case "/swipeV2":
+			var request SwipeV2Request
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decoding /swipeV2: %v", err)
+			}
+			if stub.swipe == nil {
+				t.Errorf("hideKeyboard swiped with a dismiss control on screen")
+			} else {
+				stub.swipe(request)
+			}
+			_, _ = io.WriteString(w, `{}`)
+		case "/pressKey":
+			t.Errorf("hideKeyboard pressed a key: %s", r.URL.Path)
+			_, _ = io.WriteString(w, `{}`)
+		default:
+			_, _ = io.WriteString(w, `{}`)
+		}
 	}
 }
 
