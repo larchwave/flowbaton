@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -407,5 +408,47 @@ func TestAFlowWithNoConfiguredNameIsNamedAfterItsFile(t *testing.T) {
 	}
 	if suite.Cases[0].File != "unnamed.yaml" {
 		t.Fatalf("case file = %q, want the file name", suite.Cases[0].File)
+	}
+}
+
+// Every link the detailed report writes must open from where the report is.
+// The screenshot lands in the working directory and the run artifacts in
+// --test-output-dir, so with --output somewhere else all three directories
+// differ; each href and src is resolved against the report's own directory
+// and must exist there.
+func TestDetailedHTMLLinksResolveFromTheReportDirectory(t *testing.T) {
+	dir := t.TempDir()
+	working := t.TempDir()
+	reports := t.TempDir()
+	runOutput := t.TempDir()
+	t.Chdir(working)
+	writeFile(t, filepath.Join(dir, "shots.yaml"),
+		"appId: com.example.a\n---\n- launchApp\n- takeScreenshot: before\n")
+
+	output := filepath.Join(reports, "report.html")
+	code := fakeRunner(permissiveDriver(), dir).Run(
+		context.Background(),
+		[]string{"--format", "HTML-DETAILED", "--output", output, "--test-output-dir", runOutput,
+			filepath.Join(dir, "shots.yaml")},
+		discard{}, discard{})
+	if code != ExitOK {
+		t.Fatalf("exit = %d", code)
+	}
+	page, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	links := regexp.MustCompile(`(?:href|src)="([^"]+)"`).FindAllStringSubmatch(string(page), -1)
+	if len(links) < 2 {
+		t.Fatalf("report links = %v, want the screenshot's href and src:\n%s", links, page)
+	}
+	for _, link := range links {
+		target := filepath.Join(reports, filepath.FromSlash(link[1]))
+		if _, err := os.Stat(target); err != nil {
+			t.Fatalf("link %q does not open from %s: %v\n%s", link[1], reports, err, page)
+		}
+	}
+	if !strings.Contains(string(page), `src="../`) {
+		t.Fatalf("the screenshot is not linked relative to the report:\n%s", page)
 	}
 }

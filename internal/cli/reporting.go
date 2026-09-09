@@ -90,15 +90,21 @@ func writeHTMLReport(
 	if suiteName == "" {
 		suiteName = "flowbaton"
 	}
+	path := reportPath(options, defaultHTMLFileName)
+	directory, err := filepath.Abs(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("report: resolving the directory of %s: %w", path, err)
+	}
 	data, err := report.MarshalHTML(report.HTMLOptions{
 		SuiteName: suiteName,
 		Timestamp: now,
 		Detailed:  detailed,
+		Directory: directory,
 	}, flows)
 	if err != nil {
 		return fmt.Errorf("report: rendering html: %w", err)
 	}
-	return writeReportFile(reportPath(options, defaultHTMLFileName), data)
+	return writeReportFile(path, data)
 }
 
 func writeReportFile(path string, data []byte) error {

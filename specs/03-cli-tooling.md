@@ -55,7 +55,10 @@ is the default. Reports and debug artifacts use deterministic paths and contain
 one result per executed flow and command.
 
 Debug output may include command metadata, logs, screenshots, video, and a JSON
-artifact manifest. Output writers must reject path escapes.
+artifact manifest. Output writers must reject path escapes. The detailed HTML
+report links each step's retained artifact relative to the report file and
+shows an image artifact inline, so a copied evidence directory stays
+navigable from the report.
 
 ## 5. Environment order
 

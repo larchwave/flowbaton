@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -31,6 +32,10 @@ type HTMLOptions struct {
 	// Detailed selects HTML-DETAILED, which lists each flow's steps. The step
 	// list is the whole difference between the two formats.
 	Detailed bool
+	// Directory is where the rendered file lands. Artifact links are written
+	// relative to it, so a copied evidence directory stays navigable. Blank
+	// links each artifact by the path it was recorded with.
+	Directory string
 }
 
 // htmlSummary is what the template sees. Building it here rather than reaching
@@ -71,11 +76,14 @@ type htmlStep struct {
 // htmlArtifact is one file a step produced. Note is the producer's own
 // description of it — for a device log, the source, the scope and the size —
 // so a reader can tell a filtered application log from a whole-device one
-// without opening the file.
+// without opening the file. Href is the link from the report file to the
+// artifact; Image says the browser can show it inline.
 type htmlArtifact struct {
-	Kind string
-	Path string
-	Note string
+	Kind  string
+	Path  string
+	Note  string
+	Href  string
+	Image bool
 }
 
 // MarshalHTML renders the run as a self-contained document.
@@ -121,7 +129,7 @@ func buildHTMLSummary(options HTMLOptions, flows []FlowResult) htmlSummary {
 			summary.Failed++
 		}
 		if options.Detailed {
-			converted.Steps = htmlSteps(flow.Commands)
+			converted.Steps = htmlSteps(flow.Commands, options.Directory)
 		}
 		summary.Flows = append(summary.Flows, converted)
 	}
@@ -129,7 +137,7 @@ func buildHTMLSummary(options HTMLOptions, flows []FlowResult) htmlSummary {
 	return summary
 }
 
-func htmlSteps(commands []CommandResult) []htmlStep {
+func htmlSteps(commands []CommandResult, directory string) []htmlStep {
 	steps := make([]htmlStep, 0, len(commands))
 	for _, command := range commands {
 		step := htmlStep{
@@ -146,6 +154,7 @@ func htmlSteps(commands []CommandResult) []htmlStep {
 		for _, artifact := range command.Artifacts {
 			step.Artifacts = append(step.Artifacts, htmlArtifact{
 				Kind: artifact.Kind, Path: artifact.Path, Note: artifactNote(artifact.Metadata),
+				Href: artifactHref(directory, artifact.Path), Image: isImageArtifact(artifact.Path),
 			})
 		}
 		steps = append(steps, step)
@@ -199,6 +208,9 @@ td, th { border-top: 1px solid #e5e7eb; padding: .35rem 1rem; text-align: left;
   font-size: .85rem; vertical-align: top; }
 th { color: #6b7280; font-weight: 500; }
 .empty { color: #6b7280; }
+.artifact { margin-top: .25rem; }
+.thumb { display: block; max-height: 240px; max-width: 100%; margin: .25rem 0;
+  border: 1px solid #e5e7eb; border-radius: .25rem; }
 </style>
 </head>
 <body>
@@ -224,7 +236,7 @@ th { color: #6b7280; font-weight: 500; }
 {{range .Steps}}
 <tr>
 <td>{{.Sequence}}</td>
-<td>{{.Keyword}}{{if .Description}} — {{.Description}}{{end}}{{if .FailureMessage}}<pre>{{.FailureMessage}}</pre>{{end}}{{range .Artifacts}}<div class="artifact">{{.Kind}} <code>{{.Path}}</code>{{if .Note}} · {{.Note}}{{end}}</div>{{end}}</td>
+<td>{{.Keyword}}{{if .Description}} — {{.Description}}{{end}}{{if .FailureMessage}}<pre>{{.FailureMessage}}</pre>{{end}}{{range .Artifacts}}<div class="artifact">{{.Kind}} <a href="{{.Href}}"><code>{{.Path}}</code></a>{{if .Note}} · {{.Note}}{{end}}{{if .Image}}<a href="{{.Href}}"><img class="thumb" src="{{.Href}}" alt="" loading="lazy"></a>{{end}}</div>{{end}}</td>
 <td>{{.Status}}</td>
 </tr>
 {{end}}
@@ -235,6 +247,45 @@ th { color: #6b7280; font-weight: 500; }
 </body>
 </html>
 `))
+
+// artifactHref links an artifact from the report file's directory. Both sides
+// are resolved first: a temporary directory reaches the run as /var/… and
+// comes back from a driver as /private/var/… on macOS, and an unresolved Rel
+// would answer with a stack of "..". A path on another volume, which Rel
+// cannot express, is linked absolutely. Without a directory the recorded
+// path is the link.
+func artifactHref(directory, path string) string {
+	if directory == "" || path == "" {
+		return path
+	}
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	relative, err := filepath.Rel(resolvedPath(directory), resolvedPath(absolute))
+	if err != nil {
+		return filepath.ToSlash(absolute)
+	}
+	return filepath.ToSlash(relative)
+}
+
+func resolvedPath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return path
+}
+
+// isImageArtifact says whether a browser renders the file inline. The
+// extension decides, not the kind: a recording is a file too, and it gets a
+// link, not a broken image.
+func isImageArtifact(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+		return true
+	}
+	return false
+}
 
 // artifactNote turns artifact metadata into the one line the step shows.
 // Only the keys a reader acts on are spelled out; the rest stay in the

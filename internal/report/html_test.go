@@ -108,8 +108,10 @@ func TestOnlyTheDetailedReportListsSteps(t *testing.T) {
 		t.Fatalf("the summary report listed a step:\n%s", plain)
 	}
 	for _, want := range []string{"launchApp", "tapOn", "Tap on Buy", "assertVisible",
-		// A step's artifact is listed with what it is, not just where it is.
-		"device-log", "/run/fixture-console.ndjson", "unified-log", "scope app com.example", "8192 bytes"} {
+		// A step's artifact is listed with what it is, not just where it is,
+		// and the where is a link a reader can open.
+		"device-log", `<a href="/run/fixture-console.ndjson">`, "/run/fixture-console.ndjson",
+		"unified-log", "scope app com.example", "8192 bytes"} {
 		if !strings.Contains(detailed, want) {
 			t.Fatalf("the detailed report is missing %q", want)
 		}
@@ -135,6 +137,8 @@ func TestTextFromAFlowCannotBecomeMarkup(t *testing.T) {
 		Commands: []CommandResult{{
 			Sequence: 1, Keyword: `<b>keyword</b>`, Description: `"><script>alert(3)</script>`,
 			Status: Failed,
+			// An artifact path is a file name a flow chose; it lands in an href.
+			Artifacts: []Artifact{{Kind: "screenshot", Path: `"><script>alert(5)</script>.txt`}},
 		}},
 	}}
 
@@ -194,5 +198,57 @@ func TestAnEmptyRunStillRendersADocument(t *testing.T) {
 	page := renderHTML(t, HTMLOptions{SuiteName: "nothing"}, nil)
 	if !strings.Contains(page, "<!doctype html>") || !strings.Contains(page, "nothing") {
 		t.Fatalf("empty run produced no usable document:\n%s", page)
+	}
+}
+
+func TestArtifactLinksAreRelativeToTheReportDirectory(t *testing.T) {
+	t.Parallel()
+
+	// The report is written next to nothing in particular: --output names a
+	// file while the run directory holds the artifacts. A link that works is
+	// one relative to the file the browser opened, and a screenshot is shown
+	// inline so a before/after pair reads without leaving the page.
+	root := t.TempDir()
+	flows := []FlowResult{{
+		Name: "shots", Status: Completed,
+		Commands: []CommandResult{{
+			Sequence: 1, Keyword: "takeScreenshot", Status: Completed,
+			Artifacts: []Artifact{
+				{Kind: "screenshot", Path: root + "/run/before.png"},
+				{Kind: "recording", Path: root + "/run/clip.mp4"},
+			},
+		}},
+	}}
+	page := renderHTML(t, HTMLOptions{Detailed: true, Directory: root + "/reports"}, flows)
+	for _, want := range []string{
+		`<a href="../run/before.png"><code>`,
+		`<img class="thumb" src="../run/before.png"`,
+		`<a href="../run/clip.mp4"><code>`,
+	} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("report is missing %q:\n%s", want, page)
+		}
+	}
+	if strings.Count(page, "<img") != 1 {
+		t.Fatalf("want exactly one inline image (the recording is a link, not an image):\n%s", page)
+	}
+
+	// A hostile image name is escaped inside the src, never a tag of its own.
+	hostile := []FlowResult{{
+		Name: "x", Status: Completed,
+		Commands: []CommandResult{{Sequence: 1, Keyword: "takeScreenshot", Status: Completed,
+			Artifacts: []Artifact{{Kind: "screenshot", Path: `javascript:alert(6)//.png`}}}},
+	}}
+	page = renderHTML(t, HTMLOptions{Detailed: true}, hostile)
+	for _, forbidden := range []string{`href="javascript`, `src="javascript`} {
+		if strings.Contains(page, forbidden) {
+			t.Fatalf("a javascript: path reached an attribute:\n%s", page)
+		}
+	}
+	if !strings.Contains(page, "#ZgotmplZ") {
+		t.Fatalf("the unsafe link was not neutralised by the template:\n%s", page)
+	}
+	if strings.Count(page, "<img") != 1 {
+		t.Fatalf("want the hostile image escaped, not dropped:\n%s", page)
 	}
 }
