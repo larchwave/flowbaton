@@ -31,6 +31,7 @@ type Tools struct {
 	// Seams over go-ios services; nil means talk to the real device.
 	launch        func(entry goios.DeviceEntry, bundleID string, args []any, env map[string]any, opts map[string]any) (uint64, error)
 	kill          func(entry goios.DeviceEntry, bundleID string) error
+	running       func(entry goios.DeviceEntry, bundleID string) (bool, error)
 	install       func(entry goios.DeviceEntry, appPath string) error
 	uninstall     func(entry goios.DeviceEntry, bundleID string) error
 	startLocation func(entry goios.DeviceEntry, latitude, longitude float64) (io.Closer, error)
@@ -106,6 +107,25 @@ func renderProcessArguments(arguments []ios.LaunchArgument) []any {
 		rendered = append(rendered, key, argument.Value)
 	}
 	return rendered
+}
+
+// IsRunning reports whether the bundle has a live process on the device. It
+// walks the same route as Terminate: installation proxy for the executable
+// name, device-info service for the process. A name the device does not know
+// is a stopped application, not a failure.
+func (tools *Tools) IsRunning(ctx context.Context, bundleID string) (bool, error) {
+	entry, err := tools.entry()
+	if err != nil {
+		return false, err
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	running := tools.running
+	if running == nil {
+		running = runningOnDevice
+	}
+	return running(entry, bundleID)
 }
 
 func (tools *Tools) Terminate(ctx context.Context, bundleID string) error {
@@ -334,6 +354,48 @@ func killOnDevice(entry goios.DeviceEntry, bundleID string) error {
 	}
 	defer control.Close()
 	return control.KillProcess(process.Pid)
+}
+
+// runningOnDevice resolves the bundle's executable name and looks for its
+// process. Only a resolvable, listed process counts as running.
+func runningOnDevice(entry goios.DeviceEntry, bundleID string) (bool, error) {
+	executable, err := deviceExecutableName(entry, bundleID)
+	if err != nil {
+		return false, err
+	}
+	if executable == "" {
+		return false, nil
+	}
+	info, err := instruments.NewDeviceInfoService(entry)
+	if err != nil {
+		return false, err
+	}
+	process, err := info.ProcessByName(executable)
+	info.Close()
+	if err != nil {
+		return false, nil
+	}
+	return process.Pid != 0, nil
+}
+
+// deviceExecutableName is the installed bundle's CFBundleExecutable, empty
+// when the bundle is not installed.
+func deviceExecutableName(entry goios.DeviceEntry, bundleID string) (string, error) {
+	proxy, err := installationproxy.New(entry)
+	if err != nil {
+		return "", err
+	}
+	apps, err := proxy.BrowseAllApps()
+	proxy.Close()
+	if err != nil {
+		return "", err
+	}
+	for _, app := range apps {
+		if app.CFBundleIdentifier() == bundleID {
+			return app.CFBundleExecutable(), nil
+		}
+	}
+	return "", nil
 }
 
 func installOnDevice(entry goios.DeviceEntry, appPath string) error {

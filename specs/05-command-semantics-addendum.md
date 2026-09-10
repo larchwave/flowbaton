@@ -134,3 +134,29 @@ wrote to it. The file is capped at 16 MiB when it is assembled
 application fails and leaves no file; when the session cleans up an unused
 capture after a flow failed earlier, that flow's own error is the one
 reported.
+
+## 11. A dead application under an app-scoped flow
+
+A flow that names an application expects that application to have a process.
+`takeScreenshot` asks the platform before it captures, and fails the command
+when the answer is that no process exists: the picture would hold whatever
+the device is showing instead, and a run that reports it as a pass hides the
+crash entirely.
+
+The flow's own decisions are not crashes. `stopApp`, `killApp` and
+`clearState` each record that this run took the application down, and a
+capture after one of them proceeds; `launchApp` clears that record. An
+application in the background still has its process, so a flow that presses
+home and captures the home screen is unaffected.
+
+The probe is advisory in both directions it cannot answer. A platform with no
+process behind its `appId` returns the shared unsupported sentinel — a web
+flow's identifier is a URL — and a probe that fails to run leaves the command
+alone. Only a definite "no process" stops a capture.
+
+| Platform | Probe |
+| --- | --- |
+| iOS Simulator | `simctl spawn <udid> launchctl list`, the app's own job with a pid |
+| iOS device | installation proxy for the executable, device-info for its process |
+| Android | `adb shell pidof <package>` |
+| Web | unsupported |

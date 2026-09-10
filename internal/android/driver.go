@@ -579,6 +579,12 @@ func (driver *Driver) KillApp(ctx context.Context, request device.AppRequest) er
 	return driver.adb.Kill(ctx, request.AppID)
 }
 
+// IsAppRunning asks the platform for the package's process, so a flow can
+// tell an application that crashed from one it stopped itself.
+func (driver *Driver) IsAppRunning(ctx context.Context, request device.AppRequest) (bool, error) {
+	return driver.adb.IsPackageRunning(ctx, request.AppID)
+}
+
 // ClearAppState is pm clear: data and cache wiped, app still installed —
 // unlike iOS, Android has the per-app verb, so no uninstall is needed.
 func (driver *Driver) ClearAppState(ctx context.Context, request device.AppRequest) error {

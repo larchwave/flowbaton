@@ -92,6 +92,7 @@ type Driver interface {
 	StartDeviceLogCapture(context.Context, DeviceLogRequest) (CaptureID, error)
 	StopDeviceLogCapture(context.Context, CaptureID) ([]Artifact, error)
 	CollectCrashArtifacts(context.Context, ArtifactRequest) ([]Artifact, error)
+	IsAppRunning(context.Context, AppRequest) (bool, error)
 }
 
 // RuntimeRequirements are the command-level facts a prepared run needs from

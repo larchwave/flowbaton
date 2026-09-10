@@ -325,3 +325,29 @@ func TestPhysicalLaunchRendersVerbatimTokensAsSingleArgv(t *testing.T) {
 		t.Fatalf("argv = %#v, want %#v", got, want)
 	}
 }
+
+func TestPhysicalIsRunningAnswersFromTheDeviceProbe(t *testing.T) {
+	// The probe is injected, so this pins the contract around it: unbound
+	// tools fail closed, and a bound probe's answer is passed through.
+	tools := NewTools("00008110-TEST")
+	if _, err := tools.IsRunning(context.Background(), "com.example.a"); err == nil ||
+		!strings.Contains(err.Error(), "not open yet") {
+		t.Fatalf("unbound tools must fail closed, got %v", err)
+	}
+	asked := ""
+	tools.device = &goios.DeviceEntry{}
+	tools.running = func(_ goios.DeviceEntry, bundleID string) (bool, error) {
+		asked = bundleID
+		return false, nil
+	}
+	running, err := tools.IsRunning(context.Background(), "com.example.a")
+	if err != nil {
+		t.Fatalf("IsRunning() error = %v", err)
+	}
+	if running {
+		t.Fatal("IsRunning reported a process the device does not have")
+	}
+	if asked != "com.example.a" {
+		t.Fatalf("probe asked about %q, want com.example.a", asked)
+	}
+}

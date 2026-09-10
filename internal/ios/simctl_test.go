@@ -93,6 +93,14 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 				"--stdout=/run/s-1.out", "--stderr=/run/s-1.err", udid, "com.example.a", "-mode", "probe"},
 		},
 		{
+			name: "is running",
+			call: func(ctx context.Context, simctl *Simctl) error {
+				_, err := simctl.IsRunning(ctx, "com.example.a")
+				return err
+			},
+			want: []string{"simctl", "spawn", udid, "launchctl", "list"},
+		},
+		{
 			name: "terminate",
 			call: func(ctx context.Context, simctl *Simctl) error { return simctl.Terminate(ctx, "com.example.a") },
 			want: []string{"simctl", "terminate", udid, "com.example.a"},
@@ -375,4 +383,30 @@ func TestAppExecutableReadsTheNameOutOfAppInfo(t *testing.T) {
 			t.Fatal("AppExecutable() invented an executable name")
 		}
 	})
+}
+
+func TestLaunchdListReadsOnlyALiveProcessOfTheBundle(t *testing.T) {
+	t.Parallel()
+
+	// `launchctl list` inside the simulator: pid, status, label. A crashed
+	// app keeps no line at all, and a registered-but-dead job carries "-"
+	// where its pid was — neither is a running application.
+	const output = "PID\tStatus\tLabel\n" +
+		"55545\t0\tUIKitApplication:com.example.a[bc91][0x1]\n" +
+		"-\t0\tUIKitApplication:com.example.dead[ab12][0x2]\n" +
+		"81\t0\tcom.apple.other\n"
+	for _, test := range []struct {
+		bundleID string
+		want     bool
+	}{
+		{bundleID: "com.example.a", want: true},
+		{bundleID: "com.example.dead", want: false},
+		{bundleID: "com.example.never-launched", want: false},
+		// A prefix must not pass for the bundle itself.
+		{bundleID: "com.example", want: false},
+	} {
+		if got := launchdListHasProcess(output, test.bundleID); got != test.want {
+			t.Fatalf("launchdListHasProcess(%q) = %v, want %v", test.bundleID, got, test.want)
+		}
+	}
 }

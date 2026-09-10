@@ -401,3 +401,37 @@ Queries:
 		t.Fatalf("permissions = %v, want %v (deduplicated, sorted, runtime only)", permissions, want)
 	}
 }
+
+func TestIsPackageRunningReadsPidofAndTreatsItsRefusalAsStopped(t *testing.T) {
+	t.Parallel()
+
+	// pidof prints the pids of a live package and exits non-zero when there
+	// are none. The non-zero exit is the ordinary "stopped" answer, not a
+	// broken probe, so it must not fail the caller.
+	for _, test := range []struct {
+		name   string
+		output []byte
+		err    error
+		want   bool
+	}{
+		{name: "running", output: []byte("4821\n"), want: true},
+		{name: "not running", err: errors.New("exit status 1")},
+		{name: "empty output", output: []byte("  \n")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := &recordingRunner{output: test.output, err: test.err}
+			adb := NewAdb(testSerial, runner)
+			running, err := adb.IsPackageRunning(context.Background(), "com.example.a")
+			if err != nil {
+				t.Fatalf("IsPackageRunning() error = %v", err)
+			}
+			if running != test.want {
+				t.Fatalf("IsPackageRunning() = %v, want %v", running, test.want)
+			}
+			want := []string{"-s", testSerial, "shell", "pidof", "com.example.a"}
+			if len(runner.recorded()) != 1 || !reflect.DeepEqual(runner.recorded()[0][1:], want) {
+				t.Fatalf("adb calls = %v, want %v", runner.recorded(), want)
+			}
+		})
+	}
+}

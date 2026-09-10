@@ -34,6 +34,7 @@ const (
 	MethodOpenLink                        Method = "OpenLink"
 	MethodHideKeyboard                    Method = "HideKeyboard"
 	MethodTakeScreenshot                  Method = "TakeScreenshot"
+	MethodIsAppRunning                    Method = "IsAppRunning"
 	MethodStartScreenRecording            Method = "StartScreenRecording"
 	MethodSetLocation                     Method = "SetLocation"
 	MethodSetOrientation                  Method = "SetOrientation"
@@ -92,6 +93,7 @@ type DriverScript struct {
 	SetProxy                        []Result[struct{}]
 	ResetProxy                      []Result[struct{}]
 	IsShutdown                      []Result[bool]
+	IsAppRunning                    []Result[bool]
 	WaitUntilScreenIsStatic         []Result[bool]
 	WaitForAppToSettle              []Result[*device.ViewHierarchy]
 	Capabilities                    []device.Capabilities
@@ -174,6 +176,7 @@ func (f *FakeDriver) Enqueue(script DriverScript) {
 	f.plan.StartDeviceLogCapture = append(f.plan.StartDeviceLogCapture, script.StartDeviceLogCapture...)
 	f.plan.StopDeviceLogCapture = appendResults(f.plan.StopDeviceLogCapture, script.StopDeviceLogCapture)
 	f.plan.CollectCrashArtifacts = appendResults(f.plan.CollectCrashArtifacts, script.CollectCrashArtifacts)
+	f.plan.IsAppRunning = appendResults(f.plan.IsAppRunning, script.IsAppRunning)
 }
 
 // Actions returns an isolated snapshot of accepted calls.
@@ -302,6 +305,18 @@ func (f *FakeDriver) SetProxy(ctx context.Context, request device.Proxy) error {
 
 func (f *FakeDriver) ResetProxy(ctx context.Context) error {
 	return invokeVoid(ctx, f, MethodResetProxy, nil, &f.plan.ResetProxy)
+}
+
+// IsAppRunning answers true unless the script says otherwise: a driver that
+// has not been told about a dead app must not make every screenshot fail.
+func (f *FakeDriver) IsAppRunning(ctx context.Context, request device.AppRequest) (bool, error) {
+	if len(f.plan.IsAppRunning) == 0 {
+		f.mu.Lock()
+		f.recordLocked(MethodIsAppRunning, request)
+		f.mu.Unlock()
+		return true, nil
+	}
+	return invoke(ctx, f, MethodIsAppRunning, request, &f.plan.IsAppRunning)
 }
 
 func (f *FakeDriver) IsShutdown(ctx context.Context) (bool, error) {

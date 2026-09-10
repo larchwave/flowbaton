@@ -38,6 +38,7 @@ type mediaEvaluated struct {
 	keyword model.CommandKeyword
 	name    string
 	paths   []string
+	appID   string
 }
 
 func mediaHandlerSpecs() []handlerSpec {
@@ -185,6 +186,18 @@ func evaluateMedia(
 		// Copied, not aliased: the compiled payload outlives every evaluation.
 		value.paths = append(make([]string, 0, len(payload.paths)), payload.paths...)
 	}
+	if payload.keyword == model.CommandTakeScreenshot {
+		// The flow's own application, resolved here where interpolation lives.
+		// A flow without one asks for the device screen and gets it.
+		rawAppID, err := evaluation.ActiveAppID()
+		if err == nil {
+			appID, interpolateErr := evaluation.Interpolate(ctx, rawAppID, nil)
+			if interpolateErr != nil {
+				return evaluated, interpolateErr
+			}
+			value.appID = strings.TrimSpace(appID)
+		}
+	}
 	evaluated.value = value
 	return evaluated, nil
 }
@@ -200,6 +213,12 @@ func executeMedia(ctx context.Context, state *executionState, evaluated evaluate
 	switch payload.keyword {
 	case model.CommandTakeScreenshot:
 		effect := commandEffect{effectClass: EffectArtifact}
+		// Before the capture, not after: a screenshot of the home screen is
+		// indistinguishable from a screenshot of the application once it is
+		// written, and reporting it as a pass is the silence this check ends.
+		if err := state.requireFlowAppAlive(ctx, payload.appID); err != nil {
+			return effect, err
+		}
 		// The capture is handed to the executor as a write request rather than
 		// written here, so artifact finalization stays owned by one place.
 		screenshot, err := state.dependencies.Driver.TakeScreenshot(ctx, device.ScreenshotRequest{})

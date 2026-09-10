@@ -139,5 +139,12 @@ func executeLifecycle(ctx context.Context, state *executionState, evaluated eval
 	if err != nil {
 		return effect, err
 	}
+	// stopApp, killApp and clearState all leave the application without a
+	// process. Recording that keeps the liveness check from reading the
+	// flow's own decision as a crash.
+	switch payload.keyword {
+	case model.CommandStopApp, model.CommandKillApp, model.CommandClearState:
+		state.markAppStopped(payload.appID, true)
+	}
 	return effect, nil
 }

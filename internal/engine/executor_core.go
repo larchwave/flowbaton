@@ -43,7 +43,13 @@ func newExecutorCoreForRootRun(dependencies Dependencies, rootRunID string, spec
 		dispatcher: newLedgerDispatcher(registry, ledger),
 		timeline:   timeline,
 		ledger:     ledger,
-		state:      executionState{dependencies: dependencies},
+		// stoppedApps is created once and shared by every per-command copy of
+		// this state: the copy shares the map, and a map created later inside
+		// a copy would be thrown away with it.
+		state: executionState{
+			dependencies: dependencies,
+			stoppedApps:  make(map[string]struct{}),
+		},
 	}
 	core.state.executeCompiledSequence = core.executeCompiledSequence
 	return core, nil

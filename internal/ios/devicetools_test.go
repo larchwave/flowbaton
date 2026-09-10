@@ -21,6 +21,11 @@ func (fake *fakeDeviceTools) Launch(_ context.Context, bundleID string, _ []Laun
 	return nil
 }
 
+func (fake *fakeDeviceTools) IsRunning(_ context.Context, bundleID string) (bool, error) {
+	fake.note("isRunning " + bundleID)
+	return true, nil
+}
+
 func (fake *fakeDeviceTools) Terminate(_ context.Context, bundleID string) error {
 	fake.note("terminate " + bundleID)
 	return nil

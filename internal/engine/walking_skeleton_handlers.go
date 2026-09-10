@@ -497,6 +497,9 @@ func executeLaunchApp(ctx context.Context, state *executionState, evaluated eval
 	}); err != nil {
 		return commandEffect{}, err
 	}
+	// The application is expected to be alive again: a later screenshot that
+	// finds no process has found a crash, not this flow's own stopApp.
+	state.markAppStopped(payload.appID, false)
 	return commandEffect{effectClass: EffectDeviceMutation}, nil
 }
 

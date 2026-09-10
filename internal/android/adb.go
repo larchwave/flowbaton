@@ -114,6 +114,17 @@ func (adb *Adb) Kill(ctx context.Context, packageName string) error {
 	return adb.shell(ctx, "am", "kill", packageName)
 }
 
+// IsPackageRunning reports whether the package has a live process. `pidof`
+// prints the pids and exits non-zero when there are none, so an error is
+// the ordinary "not running" answer rather than a failure to report.
+func (adb *Adb) IsPackageRunning(ctx context.Context, packageName string) (bool, error) {
+	output, err := adb.shellOutput(ctx, "pidof", packageName)
+	if err != nil {
+		return false, nil
+	}
+	return strings.TrimSpace(string(output)) != "", nil
+}
+
 // ClearPackageData is what clearState means on Android: pm clear wipes the
 // app's data and cache without uninstalling it.
 func (adb *Adb) ClearPackageData(ctx context.Context, packageName string) error {

@@ -660,6 +660,12 @@ func (driver *Driver) OpenLink(ctx context.Context, request device.OpenLinkReque
 	return driver.simctl.OpenURL(ctx, request.Link)
 }
 
+// IsAppRunning asks the device tools, not the runner: the runner answers for
+// the foreground, and an application alive in the background is not a crash.
+func (driver *Driver) IsAppRunning(ctx context.Context, request device.AppRequest) (bool, error) {
+	return driver.simctl.IsRunning(ctx, request.AppID)
+}
+
 func (driver *Driver) TakeScreenshot(
 	ctx context.Context,
 	request device.ScreenshotRequest,

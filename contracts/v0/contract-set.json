@@ -42,7 +42,7 @@
       "language": "go",
       "path": "internal/device/driver.go",
       "coverage": "contract-complete",
-      "sha256": "3689230b0562f5634eb3d6fcd196808a1814cdde2673e418b539dba5e54c5706"
+      "sha256": "876d9ea586813b5d7cbe422fd6380eef7eb6da94b55b1ac135dcdbae4f409980"
     },
     {
       "id": "driver-json-descriptor",
@@ -50,7 +50,7 @@
       "language": "machine-readable",
       "path": "contracts/v0/driver.json",
       "coverage": "contract-complete",
-      "sha256": "6167842c2587aeaf325553dd803151b89204dee6607b40b47c54a8af2eb03c95"
+      "sha256": "8a38cc71f3a60c66ed80b1398e83d36eff40e2c42d5c87d56fed91a7127fde61"
     },
     {
       "id": "ast-json-snapshot",

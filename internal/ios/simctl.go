@@ -149,6 +149,42 @@ func (simctl *Simctl) Terminate(ctx context.Context, bundleID string) error {
 	return err
 }
 
+// IsRunning reports whether the installed app has a live process.
+//
+// simctl has no "is it running" verb, so this asks the simulator's own
+// launchd: a running app is one line of `launchctl list` whose label is
+// UIKitApplication:<bundle> plus launchd's own bracketed suffixes, and whose
+// first column is a pid. A bundle
+// that never launched has no line at all, and one that died leaves a line
+// with "-" where the pid was, which is exactly the crash this must catch.
+func (simctl *Simctl) IsRunning(ctx context.Context, bundleID string) (bool, error) {
+	output, err := simctl.runOutput(ctx, []string{"spawn", simctl.udid, "launchctl", "list"}, true)
+	if err != nil {
+		return false, err
+	}
+	return launchdListHasProcess(string(output), bundleID), nil
+}
+
+// launchdListHasProcess parses `launchctl list` output: PID, status, label,
+// tab separated. Only the app's own job counts, and only with a pid.
+func launchdListHasProcess(output, bundleID string) bool {
+	label := "UIKitApplication:" + bundleID
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		name := fields[2]
+		if name != label && !strings.HasPrefix(name, label+"[") {
+			continue
+		}
+		if pid, err := strconv.Atoi(fields[0]); err == nil && pid > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (simctl *Simctl) Uninstall(ctx context.Context, bundleID string) error {
 	return simctl.run(ctx, []string{"uninstall", simctl.udid, bundleID}, true)
 }

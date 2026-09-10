@@ -2,8 +2,11 @@ package engine
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"image"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/larchwave/flowbaton/internal/device"
@@ -216,12 +219,69 @@ type executionState struct {
 	compiledChildren        []compiledDispatch
 	depth                   int
 
+	// stoppedApps records the applications this run took down itself, so the
+	// liveness check reads the flow's own stopApp as intent, not as a crash.
+	// Commands within a run execute one at a time, which is what makes a
+	// plain map enough here.
+	stoppedApps map[string]struct{}
+
 	runtimeFn       func() (js.Runtime, error)
 	lookupFn        func() (*ElementLookup, error)
 	currentConfigFn func() (model.Config, error)
 	copiedTextFn    func() (string, error)
 	setCopiedTextFn func(string) error
 	putEnvFn        func(string, string) error
+}
+
+// markAppStopped records, or clears, this run's own decision to take an
+// application down. launchApp clears it; stopApp, killApp and clearState set
+// it, because each of them leaves the application without a process.
+func (state *executionState) markAppStopped(appID string, stopped bool) {
+	if state == nil || strings.TrimSpace(appID) == "" {
+		return
+	}
+	if !stopped {
+		delete(state.stoppedApps, appID)
+		return
+	}
+	if state.stoppedApps == nil {
+		// Only a state built outside the executor core reaches this, and it
+		// has no later command to read the mark.
+		return
+	}
+	state.stoppedApps[appID] = struct{}{}
+}
+
+// requireFlowAppAlive fails the command when the flow's application has no
+// process and the flow did not stop it. That is a crash, and the commands
+// that follow would read someone else's screen.
+//
+// The probe itself is advisory: a platform that cannot answer (a web flow's
+// appId is a URL, not a process) and a probe that fails to run both leave the
+// command alone. Only a clear "not running" stops it.
+func (state *executionState) requireFlowAppAlive(ctx context.Context, appID string) error {
+	if state == nil || strings.TrimSpace(appID) == "" {
+		return nil
+	}
+	if _, stopped := state.stoppedApps[appID]; stopped {
+		return nil
+	}
+	if state.dependencies.Driver == nil {
+		return nil
+	}
+	running, err := state.dependencies.Driver.IsAppRunning(ctx, device.AppRequest{AppID: appID})
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		return nil
+	}
+	if running {
+		return nil
+	}
+	return NewOperationError(fmt.Sprintf(
+		"the flow's application %s is not running: it crashed or was never launched, "+
+			"so this command would act on whatever is on screen instead", appID), nil)
 }
 
 func (state *executionState) updateCommandMetadata(ctx context.Context, metadata CommandMetadata) error {

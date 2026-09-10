@@ -18,6 +18,7 @@
       {"name":"HideKeyboard","parameters":["context.Context"],"results":["error"]},
       {"name":"InputText","parameters":["context.Context","InputTextRequest"],"results":["error"]},
       {"name":"IsAirplaneModeEnabled","parameters":["context.Context"],"results":["bool","error"]},
+      {"name":"IsAppRunning","parameters":["context.Context","AppRequest"],"results":["bool","error"]},
       {"name":"IsKeyboardVisible","parameters":["context.Context","KeyboardRequest"],"results":["bool","error"]},
       {"name":"IsShutdown","parameters":["context.Context"],"results":["bool","error"]},
       {"name":"KillApp","parameters":["context.Context","AppRequest"],"results":["error"]},

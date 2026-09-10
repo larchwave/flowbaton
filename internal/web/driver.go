@@ -555,6 +555,13 @@ func (driver *Driver) LaunchApp(ctx context.Context, request device.LaunchAppReq
 	return driver.OpenLink(ctx, device.OpenLinkRequest{Link: request.AppID})
 }
 
+// IsAppRunning has no meaning for a page: a browser tab is not a process the
+// flow launched, so this is the shared unsupported sentinel and the caller
+// skips the check.
+func (driver *Driver) IsAppRunning(ctx context.Context, request device.AppRequest) (bool, error) {
+	return false, unsupported("report whether an app is running")
+}
+
 // isWebTarget reports whether a flow target names a page rather than an app.
 func isWebTarget(target string) bool {
 	return strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://")

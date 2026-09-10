@@ -212,6 +212,9 @@ func (f *fakeDriver) EraseText(_ context.Context, request device.EraseTextReques
 func (f *fakeDriver) SetProxy(context.Context, device.Proxy) error { return nil }
 func (f *fakeDriver) ResetProxy(context.Context) error             { return nil }
 func (f *fakeDriver) IsShutdown(context.Context) (bool, error)     { return false, nil }
+func (f *fakeDriver) IsAppRunning(context.Context, device.AppRequest) (bool, error) {
+	return true, nil
+}
 
 func (f *fakeDriver) WaitUntilScreenIsStatic(context.Context, device.ScreenStaticRequest) (bool, error) {
 	return true, nil

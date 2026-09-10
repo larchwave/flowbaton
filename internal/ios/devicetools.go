@@ -12,6 +12,9 @@ import (
 type DeviceTools interface {
 	Launch(ctx context.Context, bundleID string, arguments []LaunchArgument, terminateRunning bool) error
 	Terminate(ctx context.Context, bundleID string) error
+	// IsRunning reports whether the installed bundle has a live process, so
+	// a flow can tell a crashed application from one it stopped itself.
+	IsRunning(ctx context.Context, bundleID string) (bool, error)
 	Uninstall(ctx context.Context, bundleID string) error
 	AppContainer(ctx context.Context, bundleID string) (string, error)
 	// AppExecutable names the process an installed bundle runs as, which is
