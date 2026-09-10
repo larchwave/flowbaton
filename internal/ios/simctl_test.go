@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The HTTP runner drives on-screen interaction. Device lifecycle operations —
@@ -64,6 +66,20 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 			// specs/06 section 5: a boolean argument is passed bare, everything
 			// else gets a leading dash. Required by the launch argument contract.
 			want: []string{"simctl", "launch", udid, "com.example.a", "-mode", "probe", "flag", "true"},
+		},
+		{
+			name: "launch with verbatim argv tokens",
+			call: func(ctx context.Context, simctl *Simctl) error {
+				return simctl.Launch(ctx, "com.example.a", []LaunchArgument{
+					{Value: "--trace-session=physical-demo", Type: device.LaunchArgumentToken},
+					{Value: "", Type: device.LaunchArgumentToken},
+					{Key: "mode", Value: "probe", Type: "string"},
+				}, false)
+			},
+			// A token is one argv element, delivered exactly as authored: no
+			// dash is added, no value follows it, an empty token stays a token.
+			want: []string{"simctl", "launch", udid, "com.example.a",
+				"--trace-session=physical-demo", "", "-mode", "probe"},
 		},
 		{
 			name: "launch binding stdout and stderr to files",

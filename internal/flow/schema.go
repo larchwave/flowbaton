@@ -372,6 +372,14 @@ func mapField(required bool) commandFieldRule {
 	return commandFieldRule{kinds: yamlKindMap, required: required}
 }
 
+// launchArgumentsField accepts the two authored forms of launchApp arguments:
+// the typed map, and the sequence of verbatim argv tokens
+// (specs/06-launch-app-semantics.md section 2). Element types are the
+// evaluator's business, as they already are for the map's values.
+func launchArgumentsField(required bool) commandFieldRule {
+	return commandFieldRule{kinds: yamlKindMap | yamlKindSequence, required: required}
+}
+
 func selectorField(required bool) commandFieldRule {
 	return commandFieldRule{required: required, validator: func(path string, data []byte, node *yaml.Node) error {
 		_, err := parseSelector(path, data, node)
@@ -674,7 +682,7 @@ func buildCommandSchemaV0() map[model.CommandKeyword]commandSchema {
 				"clearKeychain": boolField(false),
 				"stopApp":       boolField(false),
 				"permissions":   permissionMapField(false),
-				"arguments":     mapField(false),
+				"arguments":     launchArgumentsField(false),
 			},
 		},
 		model.CommandStopApp:       stringRule(true),

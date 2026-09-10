@@ -42,7 +42,7 @@
       "language": "go",
       "path": "internal/device/driver.go",
       "coverage": "contract-complete",
-      "sha256": "0660fde6a635a1b179ed9efcb3e827523c5e86d1bcd933f51bd9b724052ffea8"
+      "sha256": "3689230b0562f5634eb3d6fcd196808a1814cdde2673e418b539dba5e54c5706"
     },
     {
       "id": "driver-json-descriptor",

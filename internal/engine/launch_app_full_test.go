@@ -142,6 +142,11 @@ func TestLaunchAppCompileRejectsMalformedCommands(t *testing.T) {
 			name:    "argument value of an unsupported type",
 			command: launchAppCommand(map[string]any{"arguments": map[string]any{"list": []any{1}}}),
 		},
+		{name: "argument token list empty", command: launchAppCommand(map[string]any{"arguments": []any{}})},
+		{
+			name:    "argument token that is not a string",
+			command: launchAppCommand(map[string]any{"arguments": []any{"--ok", int64(7)}}),
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			compiled, err := compileLaunchApp(test.command)
@@ -237,4 +242,30 @@ func launchAppRequest(t testing.TB, driver *enginetest.FakeDriver) device.Launch
 	}
 	t.Fatal("driver was never asked to launch")
 	return device.LaunchAppRequest{}
+}
+
+func TestLaunchAppSendsVerbatimTokensInAuthoredOrder(t *testing.T) {
+	t.Parallel()
+
+	driver := launchAppDriver(nil)
+	command := launchAppCommand(map[string]any{"arguments": []any{
+		"--trace-session=physical-demo", "--trace-actor=agent", "", "два слова", "-x=a=b",
+	}})
+	if _, err := runSingleCommandFlow(t, driver, launchAppRegistry(t), command, "launch-tokens"); err != nil {
+		t.Fatalf("execute(launchApp) error = %T %v", err, err)
+	}
+	request := launchAppRequest(t, driver)
+	// Authored order, never sorted: a token list is argv, and argv position
+	// carries meaning the typed map does not have. Empty, spaced, Unicode and
+	// equals-bearing tokens survive as one token each.
+	want := []device.LaunchArgument{
+		{Value: "--trace-session=physical-demo", Type: device.LaunchArgumentToken},
+		{Value: "--trace-actor=agent", Type: device.LaunchArgumentToken},
+		{Value: "", Type: device.LaunchArgumentToken},
+		{Value: "два слова", Type: device.LaunchArgumentToken},
+		{Value: "-x=a=b", Type: device.LaunchArgumentToken},
+	}
+	if !reflect.DeepEqual(request.Arguments, want) {
+		t.Fatalf("arguments = %#v, want %#v", request.Arguments, want)
+	}
 }

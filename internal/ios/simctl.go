@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // The simctl half of the iOS host side. specs/02-device-drivers.md line 65
@@ -108,11 +110,16 @@ func (simctl *Simctl) LaunchCapturingStdio(
 }
 
 // renderLaunchArguments applies the serialization defined by
-// specs/06-launch-app-semantics.md section 5: a boolean is
-// passed bare, everything else takes a leading dash.
+// specs/06-launch-app-semantics.md section 5: a verbatim token is one argv
+// element passed through untouched, a boolean is passed bare, everything else
+// takes a leading dash.
 func renderLaunchArguments(arguments []LaunchArgument) []string {
 	rendered := make([]string, 0, len(arguments)*2)
 	for _, argument := range arguments {
+		if argument.Type == device.LaunchArgumentToken {
+			rendered = append(rendered, argument.Value)
+			continue
+		}
 		key := argument.Key
 		if argument.Type != "boolean" {
 			key = "-" + key

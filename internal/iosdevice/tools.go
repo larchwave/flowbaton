@@ -89,11 +89,16 @@ func (tools *Tools) Launch(
 	return nil
 }
 
-// renderProcessArguments mirrors the simulator's argv rendering: non-boolean
-// keys become -key value pairs, boolean keys stand alone with their value.
+// renderProcessArguments mirrors the simulator's argv rendering: a verbatim
+// token is one argv element passed through untouched, non-boolean keys become
+// -key value pairs, boolean keys stand alone with their value.
 func renderProcessArguments(arguments []ios.LaunchArgument) []any {
 	rendered := make([]any, 0, len(arguments)*2)
 	for _, argument := range arguments {
+		if argument.Type == device.LaunchArgumentToken {
+			rendered = append(rendered, argument.Value)
+			continue
+		}
 		key := argument.Key
 		if argument.Type != "boolean" {
 			key = "-" + key

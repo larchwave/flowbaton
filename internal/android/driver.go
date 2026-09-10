@@ -546,6 +546,14 @@ var launchArgumentTypes = map[string]string{
 func (driver *Driver) LaunchApp(ctx context.Context, request device.LaunchAppRequest) error {
 	arguments := make([]pbwire.ArgumentValue, 0, len(request.Arguments))
 	for _, argument := range request.Arguments {
+		// Extras are keyed values: an argv token has nowhere to go here, so
+		// the platform limit is reported as the shared unsupported sentinel
+		// rather than as a malformed command.
+		if argument.Type == device.LaunchArgumentToken {
+			return fmt.Errorf(
+				"%w: launchApp verbatim argv tokens are an iOS capability; Android launches through typed extras",
+				device.ErrUnsupported)
+		}
 		typeName, known := launchArgumentTypes[argument.Type]
 		if !known {
 			return fmt.Errorf(

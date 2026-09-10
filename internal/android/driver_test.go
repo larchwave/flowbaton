@@ -780,6 +780,26 @@ func TestLaunchAppRefusesAnUnknownArgumentTypeBeforeTheWire(t *testing.T) {
 	}
 }
 
+func TestLaunchAppReportsVerbatimTokensAsUnsupported(t *testing.T) {
+	t.Parallel()
+
+	// Android launches through typed extras; there is no argv to place a
+	// verbatim token in. specs/06 section 3: a platform that cannot perform
+	// an enabled operation returns the shared unsupported sentinel, so the
+	// same flow reports "not supported here", not a malformed command.
+	driver, _, recorder := newOpenDriver(t, nil)
+	err := driver.LaunchApp(context.Background(), device.LaunchAppRequest{
+		AppID:     "com.example.a",
+		Arguments: []device.LaunchArgument{{Value: "--trace-actor=agent", Type: device.LaunchArgumentToken}},
+	})
+	if !errors.Is(err, device.ErrUnsupported) {
+		t.Fatalf("LaunchApp() error = %T %v, want device.ErrUnsupported", err, err)
+	}
+	if calls := recorder.messagesFor(pbwire.MethodLaunchApp); len(calls) != 0 {
+		t.Fatalf("launchApp was called %d times; the refusal must come first", len(calls))
+	}
+}
+
 func TestTapRoundsOntoTheGridAndRefusesNegatives(t *testing.T) {
 	t.Parallel()
 

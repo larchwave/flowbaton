@@ -308,3 +308,20 @@ func TestPhysicalDeviceSessionEndToEnd(t *testing.T) {
 		t.Fatalf("session stop: %v", err)
 	}
 }
+
+func TestPhysicalLaunchRendersVerbatimTokensAsSingleArgv(t *testing.T) {
+	// The physical launch is the argv channel an instrumented app reads:
+	// exact tokens such as --trace-actor=agent must arrive as one token each,
+	// unsplit and unquoted, while the typed map keeps its -key value pairs.
+	got := renderProcessArguments([]ios.LaunchArgument{
+		{Value: "--trace-session=physical-demo", Type: device.LaunchArgumentToken},
+		{Value: "", Type: device.LaunchArgumentToken},
+		{Value: "два слова", Type: device.LaunchArgumentToken},
+		{Key: "mode", Value: "probe", Type: "string"},
+		{Key: "flag", Value: "true", Type: "boolean"},
+	})
+	want := []any{"--trace-session=physical-demo", "", "два слова", "-mode", "probe", "flag", "true"}
+	if fmt.Sprintf("%#v", got) != fmt.Sprintf("%#v", want) {
+		t.Fatalf("argv = %#v, want %#v", got, want)
+	}
+}

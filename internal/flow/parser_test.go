@@ -755,3 +755,39 @@ func requireDiagnostic(t *testing.T, err error) model.Diagnostic {
 	}
 	return diagnostic
 }
+
+func TestParseLaunchAppArgumentsAcceptBothTheMapAndTheTokenList(t *testing.T) {
+	t.Parallel()
+
+	input := `appId: com.example.app
+---
+- launchApp:
+    arguments:
+      - --trace-session=physical-demo
+      - --trace-actor=agent
+- launchApp:
+    arguments:
+      mode: probe
+`
+	parsed, err := ParseBytes("/workspace/launch.yaml", []byte(input))
+	if err != nil {
+		t.Fatalf("ParseBytes: %v", err)
+	}
+	object, ok := parsed.Commands[0].Arguments.(map[string]any)
+	if !ok {
+		t.Fatalf("launchApp arguments = %#v, want an object", parsed.Commands[0].Arguments)
+	}
+	// A token list stays a list, in the authored order: argv position carries
+	// meaning, so the parser must not fold it into the typed map.
+	want := []any{"--trace-session=physical-demo", "--trace-actor=agent"}
+	if !reflect.DeepEqual(object["arguments"], want) {
+		t.Fatalf("token arguments = %#v, want %#v", object["arguments"], want)
+	}
+	typed, ok := parsed.Commands[1].Arguments.(map[string]any)
+	if !ok {
+		t.Fatalf("second launchApp arguments = %#v, want an object", parsed.Commands[1].Arguments)
+	}
+	if !reflect.DeepEqual(typed["arguments"], map[string]any{"mode": "probe"}) {
+		t.Fatalf("typed arguments = %#v, want the map form intact", typed["arguments"])
+	}
+}

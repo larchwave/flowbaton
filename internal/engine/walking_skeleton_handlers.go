@@ -144,17 +144,22 @@ func decodeLaunchPermissions(command model.Command, object decodedObject) (map[s
 	return decodePermissionGrants(command.Kind, decodedObject{command: command.Kind, fields: fields})
 }
 
-// decodeLaunchArguments renders the authored map into the frozen typed list,
-// sorted by key. The parser hands over an unordered map, and map iteration
-// order must never be what a driver request carries.
+// decodeLaunchArguments renders the authored value into the frozen typed list.
+// A map is sorted by key, because the parser hands over an unordered map and
+// map iteration order must never be what a driver request carries; a sequence
+// is argv, so it keeps the authored order. The two forms are alternatives:
+// one authored value is either a map or a sequence, never both.
 func decodeLaunchArguments(command model.Command, object decodedObject) ([]device.LaunchArgument, error) {
 	authored, exists := object.raw("arguments")
 	if !exists {
 		return nil, nil
 	}
+	if tokens, ok := authored.([]any); ok {
+		return decodeLaunchArgumentTokens(object, tokens)
+	}
 	fields, ok := authored.(map[string]any)
 	if !ok {
-		return nil, object.fieldError("arguments", "must be an object")
+		return nil, object.fieldError("arguments", "must be an object or a list of argv tokens")
 	}
 	if len(fields) == 0 {
 		return nil, object.fieldError("arguments", "must not be empty when authored")
@@ -171,6 +176,27 @@ func decodeLaunchArguments(command model.Command, object decodedObject) ([]devic
 			return nil, err
 		}
 		arguments = append(arguments, device.LaunchArgument{Key: key, Value: value, Type: valueType})
+	}
+	return arguments, nil
+}
+
+// decodeLaunchArgumentTokens keeps every authored token as one argv token:
+// verbatim, in order, with no interpolation, splitting, or shell parsing, so
+// an app that reads exact tokens such as --trace-actor=agent gets them.
+func decodeLaunchArgumentTokens(object decodedObject, tokens []any) ([]device.LaunchArgument, error) {
+	if len(tokens) == 0 {
+		return nil, object.fieldError("arguments", "must not be empty when authored")
+	}
+	arguments := make([]device.LaunchArgument, 0, len(tokens))
+	for index, authored := range tokens {
+		token, ok := authored.(string)
+		if !ok {
+			return nil, object.fieldError("arguments",
+				fmt.Sprintf("token %d must be a string", index+1))
+		}
+		arguments = append(arguments, device.LaunchArgument{
+			Value: token, Type: device.LaunchArgumentToken,
+		})
 	}
 	return arguments, nil
 }

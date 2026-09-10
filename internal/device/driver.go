@@ -179,6 +179,11 @@ type DeviceInfo struct {
 	HeightGrid   int      `json:"height_grid"`
 }
 
+// LaunchArgumentToken is the Type of a verbatim argv token: Key is empty and
+// Value is the single token the platform must deliver unchanged. The other
+// types name a keyed value the platform renders in its own convention.
+const LaunchArgumentToken = "token"
+
 type LaunchArgument struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
