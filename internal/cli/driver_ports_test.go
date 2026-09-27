@@ -135,6 +135,23 @@ func TestTheBasePortFallsBackPerPlatform(t *testing.T) {
 	}
 }
 
+func TestHelpDocumentsTheSupportedRunnerPortOverride(t *testing.T) {
+	t.Parallel()
+
+	for _, want := range []string{
+		"FLOWBATON_DRIVER_PORTS=PORT[,PORT...]",
+		"One runner port per shard, in shard order",
+		"Example: FLOWBATON_DRIVER_PORTS=22090",
+	} {
+		if !strings.Contains(TestHelp, want) {
+			t.Fatalf("test help does not document %q:\n%s", want, TestHelp)
+		}
+	}
+	if strings.Contains(TestHelp, "--driver-port") {
+		t.Fatalf("test help advertises unsupported --driver-port:\n%s", TestHelp)
+	}
+}
+
 func TestAShardTalksToItsOwnPort(t *testing.T) {
 	t.Parallel()
 
@@ -279,11 +296,9 @@ func TestADiagnosticPortMeetsTheRunnerWhereItIs(t *testing.T) {
 	}
 }
 
-// Operator-started iOS runners need explicit ports for every shard. Shard 1
-// uses the base port, while later shards otherwise receive OS-assigned ports
-// that no prestarted runner knows. Android starts its own agent and forwards to
-// any assigned port, so the operator port list applies only to iOS and lets N
-// prestarted runners say where they are.
+// An explicit list pins every shard's runner port in shard order. This is how
+// an operator avoids occupied defaults or coordinates externally managed iOS
+// runners without adding a separate flag surface.
 func TestAnOperatorCanNameThePortOfEveryShardsRunner(t *testing.T) {
 	t.Parallel()
 
@@ -299,9 +314,9 @@ func TestAnOperatorCanNameThePortOfEveryShardsRunner(t *testing.T) {
 	}
 }
 
-// A list that runs out is refused rather than quietly falling back: a shard on
-// a port the operator did not start a runner on fails later, further from the
-// mistake, and with a message about a connection instead of a command line.
+// A list that runs out is refused rather than quietly filling the remainder
+// with allocated ports: a partially honored override is harder to diagnose
+// than a command-line error that names both counts.
 func TestAShortPortListIsRefusedRatherThanTopppedUp(t *testing.T) {
 	t.Parallel()
 

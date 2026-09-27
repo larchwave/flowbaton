@@ -33,10 +33,11 @@ func (runner HierarchyRunner) fetch() func(context.Context, string, string, []st
 	return realHierarchyFetch
 }
 
-// realHierarchyFetch is the device path: assign an ephemeral driver port, build
-// the platform driver, open it, snapshot the foreground tree, close. AppIDs is
-// left empty — with no flow there is no declared app; Android returns the full
-// tree and iOS the foreground app's.
+// realHierarchyFetch is the device path: choose the platform's diagnostic port,
+// build and open the driver, snapshot the foreground tree, then close it. On
+// iOS opening the driver starts a managed runner when none is already serving;
+// closing it tears that runner down. AppIDs is left empty when the operator did
+// not name an app; Android returns the full tree and iOS returns SpringBoard's.
 func realHierarchyFetch(
 	ctx context.Context, platform, udid string, appIDs []string, target string,
 ) (tree device.TreeNode, resultErr error) {

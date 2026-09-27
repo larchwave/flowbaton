@@ -30,6 +30,7 @@ type fakeRunnerProcess struct {
 	environment []string
 	stopped     bool
 	exit        chan error
+	diagnostic  string
 	// reason is what a real child latches when it dies: readable without
 	// taking it off the channel the stop path waits on.
 	reason string
@@ -43,6 +44,8 @@ func (process *fakeRunnerProcess) stopRunner() error {
 func (process *fakeRunnerProcess) exited() <-chan error { return process.exit }
 
 func (process *fakeRunnerProcess) exitReason() string { return process.reason }
+
+func (process *fakeRunnerProcess) diagnostics() string { return process.diagnostic }
 
 func TestOpenStartsTheRunnerWhenItOwnsOne(t *testing.T) {
 	t.Parallel()
@@ -149,7 +152,7 @@ func TestOpenGivesUpOnARunnerThatNeverAnswers(t *testing.T) {
 	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
 	driver.startupPoll = time.Millisecond
 	driver.startupTimeout = 20 * time.Millisecond
-	process := &fakeRunnerProcess{}
+	process := &fakeRunnerProcess{diagnostic: "Testing started\nWaiting for application launch"}
 	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
 		return process, nil
 	}
@@ -164,8 +167,250 @@ func TestOpenGivesUpOnARunnerThatNeverAnswers(t *testing.T) {
 	if !strings.Contains(err.Error(), startupTimeoutEnv) {
 		t.Fatalf("error = %q, want it to name the knob that changes the wait", err)
 	}
+	for _, want := range []string{
+		"Waiting for application launch",
+		"xcodebuild was still running",
+		"simulator app-launch service may be stalled",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want actionable live xcodebuild diagnostic %q", err, want)
+		}
+	}
+	var startupFailure interface{ RunnerStartupDiagnostics() string }
+	if !errors.As(err, &startupFailure) {
+		t.Fatalf("error = %T %v, want an extractable runner startup diagnostic", err, err)
+	}
+	if got := startupFailure.RunnerStartupDiagnostics(); got != process.diagnostic {
+		t.Fatalf("startup diagnostic = %q, want %q", got, process.diagnostic)
+	}
 	if !process.stopped {
 		t.Fatal("the runner it started was left behind after a failed open")
+	}
+}
+
+func TestOpenBoundsTheInitialPortProbeByTheStartupDeadline(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(_ http.ResponseWriter, request *http.Request) {
+		<-request.Context().Done()
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupTimeout = 20 * time.Millisecond
+	spawned := false
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		spawned = true
+		return &fakeRunnerProcess{}, nil
+	}
+
+	started := time.Now()
+	err := driver.Open(context.Background())
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Open() error = %v, want the shared startup deadline", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("initial /status probe took %v, want the 20ms startup budget to bound it", elapsed)
+	}
+	if spawned {
+		t.Fatal("Open started xcodebuild after the startup budget expired in the port probe")
+	}
+}
+
+func TestOpenBoundsAStalledIdentityProbeAndRetainsDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	var started atomic.Bool
+	driver := newTestDriver(t, func(w http.ResponseWriter, request *http.Request) {
+		if !started.Load() {
+			http.Error(w, "not yet", http.StatusServiceUnavailable)
+			return
+		}
+		<-request.Context().Done()
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupTimeout = 20 * time.Millisecond
+	process := &fakeRunnerProcess{diagnostic: "Testing started\nWaiting for SpringBoard"}
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		started.Store(true)
+		return process, nil
+	}
+
+	err := driver.Open(context.Background())
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Open() error = %v, want the shared startup deadline", err)
+	}
+	var startupFailure interface{ RunnerStartupDiagnostics() string }
+	if !errors.As(err, &startupFailure) || startupFailure.RunnerStartupDiagnostics() != process.diagnostic {
+		t.Fatalf("startup diagnostic = %#v, want %q", startupFailure, process.diagnostic)
+	}
+	if !process.stopped {
+		t.Fatal("the runner was left behind after its identity probe hit the startup deadline")
+	}
+}
+
+func TestOpenCancellationRetainsRunnerDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	ctx, cancel := context.WithCancel(context.Background())
+	process := &fakeRunnerProcess{diagnostic: "Testing started\nRunner process is stopped"}
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		cancel()
+		return process, nil
+	}
+
+	err := driver.Open(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Open() error = %v, want context cancellation", err)
+	}
+	var startupFailure interface{ RunnerStartupDiagnostics() string }
+	if !errors.As(err, &startupFailure) || startupFailure.RunnerStartupDiagnostics() != process.diagnostic {
+		t.Fatalf("startup diagnostic = %#v, want %q", startupFailure, process.diagnostic)
+	}
+	if !process.stopped {
+		t.Fatal("the runner was left behind after cancellation")
+	}
+}
+
+// SpringBoard can reject the runner while its application is still being
+// installed or removed. That state cleared without any source, runner, or
+// simulator change in issue #34, so the managed startup retries only this
+// exact transient and keeps the original UDID and .xctestrun selection.
+func TestOpenRetriesRunnerInstallBusy(t *testing.T) {
+	t.Parallel()
+
+	var started atomic.Bool
+	var launchedID atomic.Value
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/status" && started.Load() {
+			_, _ = w.Write([]byte(runnerStatusBody(launchedID.Load().(string))))
+			return
+		}
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	driver.installBusyRetryDelay = time.Millisecond
+	busy := errors.New("exit status 65: FBSOpenApplicationServiceErrorDomain: runner is installing or uninstalling, and cannot be launched")
+	first := &fakeRunnerProcess{exit: make(chan error, 1), reason: "the runner exited: " + busy.Error()}
+	first.exit <- busy
+	second := &fakeRunnerProcess{}
+	var calls int
+	driver.spawnRunner = func(_ context.Context, args, environment []string) (runnerProcess, error) {
+		calls++
+		if got := args[2]; got != "/built/Runner.xctestrun" {
+			t.Fatalf("attempt %d selected xctestrun %q", calls, got)
+		}
+		if got := args[4]; got != "platform=iOS Simulator,id=UDID-1" {
+			t.Fatalf("attempt %d selected destination %q", calls, got)
+		}
+		launchedID.Store(launchedRunnerID(environment))
+		if calls == 1 {
+			return first, nil
+		}
+		started.Store(true)
+		return second, nil
+	}
+
+	if err := driver.Open(context.Background()); err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("spawn calls = %d, want one bounded retry", calls)
+	}
+	if !first.stopped {
+		t.Fatal("the install-busy attempt was not cleaned up before retry")
+	}
+	if err := driver.Close(context.Background()); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestOpenDoesNotRetryAnotherExit65(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	driver.installBusyRetryDelay = time.Millisecond
+	failure := errors.New("exit status 65: Testing failed: SpringBoard quit unexpectedly")
+	var calls int
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		calls++
+		exit := make(chan error, 1)
+		exit <- failure
+		return &fakeRunnerProcess{exit: exit, reason: "the runner exited: " + failure.Error()}, nil
+	}
+
+	err := driver.Open(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "SpringBoard quit unexpectedly") {
+		t.Fatalf("Open() error = %v, want the persistent failure", err)
+	}
+	if calls != 1 {
+		t.Fatalf("spawn calls = %d, want no retry for a different exit 65", calls)
+	}
+}
+
+func TestOpenBoundsPersistentInstallBusyRetries(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	driver.installBusyRetryDelay = time.Millisecond
+	busy := errors.New("exit status 65: application is installing or uninstalling, and cannot be launched")
+	var calls int
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		calls++
+		exit := make(chan error, 1)
+		exit <- busy
+		return &fakeRunnerProcess{exit: exit, reason: "the runner exited: " + busy.Error()}, nil
+	}
+
+	err := driver.Open(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "after 3 attempts") {
+		t.Fatalf("Open() error = %v, want the bounded retry count", err)
+	}
+	if calls != 3 {
+		t.Fatalf("spawn calls = %d, want three total attempts", calls)
+	}
+}
+
+func TestOpenDoesNotStartAnotherBusyRetryAfterTheDeadline(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "not yet", http.StatusServiceUnavailable)
+	})
+	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
+	driver.startupPoll = time.Millisecond
+	driver.startupTimeout = 5 * time.Millisecond
+	driver.installBusyRetryDelay = 50 * time.Millisecond
+	busy := errors.New("exit status 65: application is installing or uninstalling, and cannot be launched")
+	var calls int
+	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
+		calls++
+		exit := make(chan error, 1)
+		exit <- busy
+		return &fakeRunnerProcess{exit: exit, diagnostic: busy.Error()}, nil
+	}
+
+	err := driver.Open(context.Background())
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Open() error = %v, want the startup deadline", err)
+	}
+	if calls != 1 {
+		t.Fatalf("spawn calls = %d, want no launch after the startup deadline", calls)
+	}
+	var startupFailure interface{ RunnerStartupDiagnostics() string }
+	if !errors.As(err, &startupFailure) || startupFailure.RunnerStartupDiagnostics() != busy.Error() {
+		t.Fatalf("startup diagnostic = %#v, want the last install-busy output", startupFailure)
 	}
 }
 
@@ -186,8 +431,9 @@ func TestOpenReportsWhyTheRunnerDied(t *testing.T) {
 	driver.startupTimeout = 200 * time.Millisecond
 	exit := make(chan error, 1)
 	exit <- errors.New("exit status 66: does not exist: /gone/Runner.xctestrun")
+	diagnostic := "xcodebuild: error: The file /gone/Runner.xctestrun does not exist."
 	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
-		return &fakeRunnerProcess{exit: exit}, nil
+		return &fakeRunnerProcess{exit: exit, diagnostic: diagnostic}, nil
 	}
 
 	err := driver.Open(context.Background())
@@ -196,6 +442,10 @@ func TestOpenReportsWhyTheRunnerDied(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "/gone/Runner.xctestrun") {
 		t.Fatalf("error = %q, want it to carry what xcodebuild said", err)
+	}
+	var startupFailure interface{ RunnerStartupDiagnostics() string }
+	if !errors.As(err, &startupFailure) || startupFailure.RunnerStartupDiagnostics() != diagnostic {
+		t.Fatalf("startup diagnostic = %#v, want %q", startupFailure, diagnostic)
 	}
 }
 
@@ -223,10 +473,17 @@ func TestOpenRefusesAPortAnotherRunnerAlreadyHolds(t *testing.T) {
 	if err == nil {
 		t.Fatal("Open used a runner it did not start")
 	}
-	for _, want := range []string{strconv.Itoa(driver.port), "UDID-1", "--driver-port"} {
+	for _, want := range []string{
+		strconv.Itoa(driver.port),
+		"UDID-1",
+		"FLOWBATON_DRIVER_PORTS=22090",
+	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error = %q, want it to mention %q", err, want)
 		}
+	}
+	if strings.Contains(err.Error(), "--driver-port") {
+		t.Fatalf("error = %q, must not recommend the unsupported --driver-port flag", err)
 	}
 	if spawned {
 		t.Fatal("a child was started on a port someone else holds")

@@ -127,10 +127,11 @@ func basePort(options TestOptions, environ []string) int {
 
 // diagnosticPort is what `hierarchy` and `query` connect on.
 //
-// They are not `test`: they do not start anything, they attach to whatever is
-// already there. On iOS that is a runner the operator started, and a runner
-// only listens where PORT told it to — so asking the OS for a free port and
-// hoping meant those two subcommands could never reach a simulator at all.
+// On iOS those commands open the driver themselves. If no runner already
+// answers, managed delivery starts one for the selected device and tears it
+// down when the command closes the driver. The runner only listens where PORT
+// told it to, so the host must use that configured port rather than asking the
+// OS for an unrelated free one.
 //
 // Android and web keep the free port, because there the host side of the
 // connection is one end of a forward this process creates: any free number
@@ -142,11 +143,11 @@ func diagnosticPort(platform string, environ []string) (int, error) {
 	return ephemeralPort()
 }
 
-// driverPortsVariable lets an operator who started the runners say where they
-// are, one port per shard, in shard order.
+// driverPortsVariable lets an operator choose the runner ports for a test run,
+// one port per shard, in shard order.
 //
-// Operator-started iOS runners need one explicit port per shard. Without the
-// list, later shards receive OS-assigned ports that no prestarted runner knows.
+// Explicit ports also let an operator avoid a default-port collision. Without
+// the list, later shards receive OS-assigned ports.
 //
 // An environment variable rather than a flag, because the CLI surface has no
 // driver-port-list option. It is NOT the runner's PORT, which

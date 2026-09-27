@@ -127,6 +127,9 @@ type Driver struct {
 	spawnRunner    func(ctx context.Context, args, environment []string) (runnerProcess, error)
 	startupPoll    time.Duration
 	startupTimeout time.Duration
+	// installBusyRetryDelay paces the narrowly-scoped managed-runner retry in
+	// managed_runner.go; zero means runnerInstallBusyRetryDelay.
+	installBusyRetryDelay time.Duration
 }
 
 // screenRecorder is a running simctl recorder the driver can stop. stop sends

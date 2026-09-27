@@ -81,6 +81,99 @@ func TestAnUnopenableDeviceIsReportedAsASetupFailureNotAFlowFailure(t *testing.T
 	}
 }
 
+type startupDiagnosticFailure struct {
+	message    string
+	diagnostic string
+	cause      error
+}
+
+func (err startupDiagnosticFailure) Error() string { return err.message }
+
+func (err startupDiagnosticFailure) Unwrap() error { return err.cause }
+
+func (err startupDiagnosticFailure) RunnerStartupDiagnostics() string { return err.diagnostic }
+
+type startupFailureDriver struct {
+	*enginetest.FakeDriver
+	failure error
+}
+
+func (driver startupFailureDriver) Open(context.Context) error { return driver.failure }
+
+func TestRunnerStartupFailureRetainsPreFlowDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	directory := filepath.Join(t.TempDir(), "artifacts")
+	driver := startupFailureDriver{
+		FakeDriver: enginetest.NewFakeDriver(),
+		failure: startupDiagnosticFailure{
+			message:    "runner stopped before it answered: exit status 65",
+			diagnostic: "runner app is installing or uninstalling",
+		},
+	}
+	_, err := (DeviceSession{Driver: driver, OutputDirectory: directory}).Execute(
+		context.Background(), nil, TestOptions{})
+	if err == nil || !strings.Contains(err.Error(), "exit status 65") {
+		t.Fatalf("Execute() error = %v, want original startup failure", err)
+	}
+	data, readErr := os.ReadFile(filepath.Join(directory, "runner-startup.log"))
+	if readErr != nil {
+		t.Fatalf("reading startup artifact: %v", readErr)
+	}
+	for _, want := range []string{"before any flow command", "exit status 65", "runner app is installing or uninstalling"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("runner-startup.log = %q, missing %q", data, want)
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(directory, "commands.json")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("commands.json exists after startup failure: %v", statErr)
+	}
+}
+
+func TestOrdinaryOpenFailureDoesNotWriteRunnerStartupArtifact(t *testing.T) {
+	t.Parallel()
+
+	directory := filepath.Join(t.TempDir(), "artifacts")
+	driver := startupFailureDriver{
+		FakeDriver: enginetest.NewFakeDriver(),
+		failure:    errors.New("device unavailable"),
+	}
+	_, err := (DeviceSession{Driver: driver, OutputDirectory: directory}).Execute(
+		context.Background(), nil, TestOptions{})
+	if err == nil || !strings.Contains(err.Error(), "device unavailable") {
+		t.Fatalf("Execute() error = %v, want original open failure", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(directory, "runner-startup.log")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("unexpected runner-startup.log: %v", statErr)
+	}
+}
+
+func TestCanceledRunnerStartupRetainsDiagnosticAndCancellation(t *testing.T) {
+	t.Parallel()
+
+	directory := filepath.Join(t.TempDir(), "artifacts")
+	driver := startupFailureDriver{
+		FakeDriver: enginetest.NewFakeDriver(),
+		failure: startupDiagnosticFailure{
+			message:    "runner did not answer before cancellation",
+			diagnostic: "SpringBoard stopped the runner under a debugger",
+			cause:      context.Canceled,
+		},
+	}
+	_, err := (DeviceSession{Driver: driver, OutputDirectory: directory}).Execute(
+		context.Background(), nil, TestOptions{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want context cancellation", err)
+	}
+	data, readErr := os.ReadFile(filepath.Join(directory, "runner-startup.log"))
+	if readErr != nil || !strings.Contains(string(data), "SpringBoard stopped the runner") {
+		t.Fatalf("runner-startup.log = %q, error = %v", data, readErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(directory, "commands.json")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("commands.json exists after startup cancellation: %v", statErr)
+	}
+}
+
 func TestTheDeviceIsClosedEvenWhenAFlowFails(t *testing.T) {
 	t.Parallel()
 

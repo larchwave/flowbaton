@@ -60,6 +60,12 @@ report links each step's retained artifact relative to the report file and
 shows an image artifact inline, so a copied evidence directory stays
 navigable from the report.
 
+If a managed iOS runner starts but times out, is cancelled, or exits before
+answering, the run fails with no completed command or flow report. Its bounded
+Xcode launch diagnostic is retained as `runner-startup.log` in that device's
+test output directory, including the selected shard directory when sharding
+is enabled.
+
 ## 5. Environment order
 
 Values are applied in this order:

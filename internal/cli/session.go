@@ -57,7 +57,8 @@ func (session DeviceSession) Execute(
 		}
 	}
 	if err := session.Driver.Open(ctx); err != nil {
-		return nil, fmt.Errorf("device session: opening %s: %w", session.Driver.Name(), err)
+		openErr := fmt.Errorf("device session: opening %s: %w", session.Driver.Name(), err)
+		return nil, errors.Join(openErr, session.writeRunnerStartupDiagnostic(openErr))
 	}
 
 	var recordingFinalizer func(context.Context) error
@@ -122,6 +123,28 @@ func (session DeviceSession) Execute(
 	}
 
 	return results, errors.Join(executeErr, recordingErr, closeErr)
+}
+
+// writeRunnerStartupDiagnostic keeps the pre-flow Xcode failure in the run's
+// artifact directory. The normal report writers have no flow result to write
+// when Open fails, so this narrow path must run before Execute returns.
+func (session DeviceSession) writeRunnerStartupDiagnostic(openErr error) error {
+	var startup interface{ RunnerStartupDiagnostics() string }
+	if session.OutputDirectory == "" || !errors.As(openErr, &startup) {
+		return nil
+	}
+	if err := os.MkdirAll(session.OutputDirectory, 0700); err != nil {
+		return fmt.Errorf("saving runner startup diagnostic: %w", err)
+	}
+	path := filepath.Join(session.OutputDirectory, "runner-startup.log")
+	content := "Runner startup failed before any flow command ran.\n" + openErr.Error() + "\n"
+	if diagnostic := startup.RunnerStartupDiagnostics(); diagnostic != "" && !strings.Contains(content, diagnostic) {
+		content += "\nxcodebuild output:\n" + diagnostic + "\n"
+	}
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		return fmt.Errorf("saving runner startup diagnostic: %w", err)
+	}
+	return nil
 }
 
 func runtimeRequirements(program *engine.Program) device.RuntimeRequirements {

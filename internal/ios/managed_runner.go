@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -44,7 +45,35 @@ const (
 	// and a budget that expires mid-install
 	// would report a working setup as broken.
 	runnerStartupTimeout = 180 * time.Second
+	// SpringBoard can briefly refuse the runner while XCTest replaces its app.
+	// Three total attempts keep that known transient bounded without replaying
+	// arbitrary exit 65 failures.
+	runnerInstallBusyRetryDelay = 2 * time.Second
+	runnerInstallBusyAttempts   = 3
 )
+
+const runnerInstallBusySignature = "is installing or uninstalling, and cannot be launched"
+
+// RunnerStartupError carries xcodebuild's bounded output separately from the
+// operator-facing error. Callers that own an artifact directory can retain the
+// raw diagnostic without parsing prose, even though startup failed before any
+// flow command or report existed.
+type RunnerStartupError struct {
+	err        error
+	diagnostic string
+}
+
+func (err *RunnerStartupError) Error() string { return err.err.Error() }
+
+func (err *RunnerStartupError) Unwrap() error { return err.err }
+
+// RunnerStartupDiagnostics returns the bounded xcodebuild tail captured for
+// this failed launch. It may be empty when xcodebuild produced no output.
+func (err *RunnerStartupError) RunnerStartupDiagnostics() string { return err.diagnostic }
+
+func runnerStartupError(err error, process runnerProcess) error {
+	return &RunnerStartupError{err: err, diagnostic: strings.TrimSpace(process.diagnostics())}
+}
 
 // runnerEnvPrefix is how a variable reaches the runner. xcodebuild passes only
 // TEST_RUNNER_-prefixed names into the test process on the simulator, with the
@@ -80,6 +109,10 @@ type runnerProcess interface {
 	// reader that took the value would leave stopRunner waiting out its whole
 	// ten-second budget before killing a process that was already dead.
 	exitReason() string
+	// diagnostics returns the bounded tail xcodebuild has written so far. It
+	// remains useful while the child is alive, when exitReason is necessarily
+	// empty but startup has stalled.
+	diagnostics() string
 }
 
 // runnerArgs builds the xcodebuild invocation that launches the managed runner.
@@ -116,21 +149,60 @@ func (driver *Driver) openManagedRunner(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	startupCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	// A runner already answering on the port cannot be the one about to be
 	// started. Another driver holds it — one serving a different simulator
 	// answers /status just as well — and the child would bind nothing while
 	// every request went to the stranger. A session took its screens from
 	// another simulator that way.
-	if err := driver.client.Status(ctx); err == nil {
+	if probeErr := driver.client.Status(startupCtx); probeErr == nil {
+		if err := contextBudgetError(startupCtx); err != nil {
+			return fmt.Errorf("checking the runner port for %s within the %v startup budget: %w", driver.udid, timeout, err)
+		}
 		return fmt.Errorf(
-			"127.0.0.1:%d already answers as a runner before this driver started one for %s; another driver holds the port — stop it, or pass --driver-port",
+			"127.0.0.1:%d already answers as a runner before this driver started one for %s; another FlowBaton process or stale runner holds the port — stop that process, or set FLOWBATON_DRIVER_PORTS to an unused port (for example FLOWBATON_DRIVER_PORTS=22090)",
 			driver.port, driver.udid)
+	} else if err := contextBudgetError(startupCtx); err != nil {
+		return fmt.Errorf("checking the runner port for %s within the %v startup budget: %w", driver.udid, timeout, err)
 	}
+	for attempt := 1; attempt <= runnerInstallBusyAttempts; attempt++ {
+		if err := contextBudgetError(startupCtx); err != nil {
+			return fmt.Errorf("starting the runner for %s within the %v startup budget: %w", driver.udid, timeout, err)
+		}
+		process, startErr := driver.startManagedRunnerAttempt(startupCtx)
+		if startErr != nil {
+			return startErr
+		}
+		if runErr := driver.awaitRunner(startupCtx, timeout, process); runErr == nil {
+			return nil
+		} else {
+			_ = driver.stopRunnerProcess()
+			if !isRunnerInstallBusy(runErr) {
+				return runErr
+			}
+			if attempt == runnerInstallBusyAttempts {
+				return fmt.Errorf(
+					"the runner for %s remained install-busy after %d attempts: %w",
+					driver.udid, attempt, runErr)
+			}
+			if waitErr := driver.waitForInstallBusyRetry(startupCtx); waitErr != nil {
+				return fmt.Errorf(
+					"the runner for %s remained install-busy after %d attempts within the %v startup budget: %w",
+					driver.udid, attempt, timeout, errors.Join(waitErr, runErr))
+			}
+		}
+	}
+	panic("unreachable")
+}
+
+func (driver *Driver) startManagedRunnerAttempt(ctx context.Context) (runnerProcess, error) {
+	var err error
 	if driver.runnerID, err = newRunnerID(); err != nil {
-		return err
+		return nil, err
 	}
 	if driver.derivedData, err = os.MkdirTemp("", "flowbaton-ios-runner-"); err != nil {
-		return fmt.Errorf("creating a derived-data directory for the runner: %w", err)
+		return nil, fmt.Errorf("creating a derived-data directory for the runner: %w", err)
 	}
 	spawn := driver.spawnRunner
 	if spawn == nil {
@@ -139,14 +211,41 @@ func (driver *Driver) openManagedRunner(ctx context.Context) error {
 	process, err := spawn(ctx, driver.runnerArgs(), driver.runnerEnv())
 	if err != nil {
 		driver.removeDerivedData()
-		return fmt.Errorf("starting the runner for %s: %w", driver.udid, err)
+		return nil, fmt.Errorf("starting the runner for %s: %w", driver.udid, err)
 	}
 	driver.process = process
 	driver.client.SetTransportHint(process.exitReason)
+	return process, nil
+}
 
-	if err := driver.awaitRunner(ctx, timeout, process); err != nil {
-		_ = driver.stopRunnerProcess()
+func isRunnerInstallBusy(err error) bool {
+	return err != nil && strings.Contains(err.Error(), runnerInstallBusySignature)
+}
+
+func (driver *Driver) waitForInstallBusyRetry(ctx context.Context) error {
+	delay := driver.installBusyRetryDelay
+	if delay <= 0 {
+		delay = runnerInstallBusyRetryDelay
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// contextBudgetError checks the absolute deadline as well as Err. A response
+// can race the context timer at the deadline; accepting it because Err has not
+// been published yet would let startup succeed outside its wall-time budget.
+func contextBudgetError(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
 	}
 	return nil
 }
@@ -169,11 +268,13 @@ func (driver *Driver) runnerStartupBudget() (time.Duration, error) {
 func (driver *Driver) awaitRunner(
 	ctx context.Context, timeout time.Duration, process runnerProcess,
 ) error {
-	deadline := time.Now().Add(timeout)
 	var lastErr error
 	for {
 		var identity string
 		if identity, lastErr = driver.client.Identity(ctx); lastErr == nil {
+			if err := contextBudgetError(ctx); err != nil {
+				return driver.runnerContextError(err, timeout, lastErr, process)
+			}
 			if identity == driver.runnerID {
 				return nil
 			}
@@ -192,18 +293,33 @@ func (driver *Driver) awaitRunner(
 		}
 		select {
 		case reason := <-process.exited():
-			return fmt.Errorf(
-				"the runner for %s stopped before it answered: %v", driver.udid, reason)
+			return runnerStartupError(fmt.Errorf(
+				"the runner for %s stopped before it answered: %v", driver.udid, reason), process)
 		case <-ctx.Done():
-			return ctx.Err()
+			return driver.runnerContextError(ctx.Err(), timeout, lastErr, process)
 		case <-time.After(driver.startupPoll):
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf(
-				"the runner for %s did not answer within %v (%s overrides the wait, in milliseconds): %w",
-				driver.udid, timeout, startupTimeoutEnv, lastErr)
-		}
 	}
+}
+
+func (driver *Driver) runnerContextError(
+	ctxErr error, timeout time.Duration, lastErr error, process runnerProcess,
+) error {
+	if !errors.Is(ctxErr, context.DeadlineExceeded) {
+		return runnerStartupError(fmt.Errorf(
+			"waiting for the runner for %s: %w", driver.udid, ctxErr), process)
+	}
+	failure := fmt.Errorf(
+		"the runner for %s did not answer within %v (%s overrides the wait, in milliseconds): %w",
+		driver.udid, timeout, startupTimeoutEnv, errors.Join(ctxErr, lastErr))
+	if diagnostic := strings.TrimSpace(process.diagnostics()); diagnostic != "" {
+		return runnerStartupError(fmt.Errorf(
+			"%w; xcodebuild was still running and its latest output was:\n%s\nThe runner or simulator app-launch service may be stalled; verify that this simulator can launch an installed app directly, then restart the dedicated simulator and retry if it cannot",
+			failure, diagnostic), process)
+	}
+	return runnerStartupError(fmt.Errorf(
+		"%w; xcodebuild was still running but produced no launch diagnostic; the runner or simulator app-launch service may be stalled — verify that this simulator can launch an installed app directly, then restart the dedicated simulator and retry if it cannot",
+		failure), process)
 }
 
 // stopRunnerProcess ends a runner this driver started, once.
@@ -305,6 +421,13 @@ func (runner *xcodebuildRunner) describeExit(err error) error {
 func (runner *xcodebuildRunner) exited() <-chan error { return runner.done }
 
 func (runner *xcodebuildRunner) exitReason() string { return runner.exit.String() }
+
+func (runner *xcodebuildRunner) diagnostics() string {
+	if runner.output == nil {
+		return ""
+	}
+	return runner.output.String()
+}
 
 func (runner *xcodebuildRunner) stopRunner() error {
 	// A child that is already gone is not a stop failure, and this is the one

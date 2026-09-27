@@ -47,6 +47,11 @@ Options:
       --shard-split N              Split the flows across N devices
       --shard-all N                Run every flow on each of N devices
   -h, --help                       Print this help and exit 0
+
+Environment:
+  FLOWBATON_DRIVER_PORTS=PORT[,PORT...]
+                                    One runner port per shard, in shard order
+                                    Example: FLOWBATON_DRIVER_PORTS=22090
 `
 
 // TestHelp is what `flowbaton test --help` prints.
