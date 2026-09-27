@@ -113,6 +113,8 @@ jobs:
           java-version: '17'
       - name: Install Android command-line tools
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
       - name: Prepare emulator host
         run: |
           sudo apt-get update
@@ -529,6 +531,8 @@ jobs:
       - name: Install Android identity tools
         if: runner.os != 'macOS'
         uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        with:
+          packages: platform-tools
       - name: Smoke POSIX installer and production driver provisioning
         if: runner.os != 'Windows'
         env:
