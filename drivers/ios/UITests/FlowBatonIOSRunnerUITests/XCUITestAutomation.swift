@@ -61,6 +61,15 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
 
   func touch(x: Double, y: Double, duration: Double?, appID: String?) throws {
     try onMain {
+      let point = CGPoint(x: x, y: y)
+      if let systemButton = try Self.systemAlertButton(at: point) {
+        guard let duration else {
+          systemButton.tap()
+          return
+        }
+        systemButton.press(forDuration: duration)
+        return
+      }
       let anchor = try Self.anchor(appIDs: appID.map { [$0] } ?? [])
       let mapping = Self.screenMapping(of: anchor)
       let target = Self.coordinate(x: x, y: y, in: anchor, mapping: mapping)
@@ -514,6 +523,36 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     return alerts.allElementsBoundByAccessibilityElement.compactMap {
       guard let snapshot = try? $0.snapshot() else { return nil }
       return SnapshotAdapter(snapshot)
+    }
+  }
+
+  /// Returns the one SpringBoard alert button containing the requested screen
+  /// point. If an alert covers the app but the point does not identify exactly
+  /// one button, the touch is refused instead of being delivered through the
+  /// alert to an obscured app control (issue #39).
+  @MainActor
+  static func systemAlertButton(at point: CGPoint) throws -> XCUIElement? {
+    let alerts = XCUIApplication(bundleIdentifier: springboardID).alerts
+      .allElementsBoundByAccessibilityElement.filter(\.exists)
+    let buttons = alerts.map {
+      $0.buttons.allElementsBoundByAccessibilityElement.filter(\.exists)
+    }
+    let decision = SystemAlertTouchTarget.decide(
+      at: point, buttonFramesByAlert: buttons.map { $0.map(\.frame) })
+    switch decision {
+    case .noAlert:
+      return nil
+    case .button(let alertIndex, let buttonIndex):
+      let button = buttons[alertIndex][buttonIndex]
+      guard button.isHittable else {
+        throw AutomationError.precondition(
+          "the system alert button at (\(point.x), \(point.y)) is not hittable")
+      }
+      return button
+    case .blocked:
+      throw AutomationError.precondition(
+        "a system alert covers the screen, but (\(point.x), \(point.y)) does not identify one of its buttons"
+      )
     }
   }
 
