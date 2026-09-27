@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/larchwave/flowbaton/internal/device"
+	"github.com/larchwave/flowbaton/internal/drivercontract"
 )
 
 // These tests pin the iOS device.Driver composition: which boundary answers
@@ -98,6 +99,9 @@ func TestCapabilitiesReportTheSameRefusals(t *testing.T) {
 		if !capabilities.Features[feature] {
 			t.Fatalf("Capabilities() reports real diagnostic feature %q unsupported", feature)
 		}
+	}
+	if feature := drivercontract.CommandValueFeature("pressKey", "LOCK"); !capabilities.Features[feature] {
+		t.Fatalf("Capabilities() reports simulator %q unsupported", feature)
 	}
 }
 
@@ -294,16 +298,26 @@ func TestPressKeyHomeGoesThroughThePressButtonRouteAndForgetsTheApp(t *testing.T
 	}
 }
 
-func TestPressKeyLockIsStillRefusedOnIOS(t *testing.T) {
+func TestPressKeyLockUsesTheSimulatorHostAndKeepsTheAppRemembered(t *testing.T) {
 	t.Parallel()
 
+	runner := &recordingRunner{}
 	driver := newTestDriver(t, func(writer http.ResponseWriter, request *http.Request) {
 		t.Errorf("LOCK reached the runner at %s", request.URL.Path)
 		writeJSON(t, writer, map[string]any{})
 	})
-	err := driver.PressKey(context.Background(), device.PressKeyRequest{Code: device.KeyCode("LOCK")})
-	if !errors.Is(err, device.ErrUnsupported) {
-		t.Fatalf("PressKey(LOCK) = %v, want ErrUnsupported", err)
+	driver.simctl = NewSimctl("UDID-1", runner)
+	driver.rememberLaunch("com.example.a")
+	if err := driver.PressKey(
+		context.Background(), device.PressKeyRequest{Code: device.KeyCode("LOCK")}); err != nil {
+		t.Fatalf("PressKey(LOCK) error = %v", err)
+	}
+	want := []string{"idb", "ui", "button", "LOCK", "--udid", "UDID-1"}
+	if !reflect.DeepEqual(runner.calls, [][]string{want}) {
+		t.Fatalf("commands = %v, want %v", runner.calls, [][]string{want})
+	}
+	if got := driver.defaultAppIDs(nil); !reflect.DeepEqual(got, []string{"com.example.a"}) {
+		t.Fatalf("after LOCK the driver remembers %v, want the still-running app", got)
 	}
 }
 

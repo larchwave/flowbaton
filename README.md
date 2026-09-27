@@ -188,6 +188,19 @@ Flags, certificates, and inventory:
 | Control | `runFlow` `repeat` `retry` `extendedWaitUntil` `action` |
 | Scripting | `runScript` `evalScript` |
 
+On an iOS Simulator, `pressKey: LOCK` locks or wakes the selected UDID. Install
+[`idb` and its local companion](https://fbidb.io/docs/installation/) before
+using that key. A lock, wake, and system screenshot can be authored directly:
+
+```yaml
+- pressKey: LOCK
+- pressKey: LOCK
+- takeScreenshot: lock-screen
+```
+
+The application stays running with its data intact. Physical iOS devices
+refuse `LOCK`.
+
 Text typed into a secure field is exported as a `${FLOWBATON_…SECRET…}`
 placeholder. The engine fails the flow when that variable is unset, and keeps
 the placeholder, never the resolved value, in recordings, artifacts, and

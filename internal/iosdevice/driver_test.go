@@ -249,6 +249,7 @@ func TestPhysicalCapabilitiesMaskUnimplementedOperations(t *testing.T) {
 	mustBeFalse := []string{
 		drivercontract.CommandFeature("clearKeychain"),
 		drivercontract.CommandFeature("addMedia"),
+		drivercontract.CommandValueFeature("pressKey", "LOCK"),
 	}
 	for _, feature := range mustBeFalse {
 		if features[feature] {
@@ -289,6 +290,15 @@ func TestApplePlatformLimitsAreErrUnsupported(t *testing.T) {
 	}
 	if err := tools.AddMedia(context.Background(), nil); !errors.Is(err, device.ErrUnsupported) {
 		t.Fatalf("AddMedia: %v", err)
+	}
+}
+
+func TestPhysicalDeviceRefusesLockWithoutCallingTheRunner(t *testing.T) {
+	driver := NewDriver("00008110-TEST", 30001, ios.NewClient("http://127.0.0.1:1"), nil)
+	err := driver.PressKey(
+		context.Background(), device.PressKeyRequest{Code: device.KeyCode("LOCK")})
+	if !errors.Is(err, device.ErrUnsupported) || !strings.Contains(err.Error(), "only on an iOS Simulator") {
+		t.Fatalf("PressKey(LOCK) = %v, want the physical-device refusal", err)
 	}
 }
 

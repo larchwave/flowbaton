@@ -193,6 +193,32 @@ func TestSimctlBuildsTheExactCommandLine(t *testing.T) {
 	}
 }
 
+func TestSimulatorLockUsesIDBWithTheExplicitUDID(t *testing.T) {
+	t.Parallel()
+
+	runner := &recordingRunner{}
+	if err := NewSimctl("UDID-1", runner).PressHardwareButton(
+		context.Background(), device.KeyCode("LOCK")); err != nil {
+		t.Fatalf("PressHardwareButton(LOCK) error = %v", err)
+	}
+	want := []string{"idb", "ui", "button", "LOCK", "--udid", "UDID-1"}
+	if !reflect.DeepEqual(runner.calls, [][]string{want}) {
+		t.Fatalf("commands = %v, want %v", runner.calls, [][]string{want})
+	}
+}
+
+func TestSimulatorLockExplainsTheIDBPrerequisite(t *testing.T) {
+	t.Parallel()
+
+	sentinel := errors.New("executable file not found")
+	runner := &recordingRunner{err: sentinel}
+	err := NewSimctl("UDID-1", runner).PressHardwareButton(
+		context.Background(), device.KeyCode("LOCK"))
+	if !errors.Is(err, sentinel) || !strings.Contains(err.Error(), "requires idb") {
+		t.Fatalf("PressHardwareButton(LOCK) error = %v, want idb prerequisite and cause", err)
+	}
+}
+
 func TestSetPermissionRejectsAGrantOutsideTheExactSet(t *testing.T) {
 	t.Parallel()
 

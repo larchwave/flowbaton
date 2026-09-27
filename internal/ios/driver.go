@@ -356,8 +356,18 @@ func (driver *Driver) LongPress(ctx context.Context, request device.LongPressReq
 }
 
 func (driver *Driver) PressKey(ctx context.Context, request device.PressKeyRequest) error {
-	if strings.EqualFold(string(request.Code), "HOME") {
+	switch {
+	case strings.EqualFold(string(request.Code), "HOME"):
 		return driver.pressHome(ctx)
+	case strings.EqualFold(string(request.Code), "LOCK"):
+		presser, ok := driver.simctl.(interface {
+			PressHardwareButton(context.Context, device.KeyCode) error
+		})
+		if !ok {
+			return fmt.Errorf(
+				"%w: pressKey LOCK is available only on an iOS Simulator", device.ErrUnsupported)
+		}
+		return presser.PressHardwareButton(ctx, request.Code)
 	}
 	key, ok := keyCodes[strings.ToLower(string(request.Code))]
 	if !ok {
@@ -374,8 +384,9 @@ func (driver *Driver) PressKey(ctx context.Context, request device.PressKeyReque
 // flow: the engine keeps naming the flow's app and is refused with "not in
 // the foreground" until launchApp) then reads the home screen (see
 // defaultAppIDs).
-// LOCK and the volume buttons stay refused: the runner cannot press them on a
-// simulator.
+// LOCK does not use this runner route: the simulator's host-side tools send
+// its sleep/wake button while physical devices fail closed. Volume buttons
+// stay refused.
 func (driver *Driver) pressHome(ctx context.Context) error {
 	if err := driver.client.PressButton(ctx, ButtonHome); err != nil {
 		return err

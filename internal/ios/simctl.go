@@ -3,6 +3,7 @@ package ios
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -74,6 +75,32 @@ func (simctl *Simctl) Boot(ctx context.Context) error {
 
 func (simctl *Simctl) Shutdown(ctx context.Context) error {
 	return simctl.deviceCommand(ctx, "shutdown")
+}
+
+// PressHardwareButton sends the simulator a host-side HID button event.
+// Apple's simctl and XCUIAutomation surfaces do not expose the Lock button;
+// idb does, scoped to the same explicit simulator UDID. Keeping this operation
+// on Simctl (the simulator-only DeviceTools implementation) means the physical
+// iOS driver cannot inherit it accidentally.
+func (simctl *Simctl) PressHardwareButton(ctx context.Context, code device.KeyCode) error {
+	if strings.TrimSpace(simctl.udid) == "" {
+		return errors.New("idb: pressing a hardware button requires a simulator udid")
+	}
+	if !strings.EqualFold(string(code), "LOCK") {
+		return fmt.Errorf("%w: idb hardware button %q is not implemented", device.ErrUnsupported, code)
+	}
+	output, err := simctl.runner.Run(ctx, "idb", "ui", "button", "LOCK", "--udid", simctl.udid)
+	if err != nil {
+		detail := strings.TrimSpace(string(output))
+		if detail != "" {
+			detail = ": " + detail
+		}
+		return fmt.Errorf(
+			"pressKey LOCK requires idb with a local companion (https://fbidb.io/docs/idb/ui/): %w%s",
+			err, detail,
+		)
+	}
+	return nil
 }
 
 // Launch starts an app. terminateRunning maps onto simctl's own

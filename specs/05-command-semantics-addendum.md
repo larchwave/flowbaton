@@ -70,8 +70,16 @@ gap must be named in the test and must fail if the gap becomes stale.
 terminating it; its state survives. On iOS the runner presses the device's home
 button, so the flow's application is no longer in front afterwards: a following
 `launchApp` with `stopApp: false` resumes it, and commands that read its
-hierarchy before that are refused as "not in the foreground". `LOCK`, `POWER`
-and the volume keys stay Android-only; preflight refuses them on iOS.
+hierarchy before that are refused as "not in the foreground".
+
+On an iOS Simulator, `pressKey: LOCK` sends the explicit simulator UDID an idb
+Lock-button event. The first press locks and sleeps the simulated device; a
+second press wakes it to the Lock Screen without terminating the foreground
+application or resetting its data. A following `takeScreenshot` therefore
+captures the system Lock Screen, including a Live Activity. This command needs
+`idb` and its local companion on the host; absence is an actionable setup
+failure. Physical iOS devices refuse `LOCK`, and `POWER` plus the volume keys
+remain Android-only.
 
 ## 10. Log capture
 

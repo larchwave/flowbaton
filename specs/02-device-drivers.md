@@ -68,6 +68,13 @@ capture instead binds the application's next launch to files through
 creates the files (simctl only opens them) and merges one pair per launch at
 the stop.
 
+`pressKey: LOCK` uses idb's host-side HID command with the selected simulator's
+explicit UDID because neither the public `simctl` command surface nor current
+XCUIAutomation exposes the Lock button. `idb` and a local companion are a host
+prerequisite for this one command. Repeating `LOCK` wakes the device; screenshots
+continue through the runner and capture the system Lock Screen. Physical iOS
+does not inherit this host operation and refuses it.
+
 ## 4. Web
 
 The web driver owns browser lifecycle, page navigation, hierarchy extraction,

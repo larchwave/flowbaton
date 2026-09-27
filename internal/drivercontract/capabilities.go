@@ -92,7 +92,7 @@ func iosSimulatorDocument() Document {
 		model.CommandSetAirplaneMode:    true,
 		model.CommandToggleAirplaneMode: true,
 	})
-	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB", "HOME")
+	addCommandValues(features, model.CommandPressKey, "ENTER", "BACKSPACE", "TAB", "HOME", "LOCK")
 	return Document{Platform: PlatformIOSSimulator, features: features}
 }
 

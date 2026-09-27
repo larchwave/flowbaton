@@ -104,7 +104,7 @@ func TestCheckUsesDriverCommandPlatformsBeforeStartup(t *testing.T) {
 		{name: "web back", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandBack}},
 		{name: "ios enter", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "ENTER"}},
 		{name: "ios home", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "HOME"}},
-		{name: "ios lock", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "LOCK"}, wantErr: true},
+		{name: "ios lock", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "LOCK"}},
 		{name: "web tab", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandPressKey, Arguments: "TAB"}},
 		{name: "web power", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandPressKey, Arguments: "POWER"}, wantErr: true},
 		{name: "ios action back", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandAction, Arguments: "back"}, wantErr: true},
