@@ -37,7 +37,7 @@ func captureRequestBody(t *testing.T, call func(*Client) error) map[string]any {
 		}))
 	t.Cleanup(server.Close)
 
-	if err := call(NewClient(server.URL)); err != nil {
+	if err := call(testClientForServer(server)); err != nil {
 		t.Fatalf("call error = %v", err)
 	}
 	if len(captured) == 0 {

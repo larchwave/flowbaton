@@ -15,6 +15,15 @@ import (
 // These tests exercise the iOS XCTest runner routes, JSON shapes, and error
 // mapping against an in-process HTTP server without requiring a simulator.
 
+// httptest.Server.Close also closes idle connections in http.DefaultTransport.
+// Give each server its own client transport so a parallel test closing another
+// server cannot break a request still connecting to this one.
+func testClientForServer(server *httptest.Server) *Client {
+	httpClient := server.Client()
+	httpClient.Timeout = defaultTimeout
+	return NewClient(server.URL, WithHTTPClient(httpClient))
+}
+
 type routeCase struct {
 	name        string
 	call        func(context.Context, *Client) error
@@ -268,7 +277,7 @@ func TestClientSpeaksEveryRouteExactly(t *testing.T) {
 			}))
 			defer server.Close()
 
-			if err := test.call(context.Background(), NewClient(server.URL)); err != nil {
+			if err := test.call(context.Background(), testClientForServer(server)); err != nil {
 				t.Fatalf("%s error = %T %v", test.name, err, err)
 			}
 			if seen.Method != test.wantMethod {
@@ -315,7 +324,7 @@ func TestScreenshotSendsTheCompressedQueryAndReturnsBytes(t *testing.T) {
 			}))
 			defer server.Close()
 
-			image, err := NewClient(server.URL).Screenshot(context.Background(), test.compressed)
+			image, err := testClientForServer(server).Screenshot(context.Background(), test.compressed)
 			if err != nil {
 				t.Fatalf("Screenshot() error = %v", err)
 			}
@@ -352,7 +361,7 @@ func TestErrorStatusesMapToTheContractCodes(t *testing.T) {
 			}))
 			defer server.Close()
 
-			err := NewClient(server.URL).Status(context.Background())
+			err := testClientForServer(server).Status(context.Background())
 			var runnerErr *Error
 			if !errors.As(err, &runnerErr) {
 				t.Fatalf("error = %T %v, want *ios.Error", err, err)
@@ -381,7 +390,7 @@ func TestTheRunnerMessageSurvivesAMissingCode(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := NewClient(server.URL).Status(context.Background())
+	err := testClientForServer(server).Status(context.Background())
 	var runnerErr *Error
 	if !errors.As(err, &runnerErr) {
 		t.Fatalf("error = %T %v, want *ios.Error", err, err)
@@ -411,7 +420,7 @@ func TestTimeoutErrorsAreNotRetryable(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 			writer.WriteHeader(test.status)
 		}))
-		err := NewClient(server.URL).Status(context.Background())
+		err := testClientForServer(server).Status(context.Background())
 		server.Close()
 		var runnerErr *Error
 		if !errors.As(err, &runnerErr) {
@@ -433,7 +442,7 @@ func TestStatusRejectsAnUnexpectedBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := NewClient(server.URL).Status(context.Background()); err == nil {
+	if err := testClientForServer(server).Status(context.Background()); err == nil {
 		t.Fatal("Status() succeeded on a non-ok body; want a refusal")
 	}
 }
