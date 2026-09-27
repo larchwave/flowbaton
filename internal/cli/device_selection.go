@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +41,29 @@ var (
 	iosPhysicalInventory = func(ctx context.Context) ([]iosdevice.Device, error) {
 		return iosdevice.ListDevices(ctx)
 	}
+	iosCoreDeviceReachable = coreDeviceReachable
 )
+
+// coreDeviceProbeTimeout keeps an unsupported CoreDevice/network connection
+// from delaying the supported simctl/usbmuxd selection path indefinitely.
+const coreDeviceProbeTimeout = 5 * time.Second
+
+// coreDeviceReachable distinguishes an unknown UDID from hardware that Apple
+// can see through CoreDevice but FlowBaton cannot drive. A successful probe is
+// diagnostic only: the physical driver still needs usbmuxd/go-ios for pairing,
+// its iOS 17+ tunnel, service access, and port forwarding.
+func coreDeviceReachable(ctx context.Context, udid string) bool {
+	if runtime.GOOS != "darwin" || ctx.Err() != nil {
+		return false
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, coreDeviceProbeTimeout)
+	defer cancel()
+	return exec.CommandContext(probeCtx,
+		"xcrun", "devicectl", "device", "info", "lockState",
+		"--device", udid, "--quiet", "--timeout",
+		strconv.Itoa(int(coreDeviceProbeTimeout/time.Second)),
+	).Run() == nil
+}
 
 var (
 	resolveAndroidAgentAPKs = androidAgentAPKs
@@ -86,6 +110,14 @@ func resolveIOSFlavor(ctx context.Context, udid string) (iosRunnerFlavor, error)
 		if entry.UDID == udid {
 			return iosRunnerFlavorDevice, nil
 		}
+	}
+	if iosCoreDeviceReachable(ctx, udid) {
+		return "", fmt.Errorf(
+			"device %q is reachable through Apple CoreDevice but is absent from usbmuxd; "+
+				"FlowBaton's physical iOS runner requires USB through usbmuxd/go-ios for pairing, "+
+				"the iOS 17+ tunnel, and port forwarding; connect the device by USB, unlock it, "+
+				"ensure usbmuxd is running, and retry (CoreDevice/network reachability alone is insufficient)",
+			udid)
 	}
 	report := func(err error) string {
 		if err != nil {

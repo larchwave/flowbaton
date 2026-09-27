@@ -27,6 +27,10 @@ macOS only. An already-built runner can run from any host with usbmuxd
 in-process userspace tunnel: no sudo, no extra daemons. CI never touches
 hardware. Seam-level tests cover the device path; the release-gate evidence
 is the env-gated end-to-end run keyed by `FLOWBATON_TEST_IOS_DEVICE_UDID`.
+Apple CoreDevice reachability over a network is not enough for this transport.
+If CoreDevice sees the selected phone but usbmuxd does not, FlowBaton refuses
+to start the runner and asks for that exact device to be connected by USB,
+unlocked, and visible to usbmuxd.
 
 Two operations stay unsupported on physical iOS hardware because Apple locks
 them without a jailbreak: keychain reset (`clearKeychain`) and media

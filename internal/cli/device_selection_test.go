@@ -26,6 +26,7 @@ func init() {
 	iosPhysicalInventory = func(context.Context) ([]iosdevice.Device, error) {
 		return []iosdevice.Device{{UDID: "00008110-PHYS"}}, nil
 	}
+	iosCoreDeviceReachable = func(context.Context, string) bool { return false }
 }
 
 // Device resolution must never invent a device identifier.
@@ -111,6 +112,31 @@ func TestUnknownIOSUdidNamesBothInventories(t *testing.T) {
 		t.Fatal("an unknown udid built a session")
 	}
 	for _, fragment := range []string{"UDID-NOWHERE", "simctl", "usbmuxd"} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("error = %q, want it to mention %q", err, fragment)
+		}
+	}
+}
+
+func TestCoreDeviceReachableIOSUdidRequiresTheUsbmuxdTransport(t *testing.T) {
+	previous := iosCoreDeviceReachable
+	var probed string
+	iosCoreDeviceReachable = func(_ context.Context, udid string) bool {
+		probed = udid
+		return true
+	}
+	t.Cleanup(func() { iosCoreDeviceReachable = previous })
+
+	const udid = "00008110-COREDEVICE-ONLY"
+	_, err := NewDeviceSession(context.Background(),
+		TestOptions{Platform: "ios", Roots: []string{"flow.yaml"}}, rootShard(udid))
+	if err == nil {
+		t.Fatal("a CoreDevice-only phone built a session without the required usbmuxd transport")
+	}
+	if probed != udid {
+		t.Fatalf("CoreDevice probe used %q, want the operator's exact UDID %q", probed, udid)
+	}
+	for _, fragment := range []string{"CoreDevice", "usbmuxd", "USB", udid} {
 		if !strings.Contains(err.Error(), fragment) {
 			t.Fatalf("error = %q, want it to mention %q", err, fragment)
 		}
