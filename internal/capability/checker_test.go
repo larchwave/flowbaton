@@ -69,17 +69,18 @@ func TestCheckRejectsFeatureOutsideDeclaredPlatforms(t *testing.T) {
 func TestCheckUsesPlatformsForPlatformLimitedFeature(t *testing.T) {
 	t.Parallel()
 
-	root := validFlow("/workspace/back.yaml")
+	root := validFlow("/workspace/airplane.yaml")
 	root.Commands = []model.Command{{
-		Kind:   model.CommandBack,
-		Source: testSource(root.Path, 4, 3),
+		Kind:      model.CommandSetAirplaneMode,
+		Arguments: "enabled",
+		Source:    testSource(root.Path, 4, 3),
 	}}
 	loader := newFakeFlowLoader(map[string]model.Flow{root.Path: root})
 	plan := model.ExecutionPlan{SelectedRoots: []string{root.Path}}
 
 	_, err := Check(context.Background(), plan, WithLoader(loader), WithPlatform(ExecutionPlatformIOSSimulator))
 	violation := requireViolation(t, err, "unsupported_platform")
-	if violation.FeatureName != string(model.CommandBack) {
+	if violation.FeatureName != string(model.CommandSetAirplaneMode) {
 		t.Fatalf("platform violation = %#v", violation)
 	}
 
@@ -100,14 +101,15 @@ func TestCheckUsesDriverCommandPlatformsBeforeStartup(t *testing.T) {
 		wantErr  bool
 	}{
 		{name: "web launch", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandLaunchApp}},
-		{name: "ios back", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandBack}, wantErr: true},
+		{name: "ios back", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandBack}},
 		{name: "web back", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandBack}},
 		{name: "ios enter", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "ENTER"}},
 		{name: "ios home", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "HOME"}},
 		{name: "ios lock", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandPressKey, Arguments: "LOCK"}},
 		{name: "web tab", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandPressKey, Arguments: "TAB"}},
 		{name: "web power", platform: ExecutionPlatformWeb, command: model.Command{Kind: model.CommandPressKey, Arguments: "POWER"}, wantErr: true},
-		{name: "ios action back", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandAction, Arguments: "back"}, wantErr: true},
+		{name: "ios action back", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandAction, Arguments: "back"}},
+		{name: "ios airplane mode", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandSetAirplaneMode, Arguments: "enabled"}, wantErr: true},
 		{name: "ios forced browser", platform: ExecutionPlatformIOSSimulator, command: model.Command{Kind: model.CommandOpenLink, Arguments: map[string]any{"link": "https://example.invalid", "browser": true}}, wantErr: true},
 		{name: "dynamic key", platform: ExecutionPlatformAndroid, command: model.Command{Kind: model.CommandPressKey, Arguments: "${output.key}"}, wantErr: true},
 	}

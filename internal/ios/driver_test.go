@@ -36,6 +36,7 @@ func TestDriverIsADeviceDriver(t *testing.T) {
 
 	var _ device.Driver = (*Driver)(nil)
 	var _ device.OrientationReader = (*Driver)(nil)
+	var _ device.TapTargeter = (*Driver)(nil)
 }
 
 func TestDriverRefusesTheOperationsIOSCannotPerform(t *testing.T) {
@@ -105,20 +106,96 @@ func TestCapabilitiesReportTheSameRefusals(t *testing.T) {
 	}
 }
 
-func TestBackPressIsUnsupportedOnIOS(t *testing.T) {
+// backPressHierarchy is the settle fixture's NavigationStack as the runner
+// read it on iOS 26.2 (issue #41): the navigation bar holds the app's own
+// leading Close and, one level down, the system back button, whose
+// identifier is "BackButton" and whose label is the previous screen's title.
+func backPressHierarchy(bar ...AXElement) ViewHierarchy {
+	app := AXElement{ElementType: 2, Frame: Frame{Width: 402, Height: 874}, Children: []AXElement{
+		{Identifier: "Source", ElementType: navigationBarElementType, Frame: Frame{Y: 62, Width: 402, Height: 106}, Children: bar},
+		{Identifier: "BackButton", Label: "Not a bar", ElementType: buttonElementType, Enabled: true,
+			Frame: Frame{X: 200, Y: 400, Width: 40, Height: 40}},
+	}}
+	return ViewHierarchy{AXElement: AXElement{Children: []AXElement{app}}}
+}
+
+var (
+	closeButton = AXElement{Identifier: "fixture.nav.close", Label: "Close", ElementType: buttonElementType,
+		Enabled: true, Frame: Frame{X: 20, Y: 66, Width: 67, Height: 36}}
+	systemBackButton = AXElement{Identifier: "BackButton", Label: "Trip", ElementType: buttonElementType,
+		Enabled: true, Frame: Frame{X: 16, Y: 62, Width: 44, Height: 44}}
+)
+
+// A flow's back pops one native navigation level by the system back button:
+// not the leading Close beside it, and not an app control that happens to
+// carry the same identifier outside the navigation bar.
+func TestBackPressTapsTheNavigationBarBackButton(t *testing.T) {
 	t.Parallel()
 
-	// Capabilities declares backPress unsupported. Call time must agree so a
-	// direct driver caller cannot record a successful step that did nothing.
-	var reached []string
-	driver := newTestDriver(t, func(_ http.ResponseWriter, request *http.Request) {
-		reached = append(reached, request.URL.Path)
-	})
-	if err := driver.BackPress(context.Background()); !errors.Is(err, device.ErrUnsupported) {
-		t.Fatalf("BackPress() error = %v, want device.ErrUnsupported", err)
+	var touched []TouchRequest
+	driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy: backPressHierarchy(closeButton, systemBackButton),
+		touch:     func(request TouchRequest) { touched = append(touched, request) },
+	}))
+	driver.launchedAppID = "dev.larchwave.flowbaton.settlefixture"
+	if err := driver.BackPress(context.Background()); err != nil {
+		t.Fatalf("BackPress: %v", err)
 	}
-	if len(reached) != 0 {
-		t.Fatalf("BackPress() called %v; iOS has no back", reached)
+	if len(touched) != 1 || touched[0].X != 38 || touched[0].Y != 84 || touched[0].Duration != nil ||
+		touched[0].AppID != "dev.larchwave.flowbaton.settlefixture" {
+		t.Fatalf("touches = %#v, want one app-anchored tap on the back button's centre", touched)
+	}
+}
+
+// With nothing to go back to, back fails and touches nothing: a leading
+// Close is a different action, and a flow must not learn that from its app.
+func TestBackPressFailsWithoutExactlyOneBackButton(t *testing.T) {
+	t.Parallel()
+
+	secondBack := systemBackButton
+	secondBack.Frame.X = 220
+	for name, bar := range map[string][]AXElement{
+		"none":      {closeButton},
+		"ambiguous": {systemBackButton, secondBack},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var touched []TouchRequest
+			driver := newTestDriver(t, hideKeyboardRunner(t, hideKeyboardStub{
+				hierarchy: backPressHierarchy(bar...),
+				touch:     func(request TouchRequest) { touched = append(touched, request) },
+			}))
+			err := driver.BackPress(context.Background())
+			if err == nil || errors.Is(err, device.ErrUnsupported) || !strings.Contains(err.Error(), "back button") {
+				t.Fatalf("BackPress() error = %v, want a failure naming the back button", err)
+			}
+			if len(touched) != 0 {
+				t.Fatalf("BackPress() touched %#v before failing", touched)
+			}
+		})
+	}
+}
+
+// Issue #40: a SwiftUI Toggle is a switch spanning its row with the real
+// switch nested inside. The driver names that inner switch as the tap target,
+// and nothing inside any other kind of element.
+func TestTapsInsideNamesTheSwitchNestedInASwitch(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	node := func(elementType string) device.TreeNode {
+		return device.TreeNode{Attributes: map[string]string{"elementType": elementType}}
+	}
+	for _, test := range []struct {
+		element, descendant string
+		want                bool
+	}{
+		{"40", "40", true}, {"41", "41", true},
+		{"40", "9", false}, {"9", "9", false}, {"75", "40", false}, {"", "", false},
+	} {
+		if got := driver.TapsInside(node(test.element), node(test.descendant)); got != test.want {
+			t.Errorf("TapsInside(%q, %q) = %t, want %t", test.element, test.descendant, got, test.want)
+		}
 	}
 }
 

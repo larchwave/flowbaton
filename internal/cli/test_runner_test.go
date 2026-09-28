@@ -149,7 +149,7 @@ func TestRunnerReachesTheDeviceBoundaryForAValidFlow(t *testing.T) {
 func TestRunnerRejectsAPlatformImpossibleFlowBeforeSessionCreation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ios-only.yaml")
-	writeFile(t, path, "appId: com.example.a\n---\n- back\n")
+	writeFile(t, path, "appId: com.example.a\n---\n- setAirplaneMode: enabled\n")
 
 	sessionCreated := false
 	runner := TestRunner{NewSession: func(_ context.Context, _ Shard, _ TestOptions) (TestSession, error) {

@@ -1,5 +1,5 @@
 appId: dev.larchwave.flowbaton.settlefixture
-name: Settle fixture launch, alert action, field under a footer, tap under decorative animation, scroll over a link, centre the end, reach a tall card
+name: Settle fixture launch, alert action, field under a footer, toggle and native back, tap under decorative animation, scroll over a link, centre the end, reach a tall card
 ---
 - launchApp
 - assertVisible:
@@ -27,6 +27,30 @@ name: Settle fixture launch, alert action, field under a footer, tap under decor
 - assertVisible: Test
 - tapOn:
     id: fixture.form.close
+# A SwiftUI Toggle spans its Form row; only the switch at the trailing edge
+# turns it (issue #40).
+- tapOn:
+    id: fixture.nav.show
+- tapOn:
+    id: fixture.toggle
+- assertVisible:
+    id: fixture.toggle.on
+# back pops one native navigation level by the system back button, which has
+# no app-owned identifier (issue #41).
+- tapOn:
+    id: fixture.nav.push1
+- tapOn:
+    id: fixture.nav.push2
+- assertVisible:
+    id: fixture.nav.level2
+- back
+- assertVisible:
+    id: fixture.nav.level1
+- back
+- assertVisible:
+    id: fixture.nav.push1
+- tapOn:
+    id: fixture.nav.close
 - tapOn:
     id: fixture.continue
 - assertVisible:

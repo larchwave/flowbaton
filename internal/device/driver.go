@@ -126,6 +126,16 @@ type HitTester interface {
 	Hittable(context.Context, HittableRequest) (HittableResult, error)
 }
 
+// TapTargeter is an optional extension for drivers whose accessibility
+// element can be wider than the control that answers a touch. A SwiftUI
+// Toggle reports its whole Form row as one switch, and only the switch nested
+// at the row's trailing edge turns it (issue #40). A centre tap on an element
+// aims at the one descendant TapsInside accepts; with none, or more than one,
+// or a driver without it, the element's own centre stands.
+type TapTargeter interface {
+	TapsInside(element, descendant TreeNode) bool
+}
+
 // HittableRequest names the element by the node the host observed and the
 // application its bounds belong to.
 type HittableRequest struct {

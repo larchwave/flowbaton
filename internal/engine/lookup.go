@@ -335,6 +335,38 @@ func (lookup *ElementLookup) visibleCenter(ctx context.Context, bounds device.Bo
 		bounds, device.Bounds{Width: info.WidthGrid, Height: info.HeightGrid}), nil
 }
 
+// tapCenter is visibleCenter for a touch: it aims at the control the driver
+// names inside the element when there is exactly one (device.TapTargeter),
+// and at the element itself otherwise.
+func (lookup *ElementLookup) tapCenter(ctx context.Context, stability ElementStabilityResult) (device.Point, error) {
+	bounds := stability.Bounds
+	if targeter, ok := lookup.driver.(device.TapTargeter); ok && stability.Element != nil {
+		if inner, found := tapTargetInside(targeter, stability.Element); found {
+			bounds = inner
+		}
+	}
+	return lookup.visibleCenter(ctx, bounds)
+}
+
+func tapTargetInside(targeter device.TapTargeter, element *hierarchy.Element) (device.Bounds, bool) {
+	var matches []device.Bounds
+	var walk func(*hierarchy.Element)
+	walk = func(node *hierarchy.Element) {
+		for _, child := range node.Children {
+			if child.HasBounds && child.Bounds.Width > 0 && child.Bounds.Height > 0 &&
+				targeter.TapsInside(element.Node, child.Node) {
+				matches = append(matches, child.Bounds)
+			}
+			walk(child)
+		}
+	}
+	walk(element)
+	if len(matches) != 1 {
+		return device.Bounds{}, false
+	}
+	return matches[0], true
+}
+
 // onScreen refuses a resolved point the device does not have. An authored
 // point is measured against the ELEMENT (resolveAxis), never the screen, so
 // `point: 50%,50%` on a row scrolled past an edge resolves to a coordinate off

@@ -23,9 +23,12 @@ struct SettleFixtureScreen: View {
   @State private var confirmingEnd = false
   @State private var ended = false
   @State private var showingForm = false
+  @State private var showingNavigation = false
 
   var body: some View {
-    if showingForm {
+    if showingNavigation {
+      NavigationFixturePage { showingNavigation = false }
+    } else if showingForm {
       FooterFormPage { showingForm = false }
     } else if continued {
       ScrollFixturePage()
@@ -58,6 +61,10 @@ struct SettleFixtureScreen: View {
           showingForm = true
         }
         .accessibilityIdentifier("fixture.form.show")
+        Button("Open navigation") {
+          showingNavigation = true
+        }
+        .accessibilityIdentifier("fixture.nav.show")
         Button("Continue") {
           continued = true
         }
@@ -187,6 +194,51 @@ struct FooterFormPage: View {
   /// Puts the field's frame in the band the footer covers on an iPhone 17 Pro
   /// screen (874 points tall) at accessibility5.
   static let fieldOffset: CGFloat = 215
+}
+
+/// The page behind Open navigation holds two native shapes. A SwiftUI Toggle
+/// in a Form, whose accessibility element spans the whole row while only the
+/// switch at its trailing edge turns it (issue #40), and a two-level
+/// NavigationStack whose system back button has no app-owned identifier
+/// (issue #41). The root's leading Close is the control a `back` must never
+/// press: at the root there is nothing to go back to.
+struct NavigationFixturePage: View {
+  let onClose: () -> Void
+  @State private var isOn = false
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Toggle("I know when I got this plant", isOn: $isOn)
+          .accessibilityIdentifier("fixture.toggle")
+        if isOn {
+          Text("Toggle is on")
+            .accessibilityIdentifier("fixture.toggle.on")
+        }
+        NavigationLink("Trip detail") {
+          Form {
+            Text("Trip detail")
+              .accessibilityIdentifier("fixture.nav.level1")
+            NavigationLink("Source detail") {
+              Text("Source detail")
+                .accessibilityIdentifier("fixture.nav.level2")
+                .navigationTitle("Source")
+            }
+            .accessibilityIdentifier("fixture.nav.push2")
+          }
+          .navigationTitle("Trip")
+        }
+        .accessibilityIdentifier("fixture.nav.push1")
+      }
+      .navigationTitle("Navigation")
+      .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          Button("Close", action: onClose)
+            .accessibilityIdentifier("fixture.nav.close")
+        }
+      }
+    }
+  }
 }
 
 /// A sine wave whose phase follows the wall clock, so every frame differs from

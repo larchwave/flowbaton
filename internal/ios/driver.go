@@ -653,11 +653,6 @@ func swipeGridEnd(
 		device.ErrUnsupported, direction)
 }
 
-// BackPress agrees with Capabilities: iOS has no platform back gesture.
-func (driver *Driver) BackPress(context.Context) error {
-	return fmt.Errorf("%w: iOS has no platform back gesture", device.ErrUnsupported)
-}
-
 func (driver *Driver) InputText(ctx context.Context, request device.InputTextRequest) error {
 	return driver.client.InputText(ctx, request.Text, request.AppIDs)
 }

@@ -109,3 +109,49 @@ func TestTapOnKeepsAnAuthoredPointOnAVisibleElement(t *testing.T) {
 		t.Fatalf("tap points = %#v, want %#v", got, want)
 	}
 }
+
+// tapTargetingDriver is the fake driver with device.TapTargeter on top, as
+// the iOS driver answers it: a switch aims at the switch nested inside it.
+type tapTargetingDriver struct {
+	*enginetest.FakeDriver
+}
+
+func (tapTargetingDriver) TapsInside(element, descendant device.TreeNode) bool {
+	return element.Attributes["elementType"] == "40" && descendant.Attributes["elementType"] == "40"
+}
+
+// Issue #40: a SwiftUI Toggle's accessibility element spans its whole Form
+// row, and only the switch at the row's trailing edge turns it. Measured on
+// iOS 26.2: the row [16,168][386,220] holds an unnamed switch
+// [309,180][372,208]. A centre tap on the row lands on the label and changes
+// nothing, so the tap aims at the switch the driver names instead.
+func TestTapOnAimsAtTheControlTheDriverNamesInsideTheElement(t *testing.T) {
+	t.Parallel()
+	tree := device.TreeNode{
+		Attributes: map[string]string{"bounds": "[0,0][402,874]"},
+		Children: []device.TreeNode{{
+			Attributes: map[string]string{
+				"id": "addPlant.knowsAcquiredAt", "elementType": "40", "bounds": "[16,168][386,220]",
+			},
+			Children: []device.TreeNode{{Attributes: map[string]string{
+				"elementType": "40", "bounds": "[309,180][372,208]",
+			}}},
+		}},
+	}
+	driver := tapTargetingDriver{FakeDriver: enginetest.NewFakeDriver()}
+	driver.Enqueue(enginetest.DriverScript{
+		DeviceInfo:        []enginetest.Result[device.DeviceInfo]{{Value: device.DeviceInfo{WidthGrid: 402, HeightGrid: 874}}},
+		ContentDescriptor: []enginetest.Result[device.TreeNode]{{Value: tree}, {Value: tree}, {Value: tree}},
+	})
+	flowModel := parsedTapFlow(t, "id: addPlant.knowsAcquiredAt\nwaitToSettleTimeoutMs: 0", nil)
+	if _, err := Execute(context.Background(), singleCompileProgram(flowModel), Dependencies{
+		ExecutionID: "tap-inner-control", Driver: driver, Clock: newAdvancingClock(),
+		JSFactory: tapJSFactory(t), Controller: NoopController{},
+	}); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	want := []device.TapRequest{{Point: device.Point{X: 340.5, Y: 194}, AppID: "com.example.tap-batch2"}}
+	if got := tapRequests(driver.Actions()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("tap points = %#v, want %#v", got, want)
+	}
+}

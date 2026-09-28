@@ -210,12 +210,14 @@
       "kind": "command",
       "name": "back",
       "parseStatus": "parseable",
-      "runtimeStatus": "platform-limited",
+      "runtimeStatus": "planned-v1",
       "platforms": [
         "android",
+        "ios-simulator",
+        "ios-physical",
         "web"
       ],
-      "reason": "production drivers expose this command only on the listed platforms"
+      "reason": "command support comes from production driver capability documents"
     },
     {
       "kind": "command",

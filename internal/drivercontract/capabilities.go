@@ -84,10 +84,9 @@ func iosSimulatorDocument() Document {
 		"deviceLogCapture":      true,
 		"crashArtifacts":        true,
 		"browserChoice":         false,
-		"backPress":             false,
+		"backPress":             true,
 	}
 	addCommands(features, map[model.CommandKeyword]bool{
-		model.CommandBack:               true,
 		model.CommandOpenBrowser:        true,
 		model.CommandSetAirplaneMode:    true,
 		model.CommandToggleAirplaneMode: true,
@@ -99,8 +98,9 @@ func iosSimulatorDocument() Document {
 // iosPhysicalDocument is the hardware surface as the driver implements it:
 // every false here has a matching device.ErrUnsupported at call time. Only
 // clearKeychain and addMedia are permanent Apple hardware limits (no tool
-// does either without a jailbreak); the rest of the simulator gaps (back,
-// browser choice, airplane mode, proxies) are shared iOS platform limits.
+// does either without a jailbreak); the rest of the simulator gaps (browser
+// choice, airplane mode, proxies) are shared iOS platform limits. back taps
+// the navigation bar's back button on both surfaces (internal/ios/back.go).
 func iosPhysicalDocument() Document {
 	features := map[string]bool{
 		"proxy":                 false,
@@ -111,11 +111,10 @@ func iosPhysicalDocument() Document {
 		"deviceLogCapture":      true,
 		"crashArtifacts":        true,
 		"browserChoice":         false,
-		"backPress":             false,
+		"backPress":             true,
 	}
 	addCommands(features, map[model.CommandKeyword]bool{
 		// Shared with the simulator surface.
-		model.CommandBack:               true,
 		model.CommandOpenBrowser:        true,
 		model.CommandSetAirplaneMode:    true,
 		model.CommandToggleAirplaneMode: true,

@@ -386,7 +386,7 @@ func resolveInteractionGestureTarget(
 			return device.Point{}, err
 		}
 		if target.targetMode == tapTargetSelectorCenter {
-			return lookup.visibleCenter(ctx, stability.Bounds)
+			return lookup.tapCenter(ctx, stability)
 		}
 		relative, err := target.point.resolveRelative(stability.Bounds)
 		if err != nil {
