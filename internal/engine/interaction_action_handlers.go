@@ -225,7 +225,7 @@ func executeBatch2ADirect(ctx context.Context, state *executionState, evaluated 
 			return effect, err
 		}
 		if plan.keyword == model.CommandBack {
-			err = state.dependencies.Driver.BackPress(ctx)
+			err = backPress(ctx, state.dependencies.Driver, plan.appID)
 		} else {
 			err = state.dependencies.Driver.HideKeyboard(ctx)
 		}
@@ -282,6 +282,16 @@ func batch2AExecutionLookup(
 		return nil, NewConfigurationError(fmt.Sprintf("%s evaluated plan requires a non-blank appId", keyword), nil)
 	}
 	return state.elementLookup()
+}
+
+// backPress names the flow's application to a driver that reads the screen
+// to go back (device.AppBackPresser), and presses the platform back
+// otherwise.
+func backPress(ctx context.Context, driver device.Driver, appID string) error {
+	if presser, ok := driver.(device.AppBackPresser); ok {
+		return presser.BackPressApp(ctx, appID)
+	}
+	return driver.BackPress(ctx)
 }
 
 func validateBatch2APlatform(platform device.Platform, keyword model.CommandKeyword) error {

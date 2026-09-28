@@ -28,7 +28,17 @@ const (
 // navigation bar is the app's own; with no back button, or more than one, the
 // command fails and touches nothing.
 func (driver *Driver) BackPress(ctx context.Context) error {
-	appIDs := driver.defaultAppIDs(nil)
+	return driver.BackPressApp(ctx, "")
+}
+
+// BackPressApp implements device.AppBackPresser: the flow's application is
+// the screen to read, whether or not this driver launched it.
+func (driver *Driver) BackPressApp(ctx context.Context, appID string) error {
+	var requested []string
+	if appID != "" {
+		requested = []string{appID}
+	}
+	appIDs := driver.defaultAppIDs(requested)
 	hierarchy, err := driver.client.ViewHierarchy(ctx, appIDs, true)
 	if err != nil {
 		return fmt.Errorf("back: reading the hierarchy: %w", err)

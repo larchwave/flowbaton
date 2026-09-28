@@ -37,6 +37,7 @@ func TestDriverIsADeviceDriver(t *testing.T) {
 	var _ device.Driver = (*Driver)(nil)
 	var _ device.OrientationReader = (*Driver)(nil)
 	var _ device.TapTargeter = (*Driver)(nil)
+	var _ device.AppBackPresser = (*Driver)(nil)
 }
 
 func TestDriverRefusesTheOperationsIOSCannotPerform(t *testing.T) {
@@ -144,6 +145,40 @@ func TestBackPressTapsTheNavigationBarBackButton(t *testing.T) {
 	if len(touched) != 1 || touched[0].X != 38 || touched[0].Y != 84 || touched[0].Duration != nil ||
 		touched[0].AppID != "dev.larchwave.flowbaton.settlefixture" {
 		t.Fatalf("touches = %#v, want one app-anchored tap on the back button's centre", touched)
+	}
+}
+
+// A flow's app is the screen back reads even when this driver never launched
+// it: an app already running, or launched by another session.
+func TestBackPressAppReadsAndAnchorsOnTheFlowsApplication(t *testing.T) {
+	t.Parallel()
+
+	var read []string
+	var touched []TouchRequest
+	stub := hideKeyboardRunner(t, hideKeyboardStub{
+		hierarchy: backPressHierarchy(systemBackButton),
+		touch:     func(request TouchRequest) { touched = append(touched, request) },
+	})
+	driver := newTestDriver(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/viewHierarchy" {
+			var body struct {
+				AppIDs []string `json:"appIds"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decoding /viewHierarchy: %v", err)
+			}
+			read = body.AppIDs
+		}
+		stub(w, r)
+	})
+	if err := driver.BackPressApp(context.Background(), "com.example.running"); err != nil {
+		t.Fatalf("BackPressApp: %v", err)
+	}
+	if got := read; !slices.Equal(got, []string{"com.example.running"}) {
+		t.Fatalf("hierarchy read for %v, want the flow's app", got)
+	}
+	if len(touched) != 1 || touched[0].AppID != "com.example.running" {
+		t.Fatalf("touches = %#v, want one tap anchored on the flow's app", touched)
 	}
 }
 

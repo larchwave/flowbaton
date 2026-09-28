@@ -136,6 +136,14 @@ type TapTargeter interface {
 	TapsInside(element, descendant TreeNode) bool
 }
 
+// AppBackPresser is an optional extension for drivers whose back press reads
+// the screen of a named application. iOS finds the navigation bar's back
+// button in the flow's app; without the app it would read whatever the
+// driver itself last launched, or the home screen (issue #41).
+type AppBackPresser interface {
+	BackPressApp(ctx context.Context, appID string) error
+}
+
 // HittableRequest names the element by the node the host observed and the
 // application its bounds belong to.
 type HittableRequest struct {
