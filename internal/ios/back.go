@@ -3,8 +3,6 @@ package ios
 import (
 	"context"
 	"fmt"
-
-	"github.com/larchwave/flowbaton/internal/device"
 )
 
 // systemBackButtonID is the identifier UIKit gives the navigation bar's back
@@ -12,13 +10,6 @@ import (
 // button reads `BackButton` with the previous screen's title as its label
 // (issue #41). The label is localised and app-chosen; the identifier is not.
 const systemBackButtonID = "BackButton"
-
-// switchElementType and toggleElementType are the XCUIElementTypes whose
-// accessibility element can wrap the control that actually turns.
-const (
-	switchElementType = "40"
-	toggleElementType = "41"
-)
 
 // BackPress pops one level of the native navigation stack the way a person
 // does: it taps the navigation bar's system back button. iOS has no platform
@@ -71,13 +62,4 @@ func (driver *Driver) BackPressApp(ctx context.Context, appID string) error {
 		return fmt.Errorf("back: tapping the back button %q: %w", button.Label, err)
 	}
 	return nil
-}
-
-// TapsInside implements device.TapTargeter. A SwiftUI Toggle is a switch that
-// spans its Form row with the real switch nested at the trailing edge; a tap
-// at the row's centre lands on the label and turns nothing (issue #40).
-func (driver *Driver) TapsInside(element, descendant device.TreeNode) bool {
-	kind := element.Attributes["elementType"]
-	return (kind == switchElementType || kind == toggleElementType) &&
-		descendant.Attributes["elementType"] == kind
 }

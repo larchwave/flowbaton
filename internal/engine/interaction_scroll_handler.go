@@ -395,7 +395,10 @@ func executeScrollUntilVisible(
 		if observeErr != nil {
 			return effect, observeErr
 		}
-		accepted, err := scrollUntilVisibleAccepted(ctx, state, plan.appID, element, viewport, threshold, course)
+		// The target is visible in the window it is drawn in, which on an
+		// iPad compatibility window is smaller than the screen (issue #44).
+		window := lookup.elementViewport(element, viewport)
+		accepted, err := scrollUntilVisibleAccepted(ctx, state, plan.appID, element, window, threshold, course)
 		if err != nil {
 			return effect, err
 		}
@@ -403,7 +406,7 @@ func executeScrollUntilVisible(
 			if !plan.centerElement {
 				return effect, nil
 			}
-			request, needed := scrollUntilVisibleCenterRequest(element.Bounds, viewport, plan.appID)
+			request, needed := scrollUntilVisibleCenterRequest(element.Bounds, window, plan.appID)
 			if !needed {
 				return effect, nil
 			}
@@ -422,7 +425,7 @@ func executeScrollUntilVisible(
 			if observeErr != nil {
 				return effect, observeErr
 			}
-			if !scrollUntilVisibleThresholdSatisfied(centered, viewport, threshold) {
+			if !scrollUntilVisibleThresholdSatisfied(centered, lookup.elementViewport(centered, viewport), threshold) {
 				return effect, NewAssertionError("scrollUntilVisible centerElement moved the target out of the required visibility", nil)
 			}
 			return effect, ctx.Err()

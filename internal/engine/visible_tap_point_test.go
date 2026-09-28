@@ -155,3 +155,48 @@ func TestTapOnAimsAtTheControlTheDriverNamesInsideTheElement(t *testing.T) {
 		t.Fatalf("tap points = %#v, want %#v", got, want)
 	}
 }
+
+// Issue #42: a button below the fold sat under a pinned footer; tapOn by id
+// reported Completed while the footer's Share button took the touch. A target
+// the driver says would not receive the touch is refused before any tap; an
+// undecided or hittable answer taps as before.
+func TestTapOnRefusesATargetTheDriverSaysIsCovered(t *testing.T) {
+	t.Parallel()
+	for name, test := range map[string]struct {
+		result  device.HittableResult
+		wantTap bool
+	}{
+		"covered":   {device.HittableResult{Decided: true, Hittable: false}, false},
+		"hittable":  {device.HittableResult{Decided: true, Hittable: true}, true},
+		"undecided": {device.HittableResult{Decided: false}, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			tree := tapTree(device.Bounds{X: 16, Y: 700, Width: 370, Height: 50})
+			driver := &hitTestingDriver{FakeDriver: enginetest.NewFakeDriver(), results: []device.HittableResult{test.result}}
+			driver.Enqueue(enginetest.DriverScript{
+				DeviceInfo:        []enginetest.Result[device.DeviceInfo]{{Value: device.DeviceInfo{WidthGrid: 400, HeightGrid: 884}}},
+				ContentDescriptor: []enginetest.Result[device.TreeNode]{{Value: tree}, {Value: tree}, {Value: tree}},
+			})
+			flowModel := parsedTapFlow(t, "text: Continue\nwaitToSettleTimeoutMs: 0", nil)
+			_, err := Execute(context.Background(), singleCompileProgram(flowModel), Dependencies{
+				ExecutionID: "tap-covered-" + name, Driver: driver, Clock: newAdvancingClock(),
+				JSFactory: tapJSFactory(t), Controller: NoopController{},
+			})
+			taps := tapRequests(driver.Actions())
+			if test.wantTap {
+				if err != nil || len(taps) != 1 {
+					t.Fatalf("Execute() error = %v, taps = %#v; want one tap", err, taps)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), "covered") || len(taps) != 0 {
+					t.Fatalf("Execute() error = %v, taps = %#v; want a refusal naming the cover and no tap", err, taps)
+				}
+			}
+			if len(driver.requests) != 1 || driver.requests[0].AppID != "com.example.tap-batch2" ||
+				driver.requests[0].Node.Attributes["text"] != "Continue" {
+				t.Fatalf("hit-test requests = %#v, want one for the resolved target in the flow's app", driver.requests)
+			}
+		})
+	}
+}

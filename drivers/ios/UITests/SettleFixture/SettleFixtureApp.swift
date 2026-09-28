@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 /// The settle fixture: a screen that never stops moving for a camera and never
@@ -24,6 +25,7 @@ struct SettleFixtureScreen: View {
   @State private var ended = false
   @State private var showingForm = false
   @State private var showingNavigation = false
+  @Environment(\.requestReview) private var requestReview
 
   var body: some View {
     if showingNavigation {
@@ -65,6 +67,12 @@ struct SettleFixtureScreen: View {
           showingNavigation = true
         }
         .accessibilityIdentifier("fixture.nav.show")
+        // The system rating prompt is a remote view another process draws
+        // over the app (issue #43).
+        Button("Rate") {
+          requestReview()
+        }
+        .accessibilityIdentifier("fixture.review.show")
         Button("Continue") {
           continued = true
         }
@@ -175,6 +183,7 @@ struct FooterFormPage: View {
             .textFieldStyle(.roundedBorder)
             .accessibilityIdentifier("fixture.footer.field")
           Text("Notes stay on this device and are never sent anywhere.")
+            .accessibilityIdentifier("fixture.footer.note")
           Color.clear.frame(height: 600)
         }
         .padding(20)

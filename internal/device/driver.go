@@ -136,6 +136,15 @@ type TapTargeter interface {
 	TapsInside(element, descendant TreeNode) bool
 }
 
+// ViewportClipper is an optional extension for drivers whose hierarchy holds
+// windows smaller than the screen. An iPhone-only app on an iPad draws in a
+// compatibility window, and a node below that window's edge is inside the
+// screen and still not visible (issue #44). Descendants of a node
+// ClipsDescendants accepts are measured against that node's bounds.
+type ViewportClipper interface {
+	ClipsDescendants(node TreeNode) bool
+}
+
 // AppBackPresser is an optional extension for drivers whose back press reads
 // the screen of a named application. iOS finds the navigation bar's back
 // button in the flow's app; without the app it would read whatever the

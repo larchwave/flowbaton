@@ -256,7 +256,7 @@ func executeDoubleTapOn(ctx context.Context, state *executionState, evaluated ev
 	if err != nil {
 		return effect, err
 	}
-	point, err := resolveInteractionGestureTarget(ctx, lookup, plan.target)
+	point, err := resolveInteractionGestureTarget(ctx, lookup, plan.target, plan.appID)
 	if err != nil {
 		return effect, err
 	}
@@ -285,7 +285,7 @@ func executeLongPressOn(ctx context.Context, state *executionState, evaluated ev
 	if err != nil {
 		return effect, err
 	}
-	point, err := resolveInteractionGestureTarget(ctx, lookup, plan.target)
+	point, err := resolveInteractionGestureTarget(ctx, lookup, plan.target, plan.appID)
 	if err != nil {
 		return effect, err
 	}
@@ -364,6 +364,7 @@ func resolveInteractionGestureTarget(
 	ctx context.Context,
 	lookup *ElementLookup,
 	target interactionGestureTarget,
+	appID string,
 ) (device.Point, error) {
 	switch target.targetMode {
 	case tapTargetScreenPoint:
@@ -386,7 +387,7 @@ func resolveInteractionGestureTarget(
 			return device.Point{}, err
 		}
 		if target.targetMode == tapTargetSelectorCenter {
-			return lookup.tapCenter(ctx, stability)
+			return lookup.tapCenter(ctx, stability, appID)
 		}
 		relative, err := target.point.resolveRelative(stability.Bounds)
 		if err != nil {

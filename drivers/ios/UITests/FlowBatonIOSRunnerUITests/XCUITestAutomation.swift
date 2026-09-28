@@ -381,10 +381,13 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
       } catch {
         throw AutomationError.timeout("the accessibility hierarchy could not be captured: \(error)")
       }
+      let appSnapshot = SnapshotAdapter(snapshot)
       return hierarchyPayload(
-        app: SnapshotAdapter(snapshot),
+        app: appSnapshot,
         systemChrome: Self.isSpringboard(app)
-          ? [] : Self.statusBarSnapshots() + Self.systemAlertSnapshots(),
+          ? []
+          : Self.statusBarSnapshots() + Self.systemAlertSnapshots()
+            + Self.remoteViewSnapshots(over: appSnapshot),
         excludeKeyboardElements: excludeKeyboardElements)
     }
     do {
@@ -523,6 +526,25 @@ final class XCUITestAutomation: DeviceAutomation, @unchecked Sendable {
     return alerts.allElementsBoundByAccessibilityElement.compactMap {
       guard let snapshot = try? $0.snapshot() else { return nil }
       return SnapshotAdapter(snapshot)
+    }
+  }
+
+  /// remoteViewSnapshots takes a system service's tree when it draws a view
+  /// over the app that the app's own snapshot does not carry: the StoreKit
+  /// rating prompt over an iPad compatibility window (issue #43). Its frames
+  /// are in the app's grid, so an element-derived tap anchored on the app
+  /// lands on it. Failures are swallowed like the status bar's.
+  @MainActor
+  static func remoteViewSnapshots(over app: any AccessibilitySnapshot)
+    -> [any AccessibilitySnapshot]
+  {
+    RemoteViewOverlay.services.compactMap { serviceID in
+      let service = XCUIApplication(bundleIdentifier: serviceID)
+      guard service.state == .runningForeground,
+        let snapshot = try? service.snapshot()
+      else { return nil }
+      let adapted = SnapshotAdapter(snapshot)
+      return RemoteViewOverlay.serves(adapted, over: app) ? adapted : nil
     }
   }
 

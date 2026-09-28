@@ -612,7 +612,7 @@ func resolveTapPoint(
 			return device.Point{}, err
 		}
 		if plan.targetMode == tapTargetSelectorCenter {
-			return lookup.tapCenter(ctx, stability)
+			return lookup.tapCenter(ctx, stability, plan.appID)
 		}
 		relative, err := plan.point.resolveRelative(stability.Bounds)
 		if err != nil {

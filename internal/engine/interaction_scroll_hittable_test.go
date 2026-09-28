@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,5 +98,46 @@ func TestScrollUntilVisibleTimeoutNamesTheCover(t *testing.T) {
 	var assertion *AssertionError
 	if !errors.As(err, &assertion) || !strings.Contains(err.Error(), "covers it") {
 		t.Fatalf("timeout under a cover: error = %T %v", err, err)
+	}
+}
+
+// windowedDriver is the fake driver with device.ViewportClipper on top: the
+// node with elementType 2 is an application window that clips its content.
+type windowedDriver struct {
+	*enginetest.FakeDriver
+}
+
+func (windowedDriver) ClipsDescendants(node device.TreeNode) bool {
+	return node.Attributes["elementType"] == "2"
+}
+
+func windowedTree(text string, bounds device.Bounds) device.TreeNode {
+	return device.TreeNode{
+		Attributes: map[string]string{"bounds": "[0,0][0,0]"},
+		Children: []device.TreeNode{{
+			Attributes: map[string]string{"elementType": "2", "bounds": "[0,0][375,667]"},
+			Children: []device.TreeNode{{Attributes: map[string]string{
+				"text": text, "bounds": fmt.Sprintf("[%d,%d][%d,%d]", bounds.X, bounds.Y, bounds.X+bounds.Width, bounds.Y+bounds.Height),
+			}}},
+		}},
+	}
+}
+
+// Issue #44: an iPhone-only app on an iPad draws in a 375x667 window on an
+// 820x1180 screen. A text at y 814 is inside the screen and below the
+// window; it is not visible yet, so the command scrolls instead of
+// completing where it stands.
+func TestScrollUntilVisibleMeasuresTheTargetAgainstItsWindow(t *testing.T) {
+	t.Parallel()
+	driver := windowedDriver{FakeDriver: batch3Driver(batch3Info(820, 1180), []device.TreeNode{
+		windowedTree("Ready", device.Bounds{X: 20, Y: 814, Width: 318, Height: 311}),
+		windowedTree("Ready", device.Bounds{X: 20, Y: 300, Width: 318, Height: 311}),
+	}, []error{nil}, nil)}
+	_, _, err := executeBatch3ForTest(context.Background(), batch3Command("Ready", map[string]any{"visibilityPercentage": int64(100)}), nil, driver, newBatch3Clock(time.Unix(900, 0), true))
+	if err != nil {
+		t.Fatalf("windowed target error = %v", err)
+	}
+	if got := batch3ScrollRequests(driver.Actions()); len(got) != 1 {
+		t.Fatalf("scroll requests = %#v, want one scroll before the target counts as visible", got)
 	}
 }

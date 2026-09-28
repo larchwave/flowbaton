@@ -301,7 +301,7 @@ func (lookup *ElementLookup) visibleHierarchy(ctx context.Context) (*hierarchy.E
 		return nil, err
 	}
 	viewport := device.Bounds{Width: info.WidthGrid, Height: info.HeightGrid}
-	return hierarchy.FilterVisible(normalized, viewport), nil
+	return hierarchy.FilterVisibleWithin(normalized, viewport, lookup.clips()), nil
 }
 
 // ForgetDeviceInfo drops the cached device grid so the next read measures the
@@ -335,17 +335,67 @@ func (lookup *ElementLookup) visibleCenter(ctx context.Context, bounds device.Bo
 		bounds, device.Bounds{Width: info.WidthGrid, Height: info.HeightGrid}), nil
 }
 
+// clips is the driver's word on which nodes clip what is drawn inside them
+// (device.ViewportClipper), or nil when the screen is the only viewport.
+func (lookup *ElementLookup) clips() func(device.TreeNode) bool {
+	if clipper, ok := lookup.driver.(device.ViewportClipper); ok {
+		return clipper.ClipsDescendants
+	}
+	return nil
+}
+
+// elementViewport is the part of the screen an element can be seen in: the
+// screen narrowed by the windows around it.
+func (lookup *ElementLookup) elementViewport(element *hierarchy.Element, screen device.Bounds) device.Bounds {
+	return hierarchy.ClippedViewport(element, screen, lookup.clips())
+}
+
 // tapCenter is visibleCenter for a touch: it aims at the control the driver
 // names inside the element when there is exactly one (device.TapTargeter),
-// and at the element itself otherwise.
-func (lookup *ElementLookup) tapCenter(ctx context.Context, stability ElementStabilityResult) (device.Point, error) {
+// and at the element itself otherwise. A target the driver says would not
+// receive the touch is refused: a button under a pinned footer was reported
+// tapped while the footer's Share button took the touch (issue #42).
+func (lookup *ElementLookup) tapCenter(ctx context.Context, stability ElementStabilityResult, appID string) (device.Point, error) {
+	if err := lookup.refuseCoveredTarget(ctx, stability, appID); err != nil {
+		return device.Point{}, err
+	}
 	bounds := stability.Bounds
 	if targeter, ok := lookup.driver.(device.TapTargeter); ok && stability.Element != nil {
 		if inner, found := tapTargetInside(targeter, stability.Element); found {
 			bounds = inner
 		}
 	}
-	return lookup.visibleCenter(ctx, bounds)
+	info, err := lookup.cachedDeviceInfo(ctx)
+	if err != nil {
+		return device.Point{}, err
+	}
+	screen := device.Bounds{Width: info.WidthGrid, Height: info.HeightGrid}
+	return hierarchy.VisibleCenter(bounds, lookup.elementViewport(stability.Element, screen)), nil
+}
+
+// refuseCoveredTarget asks a driver that can hit-test whether the element
+// would receive a touch. Undecided answers leave geometry in charge, as in
+// scrollUntilVisible (issue #14).
+func (lookup *ElementLookup) refuseCoveredTarget(ctx context.Context, stability ElementStabilityResult, appID string) error {
+	tester, ok := lookup.driver.(device.HitTester)
+	if !ok || stability.Element == nil {
+		return nil
+	}
+	result, err := tester.Hittable(ctx, device.HittableRequest{
+		AppID: appID, Node: stability.Element.Node, Bounds: stability.Bounds,
+	})
+	if err != nil {
+		if cancellation := ctx.Err(); cancellation != nil {
+			return cancellation
+		}
+		return err
+	}
+	if result.Decided && !result.Hittable {
+		return NewOperationError(fmt.Sprintf(
+			"target at %s is covered and would not receive the touch; "+
+				"scroll it clear of the overlay first", hierarchy.FormatBounds(stability.Bounds)), nil)
+	}
+	return nil
 }
 
 func tapTargetInside(targeter device.TapTargeter, element *hierarchy.Element) (device.Bounds, bool) {

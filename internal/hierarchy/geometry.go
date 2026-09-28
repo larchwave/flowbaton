@@ -96,6 +96,19 @@ func VisiblePercentage(bounds, viewport device.Bounds) float64 {
 	return float64(intersectionWidth*intersectionHeight) / float64(area)
 }
 
+// Intersection is the overlap of two bounds, or empty bounds when they do
+// not overlap.
+func Intersection(first, second device.Bounds) device.Bounds {
+	left := max64(int64(first.X), int64(second.X))
+	top := max64(int64(first.Y), int64(second.Y))
+	right := min64(int64(first.X)+int64(first.Width), int64(second.X)+int64(second.Width))
+	bottom := min64(int64(first.Y)+int64(first.Height), int64(second.Y)+int64(second.Height))
+	if right <= left || bottom <= top {
+		return device.Bounds{}
+	}
+	return device.Bounds{X: int(left), Y: int(top), Width: int(right - left), Height: int(bottom - top)}
+}
+
 // IsVisible applies the exact 10% hierarchy-retention threshold.
 func IsVisible(bounds, viewport device.Bounds) bool {
 	return VisiblePercentage(bounds, viewport) >= MinimumVisiblePercentage

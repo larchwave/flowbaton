@@ -38,6 +38,7 @@ func TestDriverIsADeviceDriver(t *testing.T) {
 	var _ device.OrientationReader = (*Driver)(nil)
 	var _ device.TapTargeter = (*Driver)(nil)
 	var _ device.AppBackPresser = (*Driver)(nil)
+	var _ device.ViewportClipper = (*Driver)(nil)
 }
 
 func TestDriverRefusesTheOperationsIOSCannotPerform(t *testing.T) {
@@ -230,6 +231,20 @@ func TestTapsInsideNamesTheSwitchNestedInASwitch(t *testing.T) {
 	} {
 		if got := driver.TapsInside(node(test.element), node(test.descendant)); got != test.want {
 			t.Errorf("TapsInside(%q, %q) = %t, want %t", test.element, test.descendant, got, test.want)
+		}
+	}
+}
+
+// Issue #44: an application draws inside its own frame, which for an
+// iPhone-only app on an iPad is the compatibility window; nothing else clips.
+func TestOnlyTheApplicationClipsItsDescendants(t *testing.T) {
+	t.Parallel()
+
+	driver := newTestDriver(t, func(http.ResponseWriter, *http.Request) {})
+	for elementType, want := range map[string]bool{"2": true, "0": false, "4": false, "32": false, "": false} {
+		node := device.TreeNode{Attributes: map[string]string{"elementType": elementType}}
+		if got := driver.ClipsDescendants(node); got != want {
+			t.Errorf("ClipsDescendants(elementType %q) = %t, want %t", elementType, got, want)
 		}
 	}
 }

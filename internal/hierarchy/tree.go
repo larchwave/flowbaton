@@ -72,10 +72,39 @@ func Walk(root *Element) []*Element {
 // FilterVisible returns a pruned copy. Nodes without bounds are retained, and
 // an otherwise invisible node remains when at least one child remains visible.
 func FilterVisible(root *Element, viewport device.Bounds) *Element {
-	return filterVisible(root, nil, viewport)
+	return FilterVisibleWithin(root, viewport, nil)
 }
 
-func filterVisible(source, parent *Element, viewport device.Bounds) *Element {
+// FilterVisibleWithin is FilterVisible where some nodes clip what is drawn
+// inside them: a descendant of a node clips accepts is measured against the
+// viewport narrowed to that node's bounds. An iPhone-only app on an iPad draws
+// in a window smaller than the screen, and a node below the window's edge is
+// inside the screen and still not visible (issue #44). A nil clips is
+// FilterVisible.
+func FilterVisibleWithin(root *Element, viewport device.Bounds, clips func(device.TreeNode) bool) *Element {
+	return filterVisible(root, nil, viewport, clips)
+}
+
+// ClippedViewport is the viewport an element is visible in: the screen
+// narrowed by every ancestor clips accepts.
+func ClippedViewport(element *Element, viewport device.Bounds, clips func(device.TreeNode) bool) device.Bounds {
+	if clips == nil || element == nil {
+		return viewport
+	}
+	for ancestor := element.Parent; ancestor != nil; ancestor = ancestor.Parent {
+		viewport = clipTo(ancestor, viewport, clips)
+	}
+	return viewport
+}
+
+func clipTo(element *Element, viewport device.Bounds, clips func(device.TreeNode) bool) device.Bounds {
+	if clips == nil || !element.HasBounds || Area(element.Bounds) == 0 || !clips(element.Node) {
+		return viewport
+	}
+	return Intersection(viewport, element.Bounds)
+}
+
+func filterVisible(source, parent *Element, viewport device.Bounds, clips func(device.TreeNode) bool) *Element {
 	if source == nil {
 		return nil
 	}
@@ -87,8 +116,9 @@ func filterVisible(source, parent *Element, viewport device.Bounds) *Element {
 		Children:  make([]*Element, 0, len(source.Children)),
 		Order:     source.Order,
 	}
+	inner := clipTo(source, viewport, clips)
 	for _, child := range source.Children {
-		if retained := filterVisible(child, clone, viewport); retained != nil {
+		if retained := filterVisible(child, clone, inner, clips); retained != nil {
 			clone.Children = append(clone.Children, retained)
 		}
 	}
