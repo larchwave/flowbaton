@@ -1,5 +1,5 @@
 appId: dev.larchwave.flowbaton.settlefixture
-name: Settle fixture launch, alert action, field under a footer, toggle and native back, tap under decorative animation, scroll over a link, centre the end, reach a tall card
+name: Settle fixture launch, alert action, field under a footer, toggle and native back, tap under decorative animation, scroll over a link, centre the end, reach a tall card, open its own link, centre above a tab bar
 ---
 - launchApp
 - assertVisible:
@@ -75,3 +75,27 @@ name: Settle fixture launch, alert action, field under a footer, toggle and nati
     visibilityPercentage: 100
 - assertVisible:
     id: fixture.card.2
+# A link to the app's own scheme from outside: a fresh simulator asks
+# "Open in ...?" first, and the flow must not stop at that prompt (issue #45).
+# The marker it sets is at the top of the page, above the cards.
+- openLink: "settlefixture://open"
+- scrollUntilVisible:
+    element:
+      id: fixture.linkActivated
+    direction: UP
+    timeout: 15000
+# A panel just above the system tab bar, in the column of the other tab item:
+# the centring swipe must not start inside the bar and switch tabs (issue #46).
+- launchApp
+- tapOn:
+    id: fixture.tabs.show
+- scrollUntilVisible:
+    element:
+      id: fixture.tabs.panel
+    direction: DOWN
+    visibilityPercentage: 60
+    centerElement: true
+- assertVisible:
+    id: fixture.tabs.panel
+- assertNotVisible:
+    id: fixture.tabs.dose

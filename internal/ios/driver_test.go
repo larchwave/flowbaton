@@ -740,6 +740,38 @@ func TestOpenLinkRefusesABrowserChoiceItCannotHonor(t *testing.T) {
 	}
 }
 
+func TestOpenLinkApprovesTheFlowAppsOwnScheme(t *testing.T) {
+	t.Parallel()
+
+	// simctl openurl asks "Open in ...?" for a custom scheme until the
+	// simulator has recorded an approval for it, and the prompt blocks the
+	// flow (issue #45). The approval is written for the flow's app first;
+	// a web link needs none and a link without an app has nobody to approve.
+	runner := &recordingRunner{}
+	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
+	ctx := context.Background()
+
+	for _, request := range []device.OpenLinkRequest{
+		{Link: "Fixture://check?x=1", AppID: "com.example.app"},
+		{Link: "https://example.invalid", AppID: "com.example.app"},
+		{Link: "fixture://check"},
+	} {
+		if err := driver.OpenLink(ctx, request); err != nil {
+			t.Fatalf("OpenLink(%+v) error = %v", request, err)
+		}
+	}
+	want := [][]string{
+		{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "write", "com.apple.launchservices.schemeapproval",
+			"com.apple.CoreSimulator.CoreSimulatorBridge-->fixture", "-string", "com.example.app"},
+		{"xcrun", "simctl", "openurl", "UDID-1", "Fixture://check?x=1"},
+		{"xcrun", "simctl", "openurl", "UDID-1", "https://example.invalid"},
+		{"xcrun", "simctl", "openurl", "UDID-1", "fixture://check"},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Fatalf("calls = %q, want %q", runner.calls, want)
+	}
+}
+
 func TestOpenReportsAnUnreachableRunner(t *testing.T) {
 	t.Parallel()
 

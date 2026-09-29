@@ -118,26 +118,27 @@ func TestOpenLinkExecuteSendsExactRequestAndInterpolates(t *testing.T) {
 		t.Fatalf("openLink request = %#v, want device.OpenLinkRequest", action.Request)
 	}
 	want := device.OpenLinkRequest{
-		Link: "https://example.invalid/deep", AutoVerify: true,
+		Link: "https://example.invalid/deep", AppID: lifecycleActiveAppID, AutoVerify: true,
 	}
 	if request != want {
 		t.Fatalf("openLink request = %#v, want %#v", request, want)
 	}
 }
 
-func TestOpenLinkNeverCarriesAnAppID(t *testing.T) {
+func TestOpenLinkCarriesTheFlowAppID(t *testing.T) {
 	t.Parallel()
 
-	// The driver request has an optional app id (specs/02-device-drivers.md:9),
-	// but the authored command does not expose it. The request must keep it empty.
+	// The authored command has no app id, but the flow's own app is the one a
+	// custom scheme link is meant for: the iOS simulator approves the scheme
+	// for that bundle so SpringBoard does not stop at "Open in ...?" (issue #45).
 	driver := navigationDriver(nil, true)
-	command := model.Command{Kind: model.CommandOpenLink, Form: model.CommandFormObject, Arguments: "https://example.invalid/plain"}
+	command := model.Command{Kind: model.CommandOpenLink, Form: model.CommandFormObject, Arguments: "fixture://plain"}
 	if _, err := runNavigationCommand(t, driver, command); err != nil {
 		t.Fatalf("execute(openLink) error = %v", err)
 	}
 	request := navigationAction(t, driver).Request.(device.OpenLinkRequest)
-	if request.AppID != "" {
-		t.Fatalf("openLink appId = %q, want empty when unauthored", request.AppID)
+	if request.AppID != lifecycleActiveAppID {
+		t.Fatalf("openLink appId = %q, want the flow app %q", request.AppID, lifecycleActiveAppID)
 	}
 }
 

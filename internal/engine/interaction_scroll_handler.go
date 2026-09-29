@@ -586,8 +586,12 @@ func scrollUntilVisibleAccepted(
 }
 
 // scrollUntilVisibleCenterRequest is the scroll that brings the centre of
-// bounds to the middle of the viewport. It starts on the element, so it names
-// the application the element's bounds came from.
+// bounds to the middle of the viewport. The drag is centred on the viewport's
+// middle, in the target's column, and names the application the bounds came
+// from. Centred on the target instead, a target near the bottom put the start
+// of the drag below it, inside a floating tab bar, and the swipe switched tabs
+// (issue #46); with at most half a viewport of travel the drag stays in the
+// middle half, clear of bars at either edge.
 func scrollUntilVisibleCenterRequest(bounds, viewport device.Bounds, appID string) (device.ScrollVerticalRequest, bool) {
 	center := hierarchy.Center(bounds)
 	viewportMidpointY := float64(viewport.Y) + float64(viewport.Height)/2
@@ -601,12 +605,17 @@ func scrollUntilVisibleCenterRequest(bounds, viewport device.Bounds, appID strin
 	if delta < 0 {
 		direction = "UP"
 	}
-	amount := math.Min(1, math.Abs(delta)/float64(viewport.Height))
+	amount := math.Min(scrollUntilVisibleMaximumCenterStep, math.Abs(delta)/float64(viewport.Height))
 	if amount == 0 {
 		return device.ScrollVerticalRequest{}, false
 	}
-	return device.ScrollVerticalRequest{Direction: direction, Amount: amount, ElementPoint: &center, AppIDs: []string{appID}}, true
+	anchor := device.Point{X: center.X, Y: viewportMidpointY}
+	return device.ScrollVerticalRequest{Direction: direction, Amount: amount, ElementPoint: &anchor, AppIDs: []string{appID}}, true
 }
+
+// scrollUntilVisibleMaximumCenterStep keeps a centring drag inside the middle
+// half of the viewport. A target whose centre is on screen never needs more.
+const scrollUntilVisibleMaximumCenterStep = 0.5
 
 func executeOwnedScrollUntilVisibleScroll(
 	ctx context.Context,

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -660,13 +661,42 @@ func (driver *Driver) InputText(ctx context.Context, request device.InputTextReq
 // OpenLink hands the URL to the simulator, which opens it in the system
 // default. A browser choice cannot be honored, and honoring it silently in the
 // wrong browser would be worse than refusing.
+//
+// A custom scheme is approved for the flow's app first: until the simulator
+// has an approval, simctl openurl stops at SpringBoard's "Open in ...?" and
+// the flow waits on a prompt it never asked for (issue #45). An approval
+// naming an app that does not own the scheme changes nothing; the prompt
+// shows as before.
 func (driver *Driver) OpenLink(ctx context.Context, request device.OpenLinkRequest) error {
 	if request.Browser != "" {
 		return fmt.Errorf(
 			"%w: iOS cannot choose the browser %q; the system default opens every link",
 			device.ErrUnsupported, request.Browser)
 	}
+	approver, ok := driver.simctl.(interface {
+		ApproveURLScheme(ctx context.Context, scheme, bundleID string) error
+	})
+	if scheme := customURLScheme(request.Link); ok && scheme != "" && request.AppID != "" {
+		if err := approver.ApproveURLScheme(ctx, scheme, request.AppID); err != nil {
+			return fmt.Errorf("approving the %s:// scheme for %s: %w", scheme, request.AppID, err)
+		}
+	}
 	return driver.simctl.OpenURL(ctx, request.Link)
+}
+
+// customURLScheme is the link's scheme, lowercased, unless it is a web link
+// or has none.
+func customURLScheme(link string) string {
+	parsed, err := url.Parse(link)
+	if err != nil {
+		return ""
+	}
+	switch scheme := strings.ToLower(parsed.Scheme); scheme {
+	case "", "http", "https":
+		return ""
+	default:
+		return scheme
+	}
 }
 
 // IsAppRunning asks the device tools, not the runner: the runner answers for

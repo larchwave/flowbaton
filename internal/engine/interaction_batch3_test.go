@@ -302,6 +302,10 @@ func TestInteractionBatch3ImmediateDelayedThresholdAndRequestOrder(t *testing.T)
 	})
 }
 
+// The centring swipe is anchored on the window's middle, not on the target:
+// anchored on a target near the bottom, the drag began below it, inside a
+// floating tab bar, and switched tabs (issue #46). Around the middle, with at
+// most half a window of travel, it stays in the middle half of the window.
 func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T) {
 	t.Parallel()
 
@@ -314,10 +318,10 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 		{name: "omitted", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}},
 		{name: "false", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: false},
 		{name: "zero amount", bounds: device.Bounds{Y: 40, Width: 100, Height: 20}, center: true},
-		{name: "below midpoint maps down", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.4, ElementPoint: &device.Point{X: 50, Y: 90}, AppIDs: []string{"com.example.batch3"}}},
-		{name: "above midpoint maps up", bounds: device.Bounds{Y: -20, Width: 100, Height: 40}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 0.5, ElementPoint: &device.Point{X: 50, Y: 0}, AppIDs: []string{"com.example.batch3"}}},
-		{name: "half-pixel center remains exact", bounds: device.Bounds{X: 1, Y: 75, Width: 99, Height: 31}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.405, ElementPoint: &device.Point{X: 50.5, Y: 90.5}, AppIDs: []string{"com.example.batch3"}}},
-		{name: "amount capped", bounds: device.Bounds{Width: 100, Height: 1000}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 1, ElementPoint: &device.Point{X: 50, Y: 500}, AppIDs: []string{"com.example.batch3"}}},
+		{name: "below midpoint maps down", bounds: device.Bounds{Y: 80, Width: 100, Height: 20}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.4, ElementPoint: &device.Point{X: 50, Y: 50}, AppIDs: []string{"com.example.batch3"}}},
+		{name: "above midpoint maps up", bounds: device.Bounds{Y: -20, Width: 100, Height: 40}, center: true, want: &device.ScrollVerticalRequest{Direction: "UP", Amount: 0.5, ElementPoint: &device.Point{X: 50, Y: 50}, AppIDs: []string{"com.example.batch3"}}},
+		{name: "half-pixel center remains exact", bounds: device.Bounds{X: 1, Y: 75, Width: 99, Height: 31}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.405, ElementPoint: &device.Point{X: 50.5, Y: 50}, AppIDs: []string{"com.example.batch3"}}},
+		{name: "amount capped", bounds: device.Bounds{Width: 100, Height: 1000}, center: true, want: &device.ScrollVerticalRequest{Direction: "DOWN", Amount: 0.5, ElementPoint: &device.Point{X: 50, Y: 50}, AppIDs: []string{"com.example.batch3"}}},
 	}
 	for _, test := range tests {
 		test := test
@@ -361,7 +365,7 @@ func TestInteractionBatch3CenteringImmediateDelayedDirectionsAndCap(t *testing.T
 	}
 	requests := batch3ScrollRequests(driver.Actions())
 	if len(requests) != 2 || requests[0].Direction != "DOWN" || requests[0].Amount != 0.4 || requests[0].ElementPoint != nil ||
-		requests[1].Direction != "DOWN" || requests[1].Amount != 0.4 || requests[1].ElementPoint == nil || *requests[1].ElementPoint != (device.Point{X: 50, Y: 90}) {
+		requests[1].Direction != "DOWN" || requests[1].Amount != 0.4 || requests[1].ElementPoint == nil || *requests[1].ElementPoint != (device.Point{X: 50, Y: 50}) {
 		t.Fatalf("delayed ordinary/final requests = %#v", requests)
 	}
 }
@@ -856,7 +860,7 @@ func TestInteractionBatch3CompiledOwnershipRepeatedAndConcurrentExecution(t *tes
 		)
 		requests := driver.Snapshot()
 		if err != nil || len(requests) != 1 || requests[0].Direction != "DOWN" || requests[0].Amount != 0.405 ||
-			requests[0].ElementPoint == nil || *requests[0].ElementPoint != (device.Point{X: 50.5, Y: 90.5}) {
+			requests[0].ElementPoint == nil || *requests[0].ElementPoint != (device.Point{X: 50.5, Y: 50}) {
 			t.Fatalf("owned centering request error = %v requests %#v", err, requests)
 		}
 	})

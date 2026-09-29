@@ -25,10 +25,13 @@ struct SettleFixtureScreen: View {
   @State private var ended = false
   @State private var showingForm = false
   @State private var showingNavigation = false
+  @State private var showingTabs = false
   @Environment(\.requestReview) private var requestReview
 
   var body: some View {
-    if showingNavigation {
+    if showingTabs {
+      TabsFixturePage()
+    } else if showingNavigation {
       NavigationFixturePage { showingNavigation = false }
     } else if showingForm {
       FooterFormPage { showingForm = false }
@@ -76,6 +79,10 @@ struct SettleFixtureScreen: View {
             requestReview()
           }
           .accessibilityIdentifier("fixture.review.show")
+          Button("Tabs") {
+            showingTabs = true
+          }
+          .accessibilityIdentifier("fixture.tabs.show")
         }
         Button("Continue") {
           continued = true
@@ -250,6 +257,42 @@ struct NavigationFixturePage: View {
             .accessibilityIdentifier("fixture.nav.close")
         }
       }
+    }
+  }
+}
+
+/// The page behind Tabs reproduces issue #46: a scrolling tab over the system
+/// tab bar, with a panel sitting just above the bar. A centring swipe anchored
+/// on the panel began half the centring distance below it, inside the bar,
+/// and selected the other tab.
+struct TabsFixturePage: View {
+  var body: some View {
+    TabView {
+      GeometryReader { geometry in
+        ScrollView {
+          VStack(spacing: 24) {
+            Text("Food log")
+              .font(.headline)
+            Color.clear.frame(height: geometry.size.height * 0.72)
+            // In the column of the Dose tab item, where a drag that starts
+            // in the bar selects Dose.
+            HStack(spacing: 0) {
+              Color.clear.frame(width: geometry.size.width * 0.45 - 20)
+              Text("Scan a meal")
+                .frame(width: geometry.size.width * 0.3, height: 60)
+                .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
+                .accessibilityIdentifier("fixture.tabs.panel")
+              Spacer(minLength: 0)
+            }
+            Color.clear.frame(height: geometry.size.height)
+          }
+          .padding(20)
+        }
+      }
+      .tabItem { Label("Food", systemImage: "fork.knife") }
+      Text("Dose tab")
+        .accessibilityIdentifier("fixture.tabs.dose")
+        .tabItem { Label("Dose", systemImage: "syringe") }
     }
   }
 }

@@ -52,7 +52,7 @@ func TestOpenBrowserForcesTheBrowserFlagAndNothingElse(t *testing.T) {
 	if !ok {
 		t.Fatalf("request = %#v, want device.OpenLinkRequest", openBrowserAction(t, driver).Request)
 	}
-	want := device.OpenLinkRequest{Link: "https://example.com/docs", Browser: browserForced}
+	want := device.OpenLinkRequest{Link: "https://example.com/docs", AppID: lifecycleActiveAppID, Browser: browserForced}
 	if !reflect.DeepEqual(request, want) {
 		t.Fatalf("request = %#v, want %#v", request, want)
 	}

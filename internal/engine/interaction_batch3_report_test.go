@@ -17,7 +17,7 @@ func TestInteractionBatch3ActualRootLifecycleResultAndReportProjection(t *testin
 
 	flowResult, events, config, requests := engine.ExecuteBatch3RootForReportTest(t)
 	if len(requests) != 1 || requests[0].Direction != "DOWN" || requests[0].Amount != 0.4 ||
-		requests[0].ElementPoint == nil || *requests[0].ElementPoint != (device.Point{X: 50, Y: 90}) {
+		requests[0].ElementPoint == nil || *requests[0].ElementPoint != (device.Point{X: 50, Y: 50}) {
 		t.Fatalf("centering requests = %#v", requests)
 	}
 	if flowResult.Path() != "/workspace/batch3-report.yaml" || flowResult.RootRunID() != "batch3-report/root-run-000001" ||

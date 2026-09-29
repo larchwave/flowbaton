@@ -213,11 +213,19 @@ func evaluateOpenLink(
 	if strings.TrimSpace(link) == "" {
 		return evaluated, NewConfigurationError("openLink link must not be blank after interpolation", nil)
 	}
-	// The v0 driver method includes an optional app id
-	// (specs/02-device-drivers.md:9), while the authored command does not expose
-	// one. The request therefore leaves the app id empty.
+	// The authored command has no app id; the driver's optional one
+	// (specs/02-device-drivers.md:9) is the flow's own app, which the iOS
+	// simulator needs to approve a custom scheme link for it (issue #45).
+	rawAppID, err := evaluation.ActiveAppID()
+	if err != nil {
+		return evaluated, err
+	}
+	appID, err := evaluation.Interpolate(ctx, rawAppID, nil)
+	if err != nil {
+		return evaluated, err
+	}
 	evaluated.value = openLinkEvaluated{request: device.OpenLinkRequest{
-		Link: link, AutoVerify: payload.autoVerify, Browser: payload.browser,
+		Link: link, AppID: strings.TrimSpace(appID), AutoVerify: payload.autoVerify, Browser: payload.browser,
 	}}
 	return evaluated, nil
 }

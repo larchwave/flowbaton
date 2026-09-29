@@ -284,6 +284,18 @@ func (simctl *Simctl) OpenURL(ctx context.Context, url string) error {
 	return simctl.run(ctx, []string{"openurl", simctl.udid, url}, true)
 }
 
+// ApproveURLScheme records the answer to SpringBoard's "Open in ...?" prompt
+// for a scheme opened through simctl, the way the simulator stores it after
+// someone taps Open: key CoreSimulatorBridge-->scheme, value the bundle that
+// handles it. Written through the simulator's own defaults, it applies to the
+// next openurl without a reboot.
+func (simctl *Simctl) ApproveURLScheme(ctx context.Context, scheme, bundleID string) error {
+	return simctl.run(ctx, []string{
+		"spawn", simctl.udid, "defaults", "write", "com.apple.launchservices.schemeapproval",
+		"com.apple.CoreSimulator.CoreSimulatorBridge-->" + scheme, "-string", bundleID,
+	}, true)
+}
+
 // SetLocation sets the simulated location. simctl takes one "lat,lon"
 // argument, and the numbers are rendered without an exponent so a coordinate
 // never reaches the device in a form it cannot parse.
