@@ -171,6 +171,16 @@ func (driver *Driver) Name() string {
 // failure. With a bundle it owns the runner's whole life: start it,
 // then poll until it answers. See managed_runner.go.
 func (driver *Driver) Open(ctx context.Context) error {
+	// A fresh simulator shows the Continuous Path introduction in place of the
+	// keys the first time a keyboard opens, and the first inputText finds
+	// nowhere to type (issue #47). Marking it shown skips it.
+	if preparer, ok := driver.simctl.(interface {
+		SkipKeyboardIntroduction(ctx context.Context) error
+	}); ok {
+		if err := preparer.SkipKeyboardIntroduction(ctx); err != nil {
+			return fmt.Errorf("marking the keyboard introduction shown on %s: %w", driver.udid, err)
+		}
+	}
 	if driver.runner != nil {
 		return driver.openManagedRunner(ctx)
 	}

@@ -284,6 +284,16 @@ func (simctl *Simctl) OpenURL(ctx context.Context, url string) error {
 	return simctl.run(ctx, []string{"openurl", simctl.udid, url}, true)
 }
 
+// SkipKeyboardIntroduction records the one-time Continuous Path keyboard
+// introduction as already shown, the answer a person gives by tapping
+// Continue on it.
+func (simctl *Simctl) SkipKeyboardIntroduction(ctx context.Context) error {
+	return simctl.run(ctx, []string{
+		"spawn", simctl.udid, "defaults", "write", "com.apple.keyboard.preferences",
+		"DidShowContinuousPathIntroduction", "-bool", "true",
+	}, true)
+}
+
 // ApproveURLScheme records the answer to SpringBoard's "Open in ...?" prompt
 // for a scheme opened through simctl, the way the simulator stores it after
 // someone taps Open: key CoreSimulatorBridge-->scheme, value the bundle that

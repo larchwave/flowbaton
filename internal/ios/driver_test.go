@@ -772,6 +772,26 @@ func TestOpenLinkApprovesTheFlowAppsOwnScheme(t *testing.T) {
 	}
 }
 
+func TestOpenMarksTheKeyboardIntroductionShown(t *testing.T) {
+	t.Parallel()
+
+	// A fresh simulator shows the Continuous Path introduction in place of
+	// the keys the first time a keyboard opens, and the first inputText
+	// finds nowhere to type (issue #47).
+	runner := &recordingRunner{}
+	driver := newTestDriverWithSimctl(t, func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, writer, map[string]any{"status": "ok"})
+	}, runner)
+	if err := driver.Open(context.Background()); err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	want := [][]string{{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "write", "com.apple.keyboard.preferences",
+		"DidShowContinuousPathIntroduction", "-bool", "true"}}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Fatalf("calls = %q, want %q", runner.calls, want)
+	}
+}
+
 func TestOpenReportsAnUnreachableRunner(t *testing.T) {
 	t.Parallel()
 
