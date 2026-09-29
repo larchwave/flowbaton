@@ -390,8 +390,11 @@ func TestOpenDoesNotStartAnotherBusyRetryAfterTheDeadline(t *testing.T) {
 	})
 	driver.runner = &RunnerBundle{XCTestRun: "/built/Runner.xctestrun"}
 	driver.startupPoll = time.Millisecond
-	driver.startupTimeout = 5 * time.Millisecond
-	driver.installBusyRetryDelay = 50 * time.Millisecond
+	// The budget must cover the port probe, which took more than 5ms under
+	// -race in CI and left no launch at all, and the retry delay must lie
+	// well past it.
+	driver.startupTimeout = 100 * time.Millisecond
+	driver.installBusyRetryDelay = time.Second
 	busy := errors.New("exit status 65: application is installing or uninstalling, and cannot be launched")
 	var calls int
 	driver.spawnRunner = func(context.Context, []string, []string) (runnerProcess, error) {
