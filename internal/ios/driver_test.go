@@ -745,14 +745,25 @@ func TestOpenLinkApprovesTheFlowAppsOwnScheme(t *testing.T) {
 
 	// simctl openurl asks "Open in ...?" for a custom scheme until the
 	// simulator has recorded an approval for it, and the prompt blocks the
-	// flow (issue #45). The approval is written for the flow's app first;
-	// a web link needs none and a link without an app has nobody to approve.
-	runner := &recordingRunner{}
+	// flow (issue #45). A missing approval is written for the flow's app; one
+	// already recorded, even for another app, is left as it is; a web link
+	// needs none and a link without an app has nobody to approve.
+	approved := map[string]string{"com.apple.CoreSimulator.CoreSimulatorBridge-->other": "com.example.other"}
+	runner := &recordingRunner{run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) == 7 && args[4] == "read" {
+			if value, ok := approved[args[6]]; ok {
+				return []byte(value + "\n"), nil
+			}
+			return []byte("The domain/default pair of (x, y) does not exist"), errors.New("exit status 1")
+		}
+		return nil, nil
+	}}
 	driver := newTestDriverWithSimctl(t, func(http.ResponseWriter, *http.Request) {}, runner)
 	ctx := context.Background()
 
 	for _, request := range []device.OpenLinkRequest{
 		{Link: "Fixture://check?x=1", AppID: "com.example.app"},
+		{Link: "other://check", AppID: "com.example.app"},
 		{Link: "https://example.invalid", AppID: "com.example.app"},
 		{Link: "fixture://check"},
 	} {
@@ -760,10 +771,14 @@ func TestOpenLinkApprovesTheFlowAppsOwnScheme(t *testing.T) {
 			t.Fatalf("OpenLink(%+v) error = %v", request, err)
 		}
 	}
+	const domain = "com.apple.launchservices.schemeapproval"
 	want := [][]string{
-		{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "write", "com.apple.launchservices.schemeapproval",
+		{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "read", domain, "com.apple.CoreSimulator.CoreSimulatorBridge-->fixture"},
+		{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "write", domain,
 			"com.apple.CoreSimulator.CoreSimulatorBridge-->fixture", "-string", "com.example.app"},
 		{"xcrun", "simctl", "openurl", "UDID-1", "Fixture://check?x=1"},
+		{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "read", domain, "com.apple.CoreSimulator.CoreSimulatorBridge-->other"},
+		{"xcrun", "simctl", "openurl", "UDID-1", "other://check"},
 		{"xcrun", "simctl", "openurl", "UDID-1", "https://example.invalid"},
 		{"xcrun", "simctl", "openurl", "UDID-1", "fixture://check"},
 	}

@@ -303,12 +303,20 @@ const keyboardDefaultsDomain = "com.apple.keyboard.pref" + "erences"
 // for a scheme opened through simctl, the way the simulator stores it after
 // someone taps Open: key CoreSimulatorBridge-->scheme, value the bundle that
 // handles it. Written through the simulator's own defaults, it applies to the
-// next openurl without a reboot.
+// next openurl without a reboot. An approval already recorded is kept, even
+// for another bundle: it was given for the app that owns the scheme, and
+// replacing it would bring the prompt back.
 func (simctl *Simctl) ApproveURLScheme(ctx context.Context, scheme, bundleID string) error {
-	return simctl.run(ctx, []string{
-		"spawn", simctl.udid, "defaults", "write", "com.apple.launchservices.schemeapproval",
-		"com.apple.CoreSimulator.CoreSimulatorBridge-->" + scheme, "-string", bundleID,
-	}, true)
+	const domain = "com.apple.launchservices.schemeapproval"
+	key := "com.apple.CoreSimulator.CoreSimulatorBridge-->" + scheme
+	output, err := simctl.runOutput(ctx, []string{"spawn", simctl.udid, "defaults", "read", domain, key}, true)
+	switch {
+	case err == nil && strings.TrimSpace(string(output)) != "":
+		return nil
+	case err != nil && !strings.Contains(err.Error(), "does not exist"):
+		return err
+	}
+	return simctl.run(ctx, []string{"spawn", simctl.udid, "defaults", "write", domain, key, "-string", bundleID}, true)
 }
 
 // SetLocation sets the simulated location. simctl takes one "lat,lon"
