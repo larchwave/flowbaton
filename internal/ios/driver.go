@@ -1479,8 +1479,10 @@ func (writer *iosLogWriter) Write(data []byte) (int, error) {
 	if writer.err != nil {
 		return 0, writer.err
 	}
+	// Ready is signalled after the bytes reach the artifact, not before: a
+	// start returns on it, and a stop right behind it read an empty file.
 	if len(data) > 0 {
-		writer.readyOnce.Do(func() { close(writer.ready) })
+		defer writer.readyOnce.Do(func() { close(writer.ready) })
 	}
 	remaining := writer.maximum - writer.written
 	if int64(len(data)) <= remaining {
