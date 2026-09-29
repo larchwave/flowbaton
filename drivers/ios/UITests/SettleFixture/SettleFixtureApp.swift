@@ -63,16 +63,20 @@ struct SettleFixtureScreen: View {
           showingForm = true
         }
         .accessibilityIdentifier("fixture.form.show")
-        Button("Open navigation") {
-          showingNavigation = true
+        // One row, so the screen still fits a landscape phone and Continue
+        // stays on it (testALandscapeRotationRotatesThePointsAndTheTaps).
+        HStack(spacing: 24) {
+          Button("Open navigation") {
+            showingNavigation = true
+          }
+          .accessibilityIdentifier("fixture.nav.show")
+          // The system rating prompt is a remote view another process draws
+          // over the app (issue #43).
+          Button("Rate") {
+            requestReview()
+          }
+          .accessibilityIdentifier("fixture.review.show")
         }
-        .accessibilityIdentifier("fixture.nav.show")
-        // The system rating prompt is a remote view another process draws
-        // over the app (issue #43).
-        Button("Rate") {
-          requestReview()
-        }
-        .accessibilityIdentifier("fixture.review.show")
         Button("Continue") {
           continued = true
         }
