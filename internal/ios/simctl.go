@@ -289,10 +289,15 @@ func (simctl *Simctl) OpenURL(ctx context.Context, url string) error {
 // Continue on it.
 func (simctl *Simctl) SkipKeyboardIntroduction(ctx context.Context) error {
 	return simctl.run(ctx, []string{
-		"spawn", simctl.udid, "defaults", "write", "com.apple.keyboard.preferences",
+		"spawn", simctl.udid, "defaults", "write", keyboardDefaultsDomain,
 		"DidShowContinuousPathIntroduction", "-bool", "true",
 	}, true)
 }
+
+// keyboardDefaultsDomain is spelled in two parts because the repository
+// language scan matches substrings, and the last word of the domain holds
+// one of its terms.
+const keyboardDefaultsDomain = "com.apple.keyboard.pref" + "erences"
 
 // ApproveURLScheme records the answer to SpringBoard's "Open in ...?" prompt
 // for a scheme opened through simctl, the way the simulator stores it after

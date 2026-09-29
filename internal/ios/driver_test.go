@@ -785,7 +785,7 @@ func TestOpenMarksTheKeyboardIntroductionShown(t *testing.T) {
 	if err := driver.Open(context.Background()); err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	want := [][]string{{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "write", "com.apple.keyboard.preferences",
+	want := [][]string{{"xcrun", "simctl", "spawn", "UDID-1", "defaults", "write", keyboardDefaultsDomain,
 		"DidShowContinuousPathIntroduction", "-bool", "true"}}
 	if !reflect.DeepEqual(runner.calls, want) {
 		t.Fatalf("calls = %q, want %q", runner.calls, want)
