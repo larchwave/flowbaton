@@ -293,7 +293,7 @@ jobs:
         with:
           syft-version: ${{ env.SYFT_VERSION }}
       - name: Download tested mobile driver products
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: driver-*-${{ github.sha }}
           path: ${{ runner.temp }}/mobile-assets
@@ -355,7 +355,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Download unsigned candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: unsigned-release-candidate-${{ github.sha }}
           path: candidate
@@ -411,12 +411,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Download unsigned candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: unsigned-release-candidate-${{ github.sha }}
           path: candidate
       - name: Download signed Darwin archives
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: signed-darwin-*-${{ github.sha }}
           path: signed-darwin
@@ -457,7 +457,7 @@ jobs:
       attestations: write
     steps:
       - name: Download exact release candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-candidate-${{ github.sha }}
           path: candidate
@@ -512,7 +512,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Download exact release candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-candidate-${{ github.sha }}
           path: candidate
@@ -565,7 +565,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Download exact signed release candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-candidate-${{ github.sha }}
           path: candidate
@@ -588,12 +588,12 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       - name: Download exact release candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-candidate-${{ github.sha }}
           path: candidate
       - name: Download provenance bundle
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: release-provenance-${{ github.sha }}
           path: provenance
