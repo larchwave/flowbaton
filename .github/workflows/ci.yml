@@ -169,7 +169,7 @@ jobs:
       # launch failed. The XML and HTML reports carry the whole message.
       - name: Keep the instrumentation reports of a failed run
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-instrumentation-reports
           # connectedDebugAndroidTest runs from the root, so it covers every
@@ -249,7 +249,7 @@ jobs:
           "$RUNNER_TEMP/flowbaton-ios-settle-flow"
       - name: Keep the flow artifacts of a failed run
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-settle-fixture-flow
           path: ${{ runner.temp }}/flowbaton-ios-settle-flow
